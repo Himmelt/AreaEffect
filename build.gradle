@@ -15,12 +15,12 @@ ext {
     mcpRenameJavadoc = false
 }
 
-// 目标 MC 版本，切换方式：./gradlew build -PmcVersion=1.14.2
-// 1.14.2 与 1.14.3 的 Java 源码完全一致，差别只在 Forge 与 MCP 映射版本
+// 目标 MC 版本，切换方式：./gradlew build -PmcVersion=1.14.3
+// 1.14.3 的 jar 可直接在 1.14.2(Forge 26) 加载：两者 Java 源码一致，
+// 且 mods.toml 的 loaderVersion="[26,)" 已覆盖 Forge 26+；MC 1.14/1.14.1 无 Forge 构建
 ext.mcVersion = project.findProperty('mcVersion') ?: '1.14.3'
 
 def mcTargets = [
-        '1.14.2': [forge: '1.14.2-26.0.63', mappings: '20190624-1.14.2'],
         '1.14.3': [forge: '1.14.3-27.0.60', mappings: '20200119-1.14.3']
 ]
 def target = mcTargets[ext.mcVersion]
