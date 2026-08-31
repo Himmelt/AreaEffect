@@ -1,55 +1,55 @@
-buildscript {
-    repositories {
-        maven { url 'https://modmaven.dev/' }
-        maven { url 'https://maven.aliyun.com/repository/public' }
-        maven { url 'https://maven.minecraftforge.net/' }
-    }
-    dependencies {
-        classpath 'net.minecraftforge.gradle:ForgeGradle:3.+'
-    }
-}
-
-apply plugin: 'java'
-apply plugin: 'net.minecraftforge.gradle'
-
-version = '1.2.0'
-group = "org.soraworld.lightarea"
-archivesBaseName = "LightArea-1.7.10-1.12.2"
-
-sourceCompatibility = targetCompatibility = 1.8
-
-repositories {
-    maven { url 'https://modmaven.dev/' }
-    maven { url 'https://maven.aliyun.com/repository/public' }
-    maven { url 'https://maven.minecraftforge.net/' }
-    maven { url 'https://hub.spigotmc.org/nexus/content/repositories/snapshots/' }
-    maven { url 'https://oss.sonatype.org/content/groups/public/' }
-    maven { url 'https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/' }
-}
-
-tasks.withType(JavaCompile).configureEach {
-    options.encoding = 'UTF-8'
-}
-
-minecraft {
-    mappings channel: 'snapshot', version: '20180814-1.12'
-    runs {
-        client {
-            workingDirectory project.file('run/client')
-            property 'forge.logging.markers', 'SCAN,REGISTRIES,REGISTRYDUMP'
-            property 'forge.logging.console.level', 'debug'
-            args '--username', 'Himmelt'
-        }
-        server {
-            workingDirectory project.file('run/server')
-            property 'forge.logging.markers', 'SCAN,REGISTRIES,REGISTRYDUMP'
-            property 'forge.logging.console.level', 'debug'
-        }
-    }
-}
-
-dependencies {
-    minecraft 'net.minecraftforge:forge:1.12.2-14.23.5.2860'
-}
-
-jar.finalizedBy('reobfJar')
+buildscript {
+    repositories {
+        maven { url 'https://modmaven.dev/' }
+        maven { url 'https://maven.aliyun.com/repository/public' }
+        maven { url 'https://maven.minecraftforge.net/' }
+    }
+    dependencies {
+        classpath 'net.minecraftforge.gradle:ForgeGradle:3.+'
+    }
+}
+
+apply plugin: 'java'
+apply plugin: 'net.minecraftforge.gradle'
+
+version = '1.2.0'
+group = "org.soraworld.areaeffect"
+archivesBaseName = "AreaEffect-1.7.10-1.12.2"
+
+sourceCompatibility = targetCompatibility = 1.8
+
+repositories {
+    maven { url 'https://modmaven.dev/' }
+    maven { url 'https://maven.aliyun.com/repository/public' }
+    maven { url 'https://maven.minecraftforge.net/' }
+    maven { url 'https://hub.spigotmc.org/nexus/content/repositories/snapshots/' }
+    maven { url 'https://oss.sonatype.org/content/groups/public/' }
+    maven { url 'https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/' }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+minecraft {
+    mappings channel: 'snapshot', version: '20180814-1.12'
+    runs {
+        client {
+            workingDirectory project.file('run/client')
+            property 'forge.logging.markers', 'SCAN,REGISTRIES,REGISTRYDUMP'
+            property 'forge.logging.console.level', 'debug'
+            args '--username', 'Himmelt'
+        }
+        server {
+            workingDirectory project.file('run/server')
+            property 'forge.logging.markers', 'SCAN,REGISTRIES,REGISTRYDUMP'
+            property 'forge.logging.console.level', 'debug'
+        }
+    }
+}
+
+dependencies {
+    minecraft 'net.minecraftforge:forge:1.12.2-14.23.5.2860'
+}
+
+jar.finalizedBy('reobfJar')
