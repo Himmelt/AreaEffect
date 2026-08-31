@@ -12,8 +12,8 @@ buildscript {
 apply plugin: 'net.minecraftforge.gradle'
 
 version = '1.2.0'
-group = 'org.soraworld.lightarea'
-archivesBaseName = 'LightArea-1.15.2'
+group = 'org.soraworld.areaeffect'
+archivesBaseName = 'AreaEffect-1.15.2'
 
 sourceCompatibility = targetCompatibility = 1.8
 

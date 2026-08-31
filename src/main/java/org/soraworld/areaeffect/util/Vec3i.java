@@ -1,4 +1,4 @@
-package org.soraworld.lightarea.util;
+package org.soraworld.areaeffect.util;
 
 import net.minecraft.entity.Entity;
 

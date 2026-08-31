@@ -1,11 +1,11 @@
-package org.soraworld.lightarea.network;
+package org.soraworld.areaeffect.network;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.util.math.BlockPos;
-import org.soraworld.lightarea.util.Vec3d;
-import org.soraworld.lightarea.util.Vec3i;
+import org.soraworld.areaeffect.util.Vec3d;
+import org.soraworld.areaeffect.util.Vec3i;
 
 /**
  * @author Himmelt

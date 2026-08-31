@@ -1,4 +1,4 @@
-package org.soraworld.lightarea.network;
+package org.soraworld.areaeffect.network;
 
 import net.minecraft.network.PacketBuffer;
 

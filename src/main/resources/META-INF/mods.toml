@@ -3,10 +3,10 @@ loaderVersion="[31,)"
 logoFile="logo.png"
 
 [[mods]]
-modId="lightarea"
+modId="areaeffect"
 version="${version}"
-displayName="LightArea"
-displayURL="https://github.com/Himmelt/LightArea"
+displayName="AreaEffect"
+displayURL="https://github.com/Himmelt/AreaEffect"
 credits="Himmelt, making this mod."
 authors="Himmelt"
 description='''

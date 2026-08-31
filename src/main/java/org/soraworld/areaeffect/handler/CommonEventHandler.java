@@ -1,4 +1,4 @@
-package org.soraworld.lightarea.handler;
+package org.soraworld.areaeffect.handler;
 
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.player.ServerPlayerEntity;
@@ -7,7 +7,7 @@ import net.minecraft.util.Hand;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
-import org.soraworld.lightarea.proxy.CommonProxy;
+import org.soraworld.areaeffect.proxy.CommonProxy;
 
 /**
  * @author Himmelt

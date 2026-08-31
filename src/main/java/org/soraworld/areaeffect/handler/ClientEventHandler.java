@@ -1,4 +1,4 @@
-package org.soraworld.lightarea.handler;
+package org.soraworld.areaeffect.handler;
 
 import net.minecraft.client.entity.player.ClientPlayerEntity;
 import net.minecraft.client.gui.screen.VideoSettingsScreen;
@@ -6,7 +6,7 @@ import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
 import net.minecraftforge.client.event.GuiScreenEvent;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
-import org.soraworld.lightarea.proxy.CommonProxy;
+import org.soraworld.areaeffect.proxy.CommonProxy;
 
 /**
  * @author Himmelt

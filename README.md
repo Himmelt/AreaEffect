@@ -59,7 +59,7 @@
   - 添加 WE_CUI 支持
 ```
  
-# LightArea
+# AreaEffect
 
 ### Description
 This mod can create areas with specific light.

@@ -1,4 +1,4 @@
-package org.soraworld.lightarea.proxy;
+package org.soraworld.areaeffect.proxy;
 
 import com.electronwill.nightconfig.core.file.FileConfig;
 import io.netty.buffer.Unpooled;
@@ -42,21 +42,21 @@ import net.minecraftforge.fml.network.NetworkHooks;
 import net.minecraftforge.fml.network.NetworkRegistry;
 import net.minecraftforge.fml.network.PacketDistributor;
 import net.minecraftforge.fml.network.simple.SimpleChannel;
-import org.soraworld.lightarea.LightArea;
-import org.soraworld.lightarea.command.LightCommand;
-import org.soraworld.lightarea.handler.ClientEventHandler;
-import org.soraworld.lightarea.handler.CommonEventHandler;
-import org.soraworld.lightarea.network.Area;
-import org.soraworld.lightarea.network.AreaPacket;
-import org.soraworld.lightarea.util.Vec3d;
-import org.soraworld.lightarea.util.Vec3i;
+import org.soraworld.areaeffect.AreaEffect;
+import org.soraworld.areaeffect.command.AreaCommand;
+import org.soraworld.areaeffect.handler.ClientEventHandler;
+import org.soraworld.areaeffect.handler.CommonEventHandler;
+import org.soraworld.areaeffect.network.Area;
+import org.soraworld.areaeffect.network.AreaPacket;
+import org.soraworld.areaeffect.util.Vec3d;
+import org.soraworld.areaeffect.util.Vec3i;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.function.Supplier;
 
-import static org.soraworld.lightarea.LightArea.MOD_ID;
+import static org.soraworld.areaeffect.AreaEffect.MOD_ID;
 
 /**
  * @author Himmelt
@@ -102,9 +102,9 @@ public class CommonProxy {
 
     @SubscribeEvent
     public void onServerStarting(FMLServerStartingEvent event) {
-        LightCommand.register(event.getCommandDispatcher(), this);
+        AreaCommand.register(event.getCommandDispatcher(), this);
         File save = event.getServer().getWorld(DimensionType.OVERWORLD).getSaveHandler().getWorldDirectory();
-        File conf = new File(save, LightArea.MOD_ID + ".toml");
+        File conf = new File(save, AreaEffect.MOD_ID + ".toml");
         config = FileConfig.of(conf);
         if (!conf.exists()) {
             save();

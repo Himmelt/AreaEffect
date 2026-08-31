@@ -1,4 +1,4 @@
-package org.soraworld.lightarea.command;
+package org.soraworld.areaeffect.command;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.FloatArgumentType;
@@ -6,13 +6,13 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import net.minecraft.command.CommandSource;
 import net.minecraft.command.Commands;
 import net.minecraft.entity.player.ServerPlayerEntity;
-import org.soraworld.lightarea.network.Area;
-import org.soraworld.lightarea.proxy.CommonProxy;
+import org.soraworld.areaeffect.network.Area;
+import org.soraworld.areaeffect.proxy.CommonProxy;
 
 /**
  * @author Himmelt
  */
-public class LightCommand {
+public class AreaCommand {
     public static void register(CommandDispatcher<CommandSource> dispatcher, CommonProxy proxy) {
         dispatcher.register(Commands.literal("light")
                 .requires((source) -> (source.getEntity() instanceof ServerPlayerEntity) && source.hasPermissionLevel(2))
