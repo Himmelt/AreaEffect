@@ -1,6 +1,27 @@
-MIT License
+版权声明与许可协议（MIT License）
+==================================
 
-Copyright (c) 2018 Himmelt
+版权持有人（作者）：Himmelt
+联系方式：
+  - 邮箱：master@void-3.cn
+  - QQ：826938185
+  - GitHub：https://github.com/Himmelt
+
+本软件采用 MIT 许可证授权。在遵守 MIT 许可证全部条款的前提下，任何人均可自由使用、
+复制、修改、合并、发布、分发、再许可、销售本软件的副本。
+
+本软件按「现状」提供，不提供任何明示或暗示的担保，包括但不限于对适销性、特定用途
+适用性与非侵权性的担保。在任何情况下，版权持有人均不对任何使用者因使用或无法使用
+本软件而产生的任何索赔、损害或其他责任负责（详见下方 MIT 许可证全文）。
+
+------------------------------------------------------------
+承接 Minecraft 插件 / Mod 定制开发。
+
+
+MIT License
+===========
+
+Copyright (c) 2018-2026 Himmelt
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -19,3 +40,6 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+------------------------------------------------------------
+Custom Minecraft plugin / mod development services are also available upon request.

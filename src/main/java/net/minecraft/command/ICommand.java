@@ -22,7 +22,7 @@ public interface ICommand extends Comparable<ICommand> {
      * 1.7.10 - getCommandAliases
      * 1.8-1.12.2 - getAliases
      * */
-    List func_71514_a();
+    List<String> func_71514_a();
 
     /*
      * 1.10.2-1.12.2 - execute
@@ -55,7 +55,7 @@ public interface ICommand extends Comparable<ICommand> {
     /*
      * 1.7.10 - addTabCompletionOptions
      * */
-    List func_71516_a(ICommandSender sender, String[] args);
+    List<String> func_71516_a(ICommandSender sender, String[] args);
 
     /*
      * 1.10.2-1.12.2 - isUsernameIndex
@@ -65,6 +65,6 @@ public interface ICommand extends Comparable<ICommand> {
     /*
      * 1.8 - addTabCompletionOptions
      * */
-    List func_180525_a(ICommandSender sender, String[] args, net.minecraft.util.BlockPos pos);
+    List<String> func_180525_a(ICommandSender sender, String[] args, net.minecraft.util.BlockPos pos);
 
 }

@@ -2,9 +2,7 @@ package net.minecraftforge.client.event;
 
 import net.minecraft.client.gui.GuiScreen;
 
-/**
- * @author Himmelt
- */
+
 public class GuiScreenEvent {
 
     public GuiScreen gui;

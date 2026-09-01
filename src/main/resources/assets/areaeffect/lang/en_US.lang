@@ -1,25 +1,1 @@
-set.pos1=[AreaEffect] Selected pos1 : %s
-set.pos2=[AreaEffect] Selected pos2 : %s
-create.area=[AreaEffect] Area is created
-
-info.pos1=[AreaEffect] Current area's start coordinate is : %s
-info.pos2=[AreaEffect] Current area's end coordinate is : %s
-info.light=[AreaEffect] Current area's light level is : %f
-info.notInArea=[AreaEffect] You are not in any area
-
-tool.set=[AreaEffect] Set select tool to : %s
-tool.get=[AreaEffect] Current select tool is : %s
-
-info.speed=[AreaEffect] Current light change speed is : %f/tick
-
-invalid.float=[AreaEffect] Invalid float arg
-invalid.int=[AreaEffect] Invalid int arg
-empty.args=[AreaEffect] Empty args
-notSelect=[AreaEffect] Please select start pos and end pos first
-create.conflict=[AreaEffect] Selected area conflicts with existed areas
-
-text.click=Click Teleport
-info.list=[AreaEffect] id:%d Dim:%d Start:%s End:%s Level:%d  %s
-
-areaTpSuccess=[AreaEffect] Teleport to area center
-areaIdNotFound=[AreaEffect] Area of this id not exist
+set.pos1=[AreaEffect] Selected pos1 : %sset.pos2=[AreaEffect] Selected pos2 : %screate.area=[AreaEffect] Area is createdinfo.pos1=[AreaEffect] Current area's start coordinate is : %sinfo.pos2=[AreaEffect] Current area's end coordinate is : %sinfo.light=[AreaEffect] Current area's light level is : %finfo.notInArea=[AreaEffect] You are not in any areatool.set=[AreaEffect] Set select tool to : %stool.get=[AreaEffect] Current select tool is : %sinfo.speed=[AreaEffect] Current light change speed is : %f/tickinvalid.float=[AreaEffect] Invalid float arginvalid.int=[AreaEffect] Invalid int argempty.args=[AreaEffect] Empty argsnotSelect=[AreaEffect] Please select start pos and end pos firstcreate.conflict=[AreaEffect] Selected area conflicts with existed areastext.click=Click Teleportinfo.list=[AreaEffect] id:%d Dim:%d Start:%s End:%s Level:%d  %sareaTpSuccess=[AreaEffect] Teleport to area centerareaIdNotFound=[AreaEffect] Area of this id not exist

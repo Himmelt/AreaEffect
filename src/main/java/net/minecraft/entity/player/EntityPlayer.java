@@ -5,9 +5,7 @@ import net.minecraft.entity.Entity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.world.World;
 
-/**
- * @author Himmelt
- */
+
 public abstract class EntityPlayer extends Entity implements ICommandSender {
 
     /*
