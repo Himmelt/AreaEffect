@@ -1,0 +1,45 @@
+plugins {
+    id 'java'
+    id 'com.gtnewhorizons.retrofuturagradle' version '1.4.9'
+}
+
+version = '1.2.0'
+group = 'org.soraworld.areaeffect'
+
+base { archivesName = 'AreaEffect-1.12.2' }
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(8)
+    }
+}
+
+minecraft {
+    mcVersion = '1.12.2'
+    username = 'Himmelt'
+}
+
+repositories {
+    maven {
+        name = 'GTNH Maven'
+        url = 'https://nexus.gtnewhorizons.com/repository/public/'
+    }
+    mavenCentral()
+    maven {
+        name = 'CurseMaven'
+        url = 'https://www.cursemaven.com/'
+    }
+}
+
+processResources {
+    filesMatching('mcmod.info') {
+        filter { line ->
+            line.replace('${version}', project.version.toString())
+                    .replace('${mcversion}', minecraft.mcVersion.get())
+        }
+    }
+}
+
+jar {
+    from('LICENSE')
+}

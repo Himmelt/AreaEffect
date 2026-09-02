@@ -1,0 +1,17 @@
+[
+  {
+    "modid": "areaeffect",
+    "name": "AreaEffect",
+    "description": "AreaEffect Mod , Copyright (c) 2018-2026 Himmelt.",
+    "version": "${version}",
+    "mcversion": "${mcversion}",
+    "url": "https://github.com/Himmelt/AreaEffect",
+    "authorList": [
+      "Himmelt"
+    ],
+    "credits": "Himmelt, making this mod.",
+    "logoFile": "assets/areaeffect/logo.png",
+    "screenshots": [],
+    "dependencies": []
+  }
+]

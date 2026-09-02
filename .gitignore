@@ -1,0 +1,25 @@
+# ===== Gradle / Forge 构建产物（按版本目录） =====
+**/build/
+**/run/
+.gradle/
+**/.gradle/
+bin/
+
+# 编译产物
+*.class
+
+# 但保留 gradle wrapper（构建必需）
+!**/gradle-wrapper.jar
+
+# ===== OS / IDE =====
+Thumbs.db
+ehthumbs.db
+.DS_Store
+*.iml
+.idea/
+*.ipr
+*.iws
+
+# ===== 日志 / 临时 =====
+*.log
+*.tmp

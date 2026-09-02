@@ -1,0 +1,14 @@
+modLoader="javafml"
+loaderVersion="[31,)"
+logoFile="logo.png"
+
+[[mods]]
+modId="areaeffect"
+version="${version}"
+displayName="AreaEffect"
+displayURL="https://github.com/Himmelt/AreaEffect"
+credits="Himmelt, making this mod."
+authors="Himmelt"
+description='''
+Light Area Mod , Copyright (c) 2018-2020 Himmelt.
+'''
