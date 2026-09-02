@@ -3,6 +3,7 @@
 **/run/
 .gradle/
 **/.gradle/
+.local-gradle/
 bin/
 
 # 编译产物

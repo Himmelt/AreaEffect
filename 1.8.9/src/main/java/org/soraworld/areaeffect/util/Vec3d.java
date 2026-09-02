@@ -1,7 +1,7 @@
 package org.soraworld.areaeffect.util;
 
 import net.minecraft.entity.Entity;
-import net.minecraft.util.math.AxisAlignedBB;
+import net.minecraft.util.AxisAlignedBB;
 
 public class Vec3d {
     public final double x, y, z;

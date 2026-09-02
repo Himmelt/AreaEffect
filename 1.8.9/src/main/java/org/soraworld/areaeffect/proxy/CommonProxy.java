@@ -2,7 +2,7 @@ package org.soraworld.areaeffect.proxy;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
-import io.netty.buffer.PacketBuffer;
+import net.minecraft.network.PacketBuffer;
 import net.minecraft.command.ICommandSender;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
@@ -51,7 +51,7 @@ public class CommonProxy {
     protected final HashMap<Integer, HashMap<Integer, Area>> lightAreas = new HashMap<>();
     protected final net.minecraftforge.fml.common.network.FMLEventChannel channel = net.minecraftforge.fml.common.network.NetworkRegistry.INSTANCE.newEventDrivenChannel("light");
     public Configuration config;
-    protected Item tool = Items.WOODEN_AXE;
+    protected Item tool = Items.wooden_axe;
     protected float speed;
     protected int AREA_ID = 0;
 
@@ -99,20 +99,20 @@ public class CommonProxy {
 
     private void setSelectTool(String toolName) {
         try {
-            Object object = Item.REGISTRY.getObject(new ResourceLocation(toolName));
+            Object object = Item.itemRegistry.getObject(new ResourceLocation(toolName));
             if (object instanceof Item) {
                 tool = (Item) object;
             } else {
-                tool = Items.WOODEN_AXE;
+                tool = Items.wooden_axe;
             }
         } catch (Throwable ignored) {
-            tool = Items.WOODEN_AXE;
+            tool = Items.wooden_axe;
         }
     }
 
     private String getToolName() {
         try {
-            Object object = Item.REGISTRY.getNameForObject(tool);
+            Object object = Item.itemRegistry.getNameForObject(tool);
             if (object != null) {
                 return object.toString();
             }
@@ -271,7 +271,7 @@ public class CommonProxy {
     }
 
     public boolean hasPerm(EntityPlayer player) {
-        return player.canUseCommand(2, "gamemode");
+        return player.canCommandSenderUseCommand(2, "gamemode");
     }
 
     public void sendChatTranslation(ICommandSender sender, String key, Object... args) {

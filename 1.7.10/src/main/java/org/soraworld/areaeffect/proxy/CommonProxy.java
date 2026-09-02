@@ -18,7 +18,7 @@ import net.minecraft.util.IChatComponent;
 import net.minecraft.event.ClickEvent;
 import net.minecraft.world.WorldServer;
 import net.minecraftforge.common.MinecraftForge;
-import cpw.mods.fml.common.config.Configuration;
+import net.minecraftforge.common.config.Configuration;
 import cpw.mods.fml.common.FMLCommonHandler;
 import cpw.mods.fml.common.event.FMLInitializationEvent;
 import cpw.mods.fml.common.event.FMLPreInitializationEvent;

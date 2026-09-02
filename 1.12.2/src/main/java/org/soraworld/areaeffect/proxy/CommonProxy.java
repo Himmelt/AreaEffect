@@ -2,7 +2,7 @@ package org.soraworld.areaeffect.proxy;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
-import io.netty.buffer.PacketBuffer;
+import net.minecraft.network.PacketBuffer;
 import net.minecraft.command.ICommandSender;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
@@ -294,9 +294,9 @@ public class CommonProxy {
         if (stack != null && stack.getItem() != Items.AIR) {
             tool = stack.getItem();
             save();
-            sendChatTranslation2(player, "tool.set", tool.getUnlocalizedName(stack) + ".name");
+            sendChatTranslation2(player, "tool.set", tool.getTranslationKey(stack) + ".name");
         } else {
-            sendChatTranslation2(player, "tool.get", tool.getUnlocalizedName() + ".name");
+            sendChatTranslation2(player, "tool.get", tool.getTranslationKey() + ".name");
         }
     }
 
@@ -318,7 +318,7 @@ public class CommonProxy {
             Area area = areas.get(id);
             if (area != null) {
                 if (player.dimension != dim) {
-                    EntityPlayerMP newPlayer = player.changeDimension(dim);
+                    EntityPlayerMP newPlayer = (EntityPlayerMP) player.changeDimension(dim);
                     if (newPlayer != null) {
                         newPlayer.moveToBlockPosAndAngles(area.center(), newPlayer.rotationYaw, newPlayer.rotationPitch);
                         sendChatTranslation(newPlayer, "areaTpSuccess");

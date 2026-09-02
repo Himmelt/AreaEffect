@@ -43,7 +43,7 @@ public class AreaEffect {
         if (event.getServer().getEntityWorld() instanceof WorldServer) {
             WorldServer world = (WorldServer) event.getServer().getEntityWorld();
             File conf = new File(world.getChunkSaveLocation(), MOD_ID + ".cfg");
-            proxy.config = new cpw.mods.fml.common.config.Configuration(conf, MOD_VERSION);
+            proxy.config = new net.minecraftforge.common.config.Configuration(conf);
             proxy.load();
         }
     }

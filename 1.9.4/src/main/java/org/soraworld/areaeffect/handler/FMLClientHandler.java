@@ -24,7 +24,7 @@ public class FMLClientHandler {
 
     @net.minecraftforge.fml.common.eventhandler.SubscribeEvent
     public void onReceivePacket(FMLNetworkEvent.ClientCustomPacketEvent event) {
-        proxy.handlePacket(event.packet.payload());
+        proxy.handlePacket(event.getPacket().payload());
     }
 
     @net.minecraftforge.fml.common.eventhandler.SubscribeEvent

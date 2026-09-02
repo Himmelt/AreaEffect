@@ -16,7 +16,7 @@ public class EventBusClientHandler {
 
     @net.minecraftforge.fml.common.eventhandler.SubscribeEvent
     public void onVideoSetting(GuiScreenEvent.DrawScreenEvent.Post event) {
-        if (event.getGui() instanceof GuiVideoSettings) {
+        if (event.gui instanceof GuiVideoSettings) {
             proxy.saveLight();
         }
     }

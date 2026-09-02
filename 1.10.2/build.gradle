@@ -1,38 +1,41 @@
-buildscript {
-    repositories {
-        maven { url 'https://files.minecraftforge.net/maven' }
-        maven { url 'https://maven.aliyun.com/repository/public/' }
-    }
-    dependencies {
-        classpath 'net.minecraftforge.gradle:ForgeGradle:2.3.3'
-    }
+plugins {
+    id 'java'
+    id 'gg.essential.loom' version '1.10.36'
 }
-
-apply plugin: 'net.minecraftforge.gradle.forge'
 
 version = '1.2.0'
 group = 'org.soraworld.areaeffect'
-archivesBaseName = 'AreaEffect-1.10.2'
 
-sourceCompatibility = targetCompatibility = 1.8
+base { archivesName = 'AreaEffect-1.10.2' }
 
-minecraft {
-    version = '1.10.2-12.18.3.2511-1.10.2'
-    runDir = 'run'
-    mappings = 'stable_22'
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(8)
+    }
+}
+
+loom {
+    forge {
+        pack200Provider.set(new dev.architectury.pack200.java.Pack200Adapter())
+    }
+}
+
+repositories {
+    mavenCentral()
+    maven { url = 'https://maven.minecraftforge.net/' }
+    maven { url = 'https://repo.essential.gg/repository/maven-public/' }
 }
 
 dependencies {
+    minecraft 'com.mojang:minecraft:1.10.2'
+    mappings 'de.oceanlabs.mcp:mcp_stable:29-1.10.2'
+    forge 'net.minecraftforge:forge:1.10.2-12.18.3.2511'
 }
 
 processResources {
     inputs.property 'version', project.version
-    inputs.property 'mcversion', project.minecraft.version
-    from(sourceSets.main.resources.srcDirs) {
-        include 'mcmod.info'
-        expand 'version': project.version, 'mcversion': project.minecraft.version
-    }
-    from(sourceSets.main.resources.srcDirs) {
-        exclude 'mcmod.info'
+    inputs.property 'mcversion', '1.10.2'
+    filesMatching('mcmod.info') {
+        expand 'version': project.version, 'mcversion': '1.10.2'
     }
 }

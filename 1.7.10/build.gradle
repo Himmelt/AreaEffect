@@ -1,37 +1,45 @@
-buildscript {
-    repositories {
-        maven { url 'https://files.minecraftforge.net/maven' }
-        maven { url 'https://maven.aliyun.com/repository/public/' }
-    }
-    dependencies {
-        classpath 'net.minecraftforge.gradle:ForgeGradle:1.2-SNAPSHOT'
-    }
+plugins {
+    id 'java'
+    id 'com.gtnewhorizons.retrofuturagradle' version '2.0.3'
 }
-
-apply plugin: 'forge'
 
 version = '1.2.0'
 group = 'org.soraworld.areaeffect'
-archivesBaseName = 'AreaEffect-1.7.10'
 
-sourceCompatibility = targetCompatibility = 1.8
+base { archivesName = 'AreaEffect-1.7.10' }
 
-minecraft {
-    version = '1.7.10-10.13.4.1614-1.7.10'
-    runDir = 'run'
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(8)
+    }
 }
 
-dependencies {
+minecraft {
+    mcVersion = '1.7.10'
+    username = 'Himmelt'
+}
+
+repositories {
+    maven {
+        name = 'GTNH Maven'
+        url = 'https://nexus.gtnewhorizons.com/repository/public/'
+    }
+    mavenCentral()
+    maven {
+        name = 'CurseMaven'
+        url = 'https://www.cursemaven.com/'
+    }
 }
 
 processResources {
-    inputs.property 'version', project.version
-    inputs.property 'mcversion', project.minecraft.version
-    from(sourceSets.main.resources.srcDirs) {
-        include 'mcmod.info'
-        expand 'version': project.version, 'mcversion': project.minecraft.version
+    filesMatching('mcmod.info') {
+        filter { line ->
+            line.replace('${version}', project.version.toString())
+                    .replace('${mcversion}', minecraft.mcVersion.get())
+        }
     }
-    from(sourceSets.main.resources.srcDirs) {
-        exclude 'mcmod.info'
-    }
+}
+
+jar {
+    from('LICENSE')
 }

@@ -118,7 +118,7 @@ public class ClientProxy extends CommonProxy {
     }
 
     public void clientReset() {
-        tool = Items.WOODEN_AXE;
+        tool = Items.wooden_axe;
         speed = 1.0F;
         AREA_ID = 0;
         lightAreas.clear();

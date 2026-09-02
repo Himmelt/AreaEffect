@@ -2,6 +2,7 @@ package org.soraworld.areaeffect.command;
 
 import net.minecraft.command.ICommandSender;
 import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.entity.player.EntityPlayerMP;
 
 import java.util.*;
 
@@ -51,7 +52,7 @@ public abstract class ICommand {
         }
     }
 
-    public void execute(EntityPlayer player, Args args) {
+    public void execute(EntityPlayerMP player, Args args) {
         execute((ICommandSender) player, args);
     }
 

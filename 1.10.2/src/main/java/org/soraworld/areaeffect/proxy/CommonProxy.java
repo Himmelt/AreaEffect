@@ -2,7 +2,7 @@ package org.soraworld.areaeffect.proxy;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
-import io.netty.buffer.PacketBuffer;
+import net.minecraft.network.PacketBuffer;
 import net.minecraft.command.ICommandSender;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
@@ -271,22 +271,22 @@ public class CommonProxy {
     }
 
     public boolean hasPerm(EntityPlayer player) {
-        return player.canCommandSenderUseCommand(2, "gamemode");
+        return player.canUseCommand(2, "gamemode");
     }
 
     public void sendChatTranslation(ICommandSender sender, String key, Object... args) {
-        sender.addChatMessage(new TextComponentTranslation(key, args));
+        sender.sendMessage(new TextComponentTranslation(key, args));
     }
 
     public void sendChatTranslation2(EntityPlayerMP player, String key, String objKey) {
-        player.addChatMessage(new TextComponentTranslation(key, new TextComponentTranslation(objKey)));
+        player.sendMessage(new TextComponentTranslation(key, new TextComponentTranslation(objKey)));
     }
 
     public void sendAreaInfo(EntityPlayerMP player, int dim, int id, Area area) {
         Style style = new Style().setColor(TextFormatting.GREEN).setBold(true)
                 .setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/light tp " + id));
         ITextComponent click = new TextComponentTranslation("text.click").setStyle(style);
-        player.addChatMessage(new TextComponentTranslation("info.list", id, dim, area.pos1(), area.pos2(), area.gamma, click));
+        player.sendMessage(new TextComponentTranslation("info.list", id, dim, area.pos1(), area.pos2(), area.gamma, click));
     }
 
     public void commandTool(EntityPlayerMP player) {
@@ -318,7 +318,7 @@ public class CommonProxy {
             Area area = areas.get(id);
             if (area != null) {
                 if (player.dimension != dim) {
-                    EntityPlayerMP newPlayer = player.changeDimension(dim);
+                    EntityPlayerMP newPlayer = (EntityPlayerMP) player.changeDimension(dim);
                     if (newPlayer != null) {
                         newPlayer.moveToBlockPosAndAngles(area.center(), newPlayer.rotationYaw, newPlayer.rotationPitch);
                         sendChatTranslation(newPlayer, "areaTpSuccess");

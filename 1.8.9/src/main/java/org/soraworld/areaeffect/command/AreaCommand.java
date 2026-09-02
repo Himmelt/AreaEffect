@@ -155,12 +155,16 @@ public class AreaCommand extends ICommand implements net.minecraft.command.IComm
     }
 
     @Override
-    public String getName() {
+    public String getCommandName() {
         return getAlias(0);
     }
     @Override
     public String getCommandUsage(ICommandSender sender) {
         return "/light pos1/pos2/create/level/speed/info/delete/tool";
+    }
+    @Override
+    public List<String> getCommandAliases() {
+        return super.getAliases();
     }
     @Override
     public List<String> getAliases() {
@@ -171,11 +175,11 @@ public class AreaCommand extends ICommand implements net.minecraft.command.IComm
         execute(sender, new Args(args));
     }
     @Override
-    public boolean canUseCommand(ICommandSender sender) {
-        return sender.canUseCommand(2, "gamemode");
+    public boolean canCommandSenderUseCommand(ICommandSender sender) {
+        return sender.canCommandSenderUseCommand(2, "gamemode");
     }
     @Override
-    public List<String> getTabCompletionOptions(ICommandSender sender, String[] args, net.minecraft.util.BlockPos pos) {
+    public List<String> addTabCompletionOptions(ICommandSender sender, String[] args, net.minecraft.util.BlockPos pos) {
         return tabCompletions(new Args(args));
     }
     @Override
@@ -184,7 +188,7 @@ public class AreaCommand extends ICommand implements net.minecraft.command.IComm
     }
     public int compareTo(net.minecraft.command.ICommand command) {
         if (command instanceof AreaCommand) {
-            return this.getName().compareTo(command.getName());
+            return this.getCommandName().compareTo(command.getCommandName());
         } else {
             return 1;
         }
