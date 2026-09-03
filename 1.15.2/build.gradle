@@ -1,61 +1,51 @@
 buildscript {
     repositories {
-        maven { url 'https://files.minecraftforge.net/maven' }
-        maven { url 'https://maven.aliyun.com/repository/public/' }
-        maven { url 'https://oss.jfrog.org/artifactory/oss-snapshot-local' }
+        // Forge 官方 maven（FG4 所在的仓库，必需，coremods 等官方构件需从此解析）
+        maven { url = 'https://maven.minecraftforge.net/' }
+        // USTC-BMCLAPI 镜像（国内加速，兜底源）
+        maven { url = 'https://bmclapi2.bangbang93.com/maven' }
+        mavenCentral()
     }
     dependencies {
-        classpath group: 'org.soraworld', name: 'ForgeGradleURI', version: '3.+', changing: true
+        classpath group: 'net.minecraftforge.gradle', name: 'ForgeGradle', version: '4.1.14', changing: true
     }
 }
 
 apply plugin: 'net.minecraftforge.gradle'
+apply plugin: 'java'
+apply plugin: 'eclipse'
+apply plugin: 'maven-publish'
 
-version = '1.2.0'
 group = 'org.soraworld.areaeffect'
+version = '1.2.0'
 archivesBaseName = 'AreaEffect-1.15.2'
 
-sourceCompatibility = targetCompatibility = 1.8
+sourceCompatibility = targetCompatibility = JavaVersion.VERSION_1_8
 
-repositories {
-    maven { url 'https://files.minecraftforge.net/maven' }
-    maven { url 'https://maven.aliyun.com/repository/public/' }
+// 使用 MCP snapshot 映射（1.15.2 对应的是为 1.15.x 发布的 snapshot，此处用官方推荐的 20200514-1.15.1）
+minecraft {
+    mappings channel: 'snapshot', version: '20200514-1.15.1'
 }
 
-minecraft {
-    mappings channel: 'snapshot', version: '20200331-1.15.1'
-    runs {
-        client {
-            workingDirectory project.file('run/client')
-            property 'forge.logging.markers', 'SCAN,REGISTRIES,REGISTRYDUMP'
-            property 'forge.logging.console.level', 'debug'
-            mods {
-                examplemod {
-                    source sourceSets.main
-                }
-            }
-        }
-        server {
-            workingDirectory project.file('run/server')
-            property 'forge.logging.markers', 'SCAN,REGISTRIES,REGISTRYDUMP'
-            property 'forge.logging.console.level', 'debug'
-            mods {
-                examplemod {
-                    source sourceSets.main
-                }
-            }
-        }
-    }
+repositories {
+    // Forge 官方 maven（coremods 等官方构件需从此解析，优先）
+    maven { url = 'https://maven.minecraftforge.net/' }
+    // USTC-BMCLAPI 镜像（国内加速，兜底源）
+    maven { url = 'https://bmclapi2.bangbang93.com/maven' }
+    mavenCentral()
 }
 
 dependencies {
     minecraft 'net.minecraftforge:forge:1.15.2-31.1.30'
 }
 
-processResources {
-    inputs.property "version", project.version
-    from(sourceSets.main.resources.srcDirs) {
-        include 'META-INF/mods.toml'
-        expand 'version': project.version
+jar {
+    manifest {
+        attributes([
+            'Implementation-Title'  : 'AreaEffect-1.15.2',
+            'Implementation-Version': "${version}",
+            'Specification-Title'   : 'areaeffect',
+            'Specification-Version' : '1'
+        ])
     }
 }

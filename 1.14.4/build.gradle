@@ -1,11 +1,12 @@
 buildscript {
     repositories {
-        maven { url 'https://files.minecraftforge.net/maven' }
-        maven { url 'https://maven.aliyun.com/repository/public/' }
-        maven { url 'https://oss.jfrog.org/artifactory/oss-snapshot-local' }
+        // USTC-BMCLAPI 镜像（国内加速，兜底源）
+        maven { url = 'https://bmclapi2.bangbang93.com/maven' }
+        maven { url = 'https://maven.minecraftforge.net' }
+        mavenCentral()
     }
     dependencies {
-        classpath group: 'org.soraworld', name: 'ForgeGradleURI', version: '3.+', changing: true
+        classpath group: 'net.minecraftforge.gradle', name: 'ForgeGradle', version: '4.1.14', changing: true
     }
 }
 
@@ -15,12 +16,13 @@ version = '1.2.0'
 group = 'org.soraworld.areaeffect'
 archivesBaseName = 'AreaEffect-1.14.4'
 
-sourceCompatibility = targetCompatibility = 1.8
+sourceCompatibility = targetCompatibility = JavaVersion.VERSION_1_8
 
 repositories {
-    maven { url 'https://files.minecraftforge.net/maven' }
-    maven { url 'https://maven.aliyun.com/repository/public/' }
-    maven { url 'https://lss233.littleservice.cn/repositories/minecraft' }
+    // USTC-BMCLAPI 镜像（国内加速，兜底源）
+    maven { url = 'https://bmclapi2.bangbang93.com/maven' }
+    maven { url = 'https://maven.minecraftforge.net' }
+    mavenCentral()
 }
 
 minecraft {
@@ -59,14 +61,4 @@ processResources {
         include 'META-INF/mods.toml'
         expand 'version': project.version
     }
-}
-
-gradle.addURIListener {
-    String uri = it
-            .replaceAll('https://files.minecraftforge.net/maven', 'https://bmclapi2.bangbang93.com/maven')
-            .replaceAll('https://libraries.minecraft.net/', 'https://mclib.mirrors.tmysam.top/')
-            .replaceAll('https://launcher.mojang.com/v1/objects', 'https://mc.mirrors.tmysam.top/v1/objects')
-            .replaceAll('https://resources.download.minecraft.net/cd/', 'https://mcres.mirrors.tmysam.top/cd/')
-    println uri
-    return uri
 }
