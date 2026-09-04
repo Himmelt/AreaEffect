@@ -31,6 +31,9 @@ public class ClientEventHandler {
 
     @SubscribeEvent
     public void onPlayerTick(TickEvent.PlayerTickEvent event) {
+        if (event.phase != TickEvent.Phase.END) {
+            return;
+        }
         if (event.player instanceof EntityPlayerSP) {
             proxy.updateClientGamma(event.player);
         }

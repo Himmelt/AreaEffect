@@ -17,7 +17,7 @@ apply plugin: 'eclipse'
 apply plugin: 'maven-publish'
 
 group = 'org.soraworld.areaeffect'
-version = '1.2.0'
+version = '1.3.0'
 archivesBaseName = 'AreaEffect-1.13.2'
 
 // 使用 MCP snapshot 映射（1.13.2 无官方 mojmap）

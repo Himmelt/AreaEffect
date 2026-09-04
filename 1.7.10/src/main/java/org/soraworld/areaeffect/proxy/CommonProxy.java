@@ -29,6 +29,7 @@ import org.soraworld.areaeffect.handler.EventBusHandler;
 import org.soraworld.areaeffect.handler.FMLHandler;
 import org.soraworld.areaeffect.network.Area;
 import org.soraworld.areaeffect.network.AreaPacket;
+import org.soraworld.areaeffect.util.GammaCurve;
 import org.soraworld.areaeffect.util.Vec3d;
 import org.soraworld.areaeffect.util.Vec3i;
 
@@ -39,8 +40,8 @@ public class CommonProxy {
 
     public static final byte UPDATE = 1;
     public static final byte DELETE = 2;
-    public static final byte GAMMA = 3;
-    public static final byte SPEED = 4;
+    public static final byte LIGHTNESS = 3;
+    public static final byte DURATION = 4;
 
     private static final byte[] CUBOID = "s|cuboid".getBytes(StandardCharsets.UTF_8);
     private static final String WECUI_CHANNEL = "WECUI";
@@ -50,7 +51,7 @@ public class CommonProxy {
     protected final cpw.mods.fml.common.network.FMLEventChannel channel = cpw.mods.fml.common.network.NetworkRegistry.INSTANCE.newEventDrivenChannel("light");
     public Configuration config;
     protected Item tool = Items.wooden_axe;
-    protected float speed;
+    protected float duration = 1.0F;
     protected int AREA_ID = 0;
 
     public void onPreInit(FMLPreInitializationEvent event) {
@@ -75,12 +76,22 @@ public class CommonProxy {
             for (String text : list) {
                 String[] ss = text.split(",");
                 try {
-                    int dim = Integer.parseInt(ss[0]);
-                    Vec3i pos1 = new Vec3i(Integer.parseInt(ss[1]), Integer.parseInt(ss[2]), Integer.parseInt(ss[3]));
-                    Vec3i pos2 = new Vec3i(Integer.parseInt(ss[4]), Integer.parseInt(ss[5]), Integer.parseInt(ss[6]));
-                    float gamma = ss.length >= 8 ? Float.parseFloat(ss[7]) : 1.0F;
-                    float speed = ss.length >= 9 ? Float.parseFloat(ss[8]) : 0.2F;
-                    addArea(dim, pos1, pos2, gamma, speed);
+                    int off = "2".equals(ss[0]) ? 1 : 0;
+                    int dim = Integer.parseInt(ss[off]);
+                    Vec3i pos1 = new Vec3i(Integer.parseInt(ss[off + 1]), Integer.parseInt(ss[off + 2]), Integer.parseInt(ss[off + 3]));
+                    Vec3i pos2 = new Vec3i(Integer.parseInt(ss[off + 4]), Integer.parseInt(ss[off + 5]), Integer.parseInt(ss[off + 6]));
+                    float lightness;
+                    float duration;
+                    if (off == 0) {
+                        // legacy row: field 8 is an old gamma value, convert it with the old reference scene
+                        float gamma = ss.length >= 8 ? Float.parseFloat(ss[7]) : 1.0F;
+                        lightness = (float) GammaCurve.perceive(gamma, 0.05);
+                        duration = 1.0F;
+                    } else {
+                        lightness = ss.length >= 9 ? Float.parseFloat(ss[8]) : 90.0F;
+                        duration = ss.length >= 10 ? Float.parseFloat(ss[9]) : 1.0F;
+                    }
+                    addArea(dim, pos1, pos2, lightness, duration);
                 } catch (Throwable ignored) {
                 }
             }
@@ -90,7 +101,7 @@ public class CommonProxy {
     public void save() {
         config.get("general", "tool", "wooden_axe", "Select Tool").set(getToolName());
         List<String> list = new ArrayList<>();
-        lightAreas.forEach((dim, areas) -> areas.values().forEach(area -> list.add(dim + "," + area)));
+        lightAreas.forEach((dim, areas) -> areas.values().forEach(area -> list.add("2," + dim + "," + area)));
         config.get("general", "areas", new String[]{}, "Light Areas").set(list.toArray(new String[]{}));
         config.save();
     }
@@ -188,25 +199,25 @@ public class CommonProxy {
         sendToAll(buf);
     }
 
-    public void sendGammaToAll(int dim, int id, float gamma) {
+    public void sendLightnessToAll(int dim, int id, float lightness) {
         ByteBuf buf = Unpooled.buffer();
-        buf.writeByte(GAMMA);
-        AreaPacket.Gamma.encode(new AreaPacket.Gamma(dim, id, gamma), buf);
+        buf.writeByte(LIGHTNESS);
+        AreaPacket.Lightness.encode(new AreaPacket.Lightness(dim, id, lightness), buf);
         sendToAll(buf);
     }
 
-    public void sendSpeedToAll(int dim, int id, float speed) {
+    public void sendDurationToAll(int dim, int id, float duration) {
         ByteBuf buf = Unpooled.buffer();
-        buf.writeByte(SPEED);
-        AreaPacket.Speed.encode(new AreaPacket.Speed(dim, id, speed), buf);
+        buf.writeByte(DURATION);
+        AreaPacket.Duration.encode(new AreaPacket.Duration(dim, id, duration), buf);
         sendToAll(buf);
     }
 
-    public void createArea(EntityPlayerMP player, float light, float speed) {
+    public void createArea(EntityPlayerMP player, float lightness, float duration) {
         Vec3i pos1 = pos1s.get(player.getUniqueID());
         Vec3i pos2 = pos2s.get(player.getUniqueID());
         if (pos1 != null && pos2 != null) {
-            Area area = addArea(player.dimension, pos1, pos2, light, speed);
+            Area area = addArea(player.dimension, pos1, pos2, lightness, duration);
             if (area == null) {
                 sendChatTranslation(player, "create.conflict");
             } else {
@@ -221,8 +232,8 @@ public class CommonProxy {
         }
     }
 
-    public Area addArea(int dim, Vec3i pos1, Vec3i pos2, float light, float speed) {
-        Area area = new Area(pos1.x, pos1.y, pos1.z, pos2.x, pos2.y, pos2.z, light, speed);
+    public Area addArea(int dim, Vec3i pos1, Vec3i pos2, float lightness, float duration) {
+        Area area = new Area(pos1.x, pos1.y, pos1.z, pos2.x, pos2.y, pos2.z, lightness, duration);
         if (checkConflict(dim, area)) {
             return null;
         } else {
@@ -248,6 +259,7 @@ public class CommonProxy {
         for (Map.Entry<Integer, Area> entry : lightAreas.getOrDefault(player.dimension, new HashMap<>()).entrySet()) {
             Area area = entry.getValue();
             if (area.contains(new Vec3d(player))) {
+                area.id = entry.getKey();
                 return area;
             }
         }
@@ -282,9 +294,9 @@ public class CommonProxy {
 
     public void sendAreaInfo(EntityPlayerMP player, int dim, int id, Area area) {
         ChatStyle style = new ChatStyle().setColor(EnumChatFormatting.GREEN).setBold(true)
-                .setChatClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/light tp " + id));
+                .setChatClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/areaeffect tp " + id));
         IChatComponent click = new ChatComponentTranslation("text.click").setChatStyle(style);
-        player.addChatMessage(new ChatComponentTranslation("info.list", id, dim, area.pos1(), area.pos2(), area.gamma, click));
+        player.addChatMessage(new ChatComponentTranslation("info.list", id, dim, area.pos1(), area.pos2(), area.lightness, area.duration, click));
     }
 
     public void commandTool(EntityPlayerMP player) {

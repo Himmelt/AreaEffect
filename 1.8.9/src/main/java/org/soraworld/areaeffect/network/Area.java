@@ -5,12 +5,13 @@ import io.netty.buffer.Unpooled;
 import net.minecraft.entity.player.EntityPlayer;
 import org.soraworld.areaeffect.util.Vec3d;
 import org.soraworld.areaeffect.util.Vec3i;
+import org.soraworld.areaeffect.util.GammaCurve;
 
 public class Area {
 
     public int id;
-    public float gamma;
-    public float speed;
+    public float lightness;
+    public float duration;
 
     public final int x1;
     public final int y1;
@@ -19,15 +20,15 @@ public class Area {
     public final int y2;
     public final int z2;
 
-    public Area(int x1, int y1, int z1, int x2, int y2, int z2, float gamma, float speed) {
+    public Area(int x1, int y1, int z1, int x2, int y2, int z2, float lightness, float duration) {
         this.x1 = Math.min(x1, x2);
         this.y1 = Math.min(y1, y2);
         this.z1 = Math.min(z1, z2);
         this.x2 = Math.max(x1, x2);
         this.y2 = Math.max(y1, y2);
         this.z2 = Math.max(z1, z2);
-        this.gamma = gamma;
-        this.speed = Math.abs(speed);
+        this.lightness = Float.isNaN(lightness) ? 90.0F : Math.max(0.0F, Math.min(100.0F, lightness));
+        this.duration = !(duration > 0.0F) ? 1.0F : Math.min(60.0F, duration);
     }
 
     public static ByteBuf toByteBuf(Area area) {
@@ -38,8 +39,8 @@ public class Area {
         buf.writeInt(area.x2);
         buf.writeInt(area.y2);
         buf.writeInt(area.z2);
-        buf.writeFloat(area.gamma);
-        buf.writeFloat(area.speed);
+        buf.writeFloat(area.lightness);
+        buf.writeFloat(area.duration);
         return buf;
     }
 
@@ -50,9 +51,9 @@ public class Area {
         int x2 = buf.readInt();
         int y2 = buf.readInt();
         int z2 = buf.readInt();
-        float light = buf.readFloat();
-        float speed = buf.readFloat();
-        return new Area(x1, y1, z1, x2, y2, z2, light, speed);
+        float lightness = buf.readFloat();
+        float duration = buf.readFloat();
+        return new Area(x1, y1, z1, x2, y2, z2, lightness, duration);
     }
 
     public boolean contains(double x, double y, double z) {
@@ -69,7 +70,7 @@ public class Area {
 
     @Override
     public String toString() {
-        return x1 + "," + y1 + "," + z1 + "," + x2 + "," + y2 + "," + z2 + "," + gamma + "," + speed;
+        return x1 + "," + y1 + "," + z1 + "," + x2 + "," + y2 + "," + z2 + "," + lightness + "," + duration;
     }
 
     public String pos1() {
@@ -96,14 +97,10 @@ public class Area {
         return new net.minecraft.util.BlockPos((x1 + x2) / 2.0, (y1 + y2) / 2.0, (z1 + z2) / 2.0);
     }
 
-    public float nextGamma(float gamma) {
-        if (gamma < this.gamma - speed) {
-            gamma += speed;
-        } else if (gamma > this.gamma + speed) {
-            gamma -= speed;
-        } else {
-            gamma = this.gamma;
-        }
-        return gamma;
+    /**
+     * Gamma that makes the current scene appear at this area's target lightness.
+     */
+    public double targetGamma(double raw) {
+        return GammaCurve.gammaFromLightness(lightness, raw);
     }
 }

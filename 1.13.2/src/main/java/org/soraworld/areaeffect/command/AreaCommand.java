@@ -14,7 +14,7 @@ import org.soraworld.areaeffect.proxy.CommonProxy;
  */
 public class AreaCommand {
     public static void register(CommandDispatcher<CommandSource> dispatcher, CommonProxy proxy) {
-        dispatcher.register(Commands.literal("light")
+        dispatcher.register(Commands.literal("areaeffect")
                 .requires((source) -> (source.getEntity() instanceof EntityPlayerMP) && source.hasPermissionLevel(2))
                 .then(Commands.literal("pos1").executes(context -> {
                     EntityPlayerMP player = context.getSource().asPlayer();
@@ -27,24 +27,24 @@ public class AreaCommand {
                     return 1;
                 }))
                 .then(Commands.literal("create")
-                        .then(Commands.argument("gamma", FloatArgumentType.floatArg())
-                                .then(Commands.argument("speed", FloatArgumentType.floatArg(0.0F))
+                        .then(Commands.argument("lightness", FloatArgumentType.floatArg(0.0F, 100.0F))
+                                .then(Commands.argument("duration", FloatArgumentType.floatArg(0.05F, 60.0F))
                                         .executes(context -> {
                                             EntityPlayerMP player = context.getSource().asPlayer();
-                                            float gamma = context.getArgument("gamma", float.class);
-                                            float speed = context.getArgument("speed", float.class);
-                                            proxy.createArea(player, gamma, speed);
+                                            float lightness = context.getArgument("lightness", float.class);
+                                            float duration = context.getArgument("duration", float.class);
+                                            proxy.createArea(player, lightness, duration);
                                             return 1;
                                         }))
                                 .executes(context -> {
                                     EntityPlayerMP player = context.getSource().asPlayer();
                                     float gamma = context.getArgument("gamma", float.class);
-                                    proxy.createArea(player, gamma, 0.2F);
+                                    proxy.createArea(player, lightness, 1.0F);
                                     return 1;
                                 }))
                         .executes(context -> {
                             EntityPlayerMP player = context.getSource().asPlayer();
-                            proxy.createArea(player, 1.0F, 0.2F);
+                            proxy.createArea(player, 90.0F, 1.0F);
                             return 1;
                         }))
                 .then(Commands.literal("delete").executes(context -> {
@@ -58,8 +58,8 @@ public class AreaCommand {
                     if (area != null) {
                         proxy.sendChatTranslation(player, "info.pos1", area.pos1());
                         proxy.sendChatTranslation(player, "info.pos2", area.pos2());
-                        proxy.sendChatTranslation(player, "info.light", area.gamma);
-                        proxy.sendChatTranslation(player, "info.speed", area.speed);
+                        proxy.sendChatTranslation(player, "info.lightness", area.lightness);
+                        proxy.sendChatTranslation(player, "info.duration", area.duration);
                         proxy.setPos1(player, area.vec1(), false);
                         proxy.setPos2(player, area.vec2(), false);
                     } else {
@@ -91,20 +91,21 @@ public class AreaCommand {
                             proxy.tpAreaById(player, id);
                             return 1;
                         })))
-                .then(Commands.literal("level")
-                        .then(Commands.argument("gamma", FloatArgumentType.floatArg()).executes(context -> {
+                .then(Commands.literal("lightness")
+                        .then(Commands.argument("lightness", FloatArgumentType.floatArg(0.0F, 100.0F)).executes(context -> {
                             EntityPlayerMP player = context.getSource().asPlayer();
                             Area area = proxy.findAreaAt(player);
                             if (area != null) {
-                                float old = area.gamma;
-                                area.gamma = context.getArgument("gamma", float.class);
-                                if (old != area.gamma) {
+                                float value = context.getArgument("lightness", float.class);
+                                float old = area.lightness;
+                                area.lightness = value;
+                                if (old != area.lightness) {
                                     if (CommonProxy.isDedicated(player)) {
-                                        proxy.sendGammaToAll(player.dimension.getId(), area.id, area.gamma);
+                                        proxy.sendLightnessToAll(player.dimension.getId(), area.id, area.lightness);
                                     }
                                     proxy.save();
                                 }
-                                proxy.sendChatTranslation(player, "info.light", area.gamma);
+                                proxy.sendChatTranslation(player, "info.lightness", area.lightness);
                             } else {
                                 proxy.sendChatTranslation(player, "info.notInArea");
                             }
@@ -114,26 +115,27 @@ public class AreaCommand {
                             EntityPlayerMP player = context.getSource().asPlayer();
                             Area area = proxy.findAreaAt(player);
                             if (area != null) {
-                                proxy.sendChatTranslation(player, "info.light", area.gamma);
+                                proxy.sendChatTranslation(player, "info.lightness", area.lightness);
                             } else {
                                 proxy.sendChatTranslation(player, "info.notInArea");
                             }
                             return 1;
                         }))
-                .then(Commands.literal("speed")
-                        .then(Commands.argument("speed", FloatArgumentType.floatArg()).executes(context -> {
+                .then(Commands.literal("duration")
+                        .then(Commands.argument("duration", FloatArgumentType.floatArg(0.05F, 60.0F)).executes(context -> {
                             EntityPlayerMP player = context.getSource().asPlayer();
                             Area area = proxy.findAreaAt(player);
                             if (area != null) {
-                                float old = area.speed;
-                                area.speed = context.getArgument("speed", float.class);
-                                if (old != area.speed) {
+                                float value = context.getArgument("duration", float.class);
+                                float old = area.duration;
+                                area.duration = value;
+                                if (old != area.duration) {
                                     if (CommonProxy.isDedicated(player)) {
-                                        proxy.sendSpeedToAll(player.dimension.getId(), area.id, area.speed);
+                                        proxy.sendDurationToAll(player.dimension.getId(), area.id, area.duration);
                                     }
                                     proxy.save();
                                 }
-                                proxy.sendChatTranslation(player, "info.speed", area.speed);
+                                proxy.sendChatTranslation(player, "info.duration", area.duration);
                             } else {
                                 proxy.sendChatTranslation(player, "info.notInArea");
                             }
@@ -143,7 +145,7 @@ public class AreaCommand {
                             EntityPlayerMP player = context.getSource().asPlayer();
                             Area area = proxy.findAreaAt(player);
                             if (area != null) {
-                                proxy.sendChatTranslation(player, "info.speed", area.speed);
+                                proxy.sendChatTranslation(player, "info.duration", area.duration);
                             } else {
                                 proxy.sendChatTranslation(player, "info.notInArea");
                             }

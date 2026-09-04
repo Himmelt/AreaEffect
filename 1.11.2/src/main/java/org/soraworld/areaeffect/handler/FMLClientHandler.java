@@ -17,6 +17,9 @@ public class FMLClientHandler {
 
     @net.minecraftforge.fml.common.eventhandler.SubscribeEvent
     public void onPlayerTick(TickEvent.PlayerTickEvent event) {
+        if (event.phase != TickEvent.Phase.END) {
+            return;
+        }
         if (event.player instanceof EntityPlayerSP) {
             proxy.updateClientGamma(event.player);
         }

@@ -17,6 +17,9 @@ public class FMLClientHandler {
 
     @cpw.mods.fml.common.eventhandler.SubscribeEvent
     public void onPlayerTick(cpw.mods.fml.common.gameevent.TickEvent.PlayerTickEvent event) {
+        if (event.phase != cpw.mods.fml.common.gameevent.TickEvent.Phase.END) {
+            return;
+        }
         if (event.player instanceof EntityPlayerSP) {
             proxy.updateClientGamma(event.player);
         }

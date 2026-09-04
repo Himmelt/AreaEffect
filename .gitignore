@@ -24,3 +24,6 @@ ehthumbs.db
 # ===== 日志 / 临时 =====
 *.log
 *.tmp
+
+# ===== WorkBuddy 本地工作区数据 =====
+.workbuddy/

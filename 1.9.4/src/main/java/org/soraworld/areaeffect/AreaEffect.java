@@ -20,7 +20,7 @@ import java.io.File;
 public class AreaEffect {
     public static final String MOD_ID = "areaeffect";
     public static final String MOD_NAME = "AreaEffect";
-    public static final String MOD_VERSION = "1.2.0";
+    public static final String MOD_VERSION = "1.3.0";
     @SidedProxy(
             clientSide = "org.soraworld.areaeffect.proxy.ClientProxy",
             serverSide = "org.soraworld.areaeffect.proxy.CommonProxy"
@@ -39,7 +39,7 @@ public class AreaEffect {
 
     @Mod.EventHandler
     public void onServerStarting(FMLServerStartingEvent event) {
-        event.registerServerCommand(new AreaCommand(proxy, true, "light"));
+        event.registerServerCommand(new AreaCommand(proxy, true, "areaeffect"));
         if (event.getServer().getEntityWorld() instanceof WorldServer) {
             WorldServer world = (WorldServer) event.getServer().getEntityWorld();
             File conf = new File(world.getChunkSaveLocation(), MOD_ID + ".cfg");

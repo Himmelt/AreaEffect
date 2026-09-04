@@ -17,7 +17,7 @@ apply plugin: 'eclipse'
 apply plugin: 'maven-publish'
 
 group = 'org.soraworld.areaeffect'
-version = '1.2.0'
+version = '1.3.0'
 archivesBaseName = 'AreaEffect-1.15.2'
 
 sourceCompatibility = targetCompatibility = JavaVersion.VERSION_1_8

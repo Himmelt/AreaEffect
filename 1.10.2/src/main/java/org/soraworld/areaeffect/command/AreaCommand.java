@@ -30,9 +30,9 @@ public class AreaCommand extends ICommand implements net.minecraft.command.IComm
             @Override
             public void execute(EntityPlayerMP player, Args args) {
                 try {
-                    float gamma = args.size() >= 1 ? Float.parseFloat(args.get(0)) : 1.0F;
-                    float speed = args.size() >= 2 ? Float.parseFloat(args.get(1)) : 0.2F;
-                    proxy.createArea(player, gamma, speed);
+                    float lightness = args.size() >= 1 ? Float.parseFloat(args.get(0)) : 90.0F;
+                    float duration = args.size() >= 2 ? Float.parseFloat(args.get(1)) : 1.0F;
+                    proxy.createArea(player, lightness, duration);
                 } catch (Throwable e) {
                     proxy.sendChatTranslation(player, "invalid.float");
                 }
@@ -51,8 +51,8 @@ public class AreaCommand extends ICommand implements net.minecraft.command.IComm
                 if (area != null) {
                     proxy.sendChatTranslation(player, "info.pos1", area.pos1());
                     proxy.sendChatTranslation(player, "info.pos2", area.pos2());
-                    proxy.sendChatTranslation(player, "info.light", area.gamma);
-                    proxy.sendChatTranslation(player, "info.speed", area.speed);
+                    proxy.sendChatTranslation(player, "info.lightness", area.lightness);
+                    proxy.sendChatTranslation(player, "info.duration", area.duration);
                     proxy.setPos1(player, area.vec1(), false);
                     proxy.setPos2(player, area.vec2(), false);
                 } else {
@@ -92,54 +92,68 @@ public class AreaCommand extends ICommand implements net.minecraft.command.IComm
                 }
             }
         });
-        addSub(new ICommand(true, "level") {
+        addSub(new ICommand(true, "lightness") {
             @Override
             public void execute(EntityPlayerMP player, Args args) {
                 Area area = proxy.findAreaAt(player);
                 if (area != null) {
                     if (args.notEmpty()) {
                         try {
-                            float old = area.gamma;
-                            area.gamma = Float.parseFloat(args.first());
-                            if (old != area.gamma) {
+                            float value = Float.parseFloat(args.first());
+                            if (!(value >= 0.0F)) {
+                                value = 0.0F;
+                            }
+                            if (value > 100.0F) {
+                                value = 100.0F;
+                            }
+                            float old = area.lightness;
+                            area.lightness = value;
+                            if (old != area.lightness) {
                                 if (CommonProxy.isDedicated(player)) {
-                                    proxy.sendGammaToAll(player.dimension, area.id, area.gamma);
+                                    proxy.sendLightnessToAll(player.dimension, area.id, area.lightness);
                                 }
                                 proxy.save();
                             }
-                            proxy.sendChatTranslation(player, "info.light", area.gamma);
+                            proxy.sendChatTranslation(player, "info.lightness", area.lightness);
                         } catch (Throwable e) {
                             proxy.sendChatTranslation(player, "invalid.float");
                         }
                     } else {
-                        proxy.sendChatTranslation(player, "info.light", area.gamma);
+                        proxy.sendChatTranslation(player, "info.lightness", area.lightness);
                     }
                 } else {
                     proxy.sendChatTranslation(player, "info.notInArea");
                 }
             }
         });
-        addSub(new ICommand(true, "speed") {
+        addSub(new ICommand(true, "duration") {
             @Override
             public void execute(EntityPlayerMP player, Args args) {
                 Area area = proxy.findAreaAt(player);
                 if (area != null) {
                     if (args.notEmpty()) {
                         try {
-                            float old = area.speed;
-                            area.speed = Float.parseFloat(args.first());
-                            if (old != area.speed) {
+                            float value = Float.parseFloat(args.first());
+                            if (!(value >= 0.05F)) {
+                                value = 0.05F;
+                            }
+                            if (value > 60.0F) {
+                                value = 60.0F;
+                            }
+                            float old = area.duration;
+                            area.duration = value;
+                            if (old != area.duration) {
                                 if (CommonProxy.isDedicated(player)) {
-                                    proxy.sendSpeedToAll(player.dimension, area.id, area.speed);
+                                    proxy.sendDurationToAll(player.dimension, area.id, area.duration);
                                 }
                                 proxy.save();
                             }
-                            proxy.sendChatTranslation(player, "info.speed", area.speed);
+                            proxy.sendChatTranslation(player, "info.duration", area.duration);
                         } catch (Throwable e) {
                             proxy.sendChatTranslation(player, "invalid.float");
                         }
                     } else {
-                        proxy.sendChatTranslation(player, "info.speed", area.speed);
+                        proxy.sendChatTranslation(player, "info.duration", area.duration);
                     }
                 } else {
                     proxy.sendChatTranslation(player, "info.notInArea");
@@ -160,7 +174,7 @@ public class AreaCommand extends ICommand implements net.minecraft.command.IComm
     }
     @Override
     public String getUsage(ICommandSender sender) {
-        return "/light pos1/pos2/create/level/speed/info/delete/tool";
+        return "/areaeffect pos1/pos2/create/lightness/duration/info/delete/tool";
     }
     @Override
     public List<String> getAliases() {

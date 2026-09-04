@@ -16,10 +16,16 @@ import org.soraworld.areaeffect.network.AreaPacket;
 
 import java.util.HashMap;
 import java.util.Map;
+import org.soraworld.areaeffect.util.GammaCurve;
 
 public class ClientProxy extends CommonProxy {
 
     private float originGamma = 0.0F;
+    private double originLightness = 0.0D;
+    private int elapsed = Integer.MAX_VALUE;
+    private boolean inArea = false;
+    private int lastAreaId = -1;
+    private float lastLightness = -1.0F;
 
     private final Minecraft mc = Minecraft.getMinecraft();
     private final GameSettings gameSettings = mc.gameSettings;
@@ -46,11 +52,11 @@ public class ClientProxy extends CommonProxy {
             case DELETE:
                 processDelete(AreaPacket.Delete.decode(buf));
                 break;
-            case GAMMA:
-                processGamma(AreaPacket.Gamma.decode(buf));
+            case LIGHTNESS:
+                processLightness(AreaPacket.Lightness.decode(buf));
                 break;
-            case SPEED:
-                processSpeed(AreaPacket.Speed.decode(buf));
+            case DURATION:
+                processDuration(AreaPacket.Duration.decode(buf));
                 break;
             default:
         }
@@ -67,22 +73,22 @@ public class ClientProxy extends CommonProxy {
         }
     }
 
-    public void processGamma(AreaPacket.Gamma packet) {
+    public void processLightness(AreaPacket.Lightness packet) {
         Map<Integer, Area> areas = lightAreas.get(packet.dim);
         if (areas != null && !areas.isEmpty()) {
             Area area = areas.get(packet.id);
             if (area != null) {
-                area.gamma = packet.gamma;
+                area.lightness = packet.lightness;
             }
         }
     }
 
-    public void processSpeed(AreaPacket.Speed packet) {
+    public void processDuration(AreaPacket.Duration packet) {
         Map<Integer, Area> areas = lightAreas.get(packet.dim);
         if (areas != null && !areas.isEmpty()) {
             Area area = areas.get(packet.id);
             if (area != null) {
-                area.speed = packet.speed;
+                area.duration = packet.duration;
             }
         }
     }
@@ -91,26 +97,53 @@ public class ClientProxy extends CommonProxy {
         if (mc.currentScreen instanceof GuiVideoSettings) {
             return;
         }
+        double raw = rawLightAt(player);
+        double targetGamma;
+        double targetLightness;
+        float seconds;
+        boolean restart = false;
         Area area = findAreaAt(player);
         if (area != null) {
-            speed = area.speed;
-            gameSettings.gammaSetting = area.nextGamma(gameSettings.gammaSetting);
-            return;
+            seconds = area.duration;
+            targetLightness = area.lightness;
+            targetGamma = GammaCurve.gammaFromLightness(area.lightness, raw);
+            if (!inArea || area.id != lastAreaId || area.lightness != lastLightness) {
+                restart = true;
+            }
+            inArea = true;
+            lastAreaId = area.id;
+            lastLightness = area.lightness;
+            duration = area.duration;
+        } else {
+            seconds = duration;
+            targetGamma = originGamma;
+            targetLightness = GammaCurve.perceive(originGamma, raw);
+            if (inArea) {
+                restart = true;
+            }
+            inArea = false;
+            lastAreaId = -1;
         }
-        fallbackDefaultGamma();
+        if (restart) {
+            originLightness = GammaCurve.perceive(gameSettings.gammaSetting, raw);
+            elapsed = 0;
+        }
+        int ticks = Math.max(1, Math.round(seconds * 20.0F));
+        double gamma;
+        if (elapsed >= ticks) {
+            gamma = targetGamma;
+        } else {
+            double lightness = GammaCurve.glide(originLightness, targetLightness, elapsed, ticks);
+            gamma = GammaCurve.gammaFromLightness(lightness, raw);
+            elapsed++;
+        }
+        gameSettings.gammaSetting = (float) gamma;
     }
 
-    private void fallbackDefaultGamma() {
-        if (originGamma > 1) {
-            originGamma = 1.0F;
-        }
-        if (gameSettings.gammaSetting < this.originGamma - speed) {
-            gameSettings.gammaSetting += speed;
-        } else if (gameSettings.gammaSetting > this.originGamma + speed) {
-            gameSettings.gammaSetting -= speed;
-        } else {
-            gameSettings.gammaSetting = this.originGamma;
-        }
+
+    /** Scene base light level (the lightmap's raw value) at the player's position. */
+    private double rawLightAt(EntityPlayer player) {
+        return player.world.getLightBrightness(new net.minecraft.util.math.BlockPos(player));
     }
 
     public void saveLight() {
@@ -119,7 +152,10 @@ public class ClientProxy extends CommonProxy {
 
     public void clientReset() {
         tool = Items.wooden_axe;
-        speed = 1.0F;
+        duration = 1.0F;
+        elapsed = Integer.MAX_VALUE;
+        inArea = false;
+        lastAreaId = -1;
         AREA_ID = 0;
         lightAreas.clear();
         pos1s.clear();

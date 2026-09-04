@@ -20,23 +20,23 @@
 ### 指令
 **所有指令只能由OP权限等级2+的玩家执行**
 ```
-/light pos1                         设置玩家当前位置为选区起点
-/light pos2                         设置玩家当前位置为选区终点
-/light create [light] [speed]       根据选区创建区域，可选参数[light:小数]为亮度级别,[speed:小数]为变化速度
-/light delete                       删除玩家当前所在的区域
-/light info                         显示玩家当前所在区域的信息，如果客户端安装有WE-CUI，则会显示范围
-/light list [all|<dim>]             列出(<dim>维度世界的)所有区域，没有参数时为玩家所在世界，参数为all时为全部世界
-/light tp <id>                      传送到指定<id:整数>的区域的中心位置(无视方块阻碍)
-/light level [value]                查看/设置当前区域的亮度 [value:小数]
-/light speed [value]                查看/设置当前区域的变化速度 [value:小数]（变化值/tick）
-/light tool                         手持为空，查看选区工具；手持非空，设置选区工具为当前手持物
+/areaeffect pos1                         设置玩家当前位置为选区起点
+/areaeffect pos2                         设置玩家当前位置为选区终点
+/areaeffect create [lightness] [duration]       根据选区创建区域，可选参数[light:小数]为目标亮度 (CIE L*, 0-100),[speed:小数]为过渡时长(秒)
+/areaeffect delete                       删除玩家当前所在的区域
+/areaeffect info                         显示玩家当前所在区域的信息，如果客户端安装有WE-CUI，则会显示范围
+/areaeffect list [all|<dim>]             列出(<dim>维度世界的)所有区域，没有参数时为玩家所在世界，参数为all时为全部世界
+/areaeffect tp <id>                      传送到指定<id:整数>的区域的中心位置(无视方块阻碍)
+/areaeffect lightness [value]                查看/设置当前区域的亮度 [value:小数]
+/areaeffect duration [value]                查看/设置当前区域的过渡时长(秒) [value:小数]（变化值/tick）
+/areaeffect tool                         手持为空，查看选区工具；手持非空，设置选区工具为当前手持物
 ```
 
 ### 更新日志
 ```yaml
 1.2.0
   - 调整代码结构
-  - 增加每区域独立设置变化速度
+  - 增加每区域独立设置过渡时长(秒)
   - 增加 1.13+ 版本支持
 1.1.0:
   - 修正翻译
@@ -45,7 +45,7 @@
   - 添加 tp 指令，可以传送到指定id区域的中心
   - 修复 原始亮度，原始亮度最大值限制为1.0
 1.0.6:
-  - 添加 speed 指令，添加亮度变化速度配置项和对应功能
+  - 添加 speed 指令，添加亮度过渡时长(秒)配置项和对应功能
   - 调整 配置文件存放位置调整为存档目录
 1.0.5:
   - 添加 1.8|1.8.8|1.8.9|1.9|1.9.4 支持
@@ -82,14 +82,14 @@ right click to set the end point.
 
 ### Commands
 ```
-/light pos1                         set player's pos as area start point
-/light pos2                         set player's pos as area end point
-/light create [light]               create area by current selected area, the optional arg is light (range: -15.0 - 15.0)
-/light delete                       delete the area at player's pos
-/light info                         show the info of the area at player's pos
-/light list [all|<dim>]             list dimension <dim> world's areas, empty args using player's world, arg "all" will list all world's areas
-/light tp <id>                      teleport to area's center of the id
-/light level [light]                get/set the current area's light
-/light speed [speed]                get/set the current area's light change speed (float/tick)
-/light tool                         hand empty, show select tool; hand item,set select tool to the item in hand
+/areaeffect pos1                         set player's pos as area start point
+/areaeffect pos2                         set player's pos as area end point
+/areaeffect create [lightness]               create area by current selected area, the optional arg is light (range: -15.0 - 15.0)
+/areaeffect delete                       delete the area at player's pos
+/areaeffect info                         show the info of the area at player's pos
+/areaeffect list [all|<dim>]             list dimension <dim> world's areas, empty args using player's world, arg "all" will list all world's areas
+/areaeffect tp <id>                      teleport to area's center of the id
+/areaeffect level [lightness]                get/set the current area's light
+/areaeffect speed [duration]                get/set the current area's light change speed (float/tick)
+/areaeffect tool                         hand empty, show select tool; hand item,set select tool to the item in hand
 ```

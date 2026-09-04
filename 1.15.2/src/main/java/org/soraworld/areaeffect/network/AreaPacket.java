@@ -54,47 +54,47 @@ public abstract class AreaPacket {
         }
     }
 
-    public static class Gamma extends AreaPacket {
-        public final float gamma;
+    public static class Lightness extends AreaPacket {
+        public final float lightness;
 
-        public Gamma(int dim, int id, float gamma) {
+        public Lightness(int dim, int id, float lightness) {
             super(dim, id);
-            this.gamma = gamma;
+            this.lightness = lightness;
         }
 
-        public static void encode(Gamma packet, PacketBuffer buf) {
+        public static void encode(Lightness packet, PacketBuffer buf) {
             buf.writeInt(packet.dim);
             buf.writeInt(packet.id);
-            buf.writeFloat(packet.gamma);
+            buf.writeFloat(packet.lightness);
         }
 
-        public static Gamma decode(PacketBuffer buf) {
+        public static Lightness decode(PacketBuffer buf) {
             int dim = buf.readInt();
             int id = buf.readInt();
-            float gamma = buf.readFloat();
-            return new Gamma(dim, id, gamma);
+            float lightness = buf.readFloat();
+            return new Lightness(dim, id, lightness);
         }
     }
 
-    public static class Speed extends AreaPacket {
-        public final float speed;
+    public static class Duration extends AreaPacket {
+        public final float duration;
 
-        public Speed(int dim, int id, float speed) {
+        public Duration(int dim, int id, float duration) {
             super(dim, id);
-            this.speed = speed;
+            this.duration = duration;
         }
 
-        public static void encode(Speed packet, PacketBuffer buf) {
+        public static void encode(Duration packet, PacketBuffer buf) {
             buf.writeInt(packet.dim);
             buf.writeInt(packet.id);
-            buf.writeFloat(packet.speed);
+            buf.writeFloat(packet.duration);
         }
 
-        public static Speed decode(PacketBuffer buf) {
+        public static Duration decode(PacketBuffer buf) {
             int dim = buf.readInt();
             int id = buf.readInt();
-            float speed = buf.readFloat();
-            return new Speed(dim, id, speed);
+            float duration = buf.readFloat();
+            return new Duration(dim, id, duration);
         }
     }
 }
