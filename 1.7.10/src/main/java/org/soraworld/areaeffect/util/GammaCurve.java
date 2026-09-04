@@ -29,7 +29,9 @@ package org.soraworld.areaeffect.util;
  */
 public final class GammaCurve {
 
-    /** Perceptual difference (CIE L*) below which two gammas look identical. */
+    /**
+     * Perceptual difference (CIE L*) below which two gammas look identical.
+     */
     private static final double JND = 0.05;
 
     private GammaCurve() {
@@ -39,30 +41,40 @@ public final class GammaCurve {
     // forward chain: (raw, gamma) -> perceived lightness
     // ------------------------------------------------------------------
 
-    /** Minecraft lightmap output (0..1) for the given base light and gamma. */
+    /**
+     * Minecraft lightmap output (0..1) for the given base light and gamma.
+     */
     public static double lightmap(double raw, double gamma) {
         double bright = 1.0 - Math.pow(1.0 - raw, 4.0);
         double value = raw * (1.0 - gamma) + bright * gamma;
         return clamp(value * 0.96 + 0.03, 0.0, 1.0);
     }
 
-    /** sRGB code value -> linear luminance (sRGB EOTF). */
+    /**
+     * sRGB code value -> linear luminance (sRGB EOTF).
+     */
     public static double toLinear(double code) {
         return code <= 0.04045 ? code / 12.92 : Math.pow((code + 0.055) / 1.055, 2.4);
     }
 
-    /** Linear luminance -> CIE L* (0..100). */
+    /**
+     * Linear luminance -> CIE L* (0..100).
+     */
     public static double lightness(double luminance) {
         double f = luminance > 0.008856 ? Math.cbrt(luminance) : luminance * 7.787 + 16.0 / 116.0;
         return 116.0 * f - 16.0;
     }
 
-    /** Gamma -> perceived lightness (CIE L*, 0..100) in a scene with base light {@code raw}. */
+    /**
+     * Gamma -> perceived lightness (CIE L*, 0..100) in a scene with base light {@code raw}.
+     */
     public static double perceive(double gamma, double raw) {
         return lightness(toLinear(lightmap(raw, gamma)));
     }
 
-    /** sRGB code value (0..1) -> CIE L* (0..100). */
+    /**
+     * sRGB code value (0..1) -> CIE L* (0..100).
+     */
     public static double lightnessFromCode(double code) {
         return lightness(toLinear(code));
     }
@@ -71,30 +83,40 @@ public final class GammaCurve {
     // inverse chain: perceived lightness -> (raw, gamma)
     // ------------------------------------------------------------------
 
-    /** CIE L* (0..100) -> linear luminance. */
+    /**
+     * CIE L* (0..100) -> linear luminance.
+     */
     public static double toLuminance(double lightness) {
         double f = (lightness + 16.0) / 116.0;
         double cube = f * f * f;
         return cube > 0.008856 ? cube : lightness / 903.292;
     }
 
-    /** Linear luminance -> sRGB code value (inverse EOTF). */
+    /**
+     * Linear luminance -> sRGB code value (inverse EOTF).
+     */
     public static double toCode(double luminance) {
         return luminance <= 0.0031308 ? luminance * 12.92 : 1.055 * Math.pow(luminance, 1.0 / 2.4) - 0.055;
     }
 
-    /** {@code 1 - (1 - raw)^4 - raw}: how much a unit of gamma shifts the blend. */
+    /**
+     * {@code 1 - (1 - raw)^4 - raw}: how much a unit of gamma shifts the blend.
+     */
     public static double delta(double raw) {
         return 1.0 - Math.pow(1.0 - raw, 4.0) - raw;
     }
 
-    /** Lowest gamma with a visible effect in a scene with base light {@code raw}. */
+    /**
+     * Lowest gamma with a visible effect in a scene with base light {@code raw}.
+     */
     public static double liveMinGamma(double raw) {
         double d = delta(raw);
         return d <= 1.0e-9 ? 0.0 : ((-0.03) / 0.96 - raw) / d;
     }
 
-    /** Highest gamma with a visible effect in a scene with base light {@code raw}. */
+    /**
+     * Highest gamma with a visible effect in a scene with base light {@code raw}.
+     */
     public static double liveMaxGamma(double raw) {
         double d = delta(raw);
         return d <= 1.0e-9 ? 0.0 : ((1.0 - 0.03) / 0.96 - raw) / d;
@@ -119,7 +141,9 @@ public final class GammaCurve {
     // duration based transition
     // ------------------------------------------------------------------
 
-    /** Smooth 0..1 easing (smoothstep). */
+    /**
+     * Smooth 0..1 easing (smoothstep).
+     */
     public static double ease(double progress) {
         double t = clamp(progress, 0.0, 1.0);
         return t * t * (3.0 - 2.0 * t);

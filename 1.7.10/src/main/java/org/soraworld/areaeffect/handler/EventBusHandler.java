@@ -1,10 +1,10 @@
 package org.soraworld.areaeffect.handler;
 
+import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.item.ItemStack;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
-import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import org.soraworld.areaeffect.proxy.CommonProxy;
 import org.soraworld.areaeffect.util.Vec3i;
 
@@ -16,7 +16,7 @@ public class EventBusHandler {
         this.proxy = proxy;
     }
 
-    @cpw.mods.fml.common.eventhandler.SubscribeEvent(receiveCanceled = true)
+    @SubscribeEvent(receiveCanceled = true)
     public void onClickBlock(PlayerInteractEvent event) {
         EntityPlayer player = event.entityPlayer;
         ItemStack stack = player.getHeldItem();

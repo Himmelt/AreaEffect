@@ -35,7 +35,9 @@ public final class LightmapHook {
     private LightmapHook() {
     }
 
-    /** Sets the current uniform lightness offset (CIE L*); {@code 0} is vanilla exact. */
+    /**
+     * Sets the current uniform lightness offset (CIE L*); {@code 0} is vanilla exact.
+     */
     public static void setOffset(double dl) {
         offset = dl;
     }
@@ -81,7 +83,9 @@ public final class LightmapHook {
         }
     }
 
-    /** First declared field of exactly {@code type}, made accessible. */
+    /**
+     * First declared field of exactly {@code type}, made accessible.
+     */
     private static Field findField(Class<?> owner, Class<?> type) {
         for (Field f : owner.getDeclaredFields()) {
             if (f.getType() == type) {
@@ -102,7 +106,9 @@ public final class LightmapHook {
         return true;
     }
 
-    /** 256 entry LUT: code value -> code value, shifted by {@code offset} in CIE L* space. */
+    /**
+     * 256 entry LUT: code value -> code value, shifted by {@code offset} in CIE L* space.
+     */
     private static int[] getLut() {
         double dl = offset;
         int[] table = lut;

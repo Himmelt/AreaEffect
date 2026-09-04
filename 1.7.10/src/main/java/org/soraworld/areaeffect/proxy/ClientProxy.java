@@ -1,11 +1,11 @@
 package org.soraworld.areaeffect.proxy;
 
+import cpw.mods.fml.common.FMLCommonHandler;
+import cpw.mods.fml.common.event.FMLPreInitializationEvent;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.init.Items;
-import cpw.mods.fml.common.FMLCommonHandler;
-import cpw.mods.fml.common.event.FMLPreInitializationEvent;
 import org.soraworld.areaeffect.handler.FMLClientHandler;
 import org.soraworld.areaeffect.handler.LightmapHook;
 import org.soraworld.areaeffect.network.Area;
@@ -128,7 +128,9 @@ public class ClientProxy extends CommonProxy {
         LightmapHook.setOffset(curDL);
     }
 
-    /** Scene base light level (the lightmap's raw value) at the player's position. */
+    /**
+     * Scene base light level (the lightmap's raw value) at the player's position.
+     */
     private double rawLightAt(EntityPlayer player) {
         return player.worldObj.getLightBrightness((int) Math.floor(player.posX), (int) Math.floor(player.posY), (int) Math.floor(player.posZ));
     }

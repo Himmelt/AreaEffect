@@ -1,10 +1,13 @@
 package org.soraworld.areaeffect.proxy;
 
+import cpw.mods.fml.common.event.FMLInitializationEvent;
+import cpw.mods.fml.common.event.FMLPreInitializationEvent;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import net.minecraft.command.ICommandSender;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.event.ClickEvent;
 import net.minecraft.init.Items;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
@@ -15,16 +18,8 @@ import net.minecraft.util.ChatComponentTranslation;
 import net.minecraft.util.ChatStyle;
 import net.minecraft.util.EnumChatFormatting;
 import net.minecraft.util.IChatComponent;
-import net.minecraft.event.ClickEvent;
-import net.minecraft.world.WorldServer;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.common.config.Configuration;
-import cpw.mods.fml.common.FMLCommonHandler;
-import cpw.mods.fml.common.event.FMLInitializationEvent;
-import cpw.mods.fml.common.event.FMLPreInitializationEvent;
-import cpw.mods.fml.common.network.FMLEventChannel;
-import cpw.mods.fml.common.network.NetworkRegistry;
-import cpw.mods.fml.common.network.internal.FMLProxyPacket;
 import org.soraworld.areaeffect.handler.EventBusHandler;
 import org.soraworld.areaeffect.handler.FMLHandler;
 import org.soraworld.areaeffect.network.Area;
@@ -121,9 +116,9 @@ public class CommonProxy {
 
     private String getToolName() {
         try {
-            Object object = Item.itemRegistry.getNameForObject(tool);
-            if (object instanceof String) {
-                return (String) object;
+            String object = Item.itemRegistry.getNameForObject(tool);
+            if (object != null) {
+                return object;
             }
         } catch (Throwable ignored) {
         }

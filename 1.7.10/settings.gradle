@@ -1,8 +1,12 @@
 pluginManagement {
     repositories {
-        gradlePluginPortal()
-        maven { url = 'https://nexus.gtnewhorizons.com/repository/public/' }
-        mavenCentral()
+        maven {
+            credentials {
+                username = System.getenv('ALIYUN_MVN_USERNAME')
+                password = System.getenv('ALIYUN_MVN_PASSWORD')
+            }
+            url = System.getenv('ALIYUN_MVN_URL')
+        }
     }
 }
 

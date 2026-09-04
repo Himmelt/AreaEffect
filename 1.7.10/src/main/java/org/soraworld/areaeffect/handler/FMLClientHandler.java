@@ -1,11 +1,10 @@
 package org.soraworld.areaeffect.handler;
 
-import net.minecraft.client.entity.EntityPlayerSP;
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import cpw.mods.fml.common.gameevent.TickEvent;
 import cpw.mods.fml.common.network.FMLNetworkEvent;
+import net.minecraft.client.entity.EntityPlayerSP;
 import org.soraworld.areaeffect.proxy.ClientProxy;
-import org.soraworld.areaeffect.proxy.CommonProxy;
 
 public class FMLClientHandler {
 
@@ -15,9 +14,9 @@ public class FMLClientHandler {
         this.proxy = proxy;
     }
 
-    @cpw.mods.fml.common.eventhandler.SubscribeEvent
-    public void onPlayerTick(cpw.mods.fml.common.gameevent.TickEvent.PlayerTickEvent event) {
-        if (event.phase != cpw.mods.fml.common.gameevent.TickEvent.Phase.END) {
+    @SubscribeEvent
+    public void onPlayerTick(TickEvent.PlayerTickEvent event) {
+        if (event.phase != TickEvent.Phase.END) {
             return;
         }
         if (event.player instanceof EntityPlayerSP) {
@@ -25,13 +24,13 @@ public class FMLClientHandler {
         }
     }
 
-    @cpw.mods.fml.common.eventhandler.SubscribeEvent
-    public void onReceivePacket(cpw.mods.fml.common.network.FMLNetworkEvent.ClientCustomPacketEvent event) {
+    @SubscribeEvent
+    public void onReceivePacket(FMLNetworkEvent.ClientCustomPacketEvent event) {
         proxy.handlePacket(event.packet.payload());
     }
 
-    @cpw.mods.fml.common.eventhandler.SubscribeEvent
-    public void onLogout(cpw.mods.fml.common.network.FMLNetworkEvent.ClientDisconnectionFromServerEvent event) {
+    @SubscribeEvent
+    public void onLogout(FMLNetworkEvent.ClientDisconnectionFromServerEvent event) {
         proxy.clientReset();
     }
 }

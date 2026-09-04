@@ -1,210 +1,177 @@
 package org.soraworld.areaeffect.command;
 
+import net.minecraft.command.CommandBase;
 import net.minecraft.command.ICommandSender;
 import net.minecraft.entity.player.EntityPlayerMP;
-import net.minecraft.server.MinecraftServer;
 
 import org.soraworld.areaeffect.network.Area;
 import org.soraworld.areaeffect.proxy.CommonProxy;
 import org.soraworld.areaeffect.util.Vec3i;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
-public class AreaCommand extends ICommand implements net.minecraft.command.ICommand {
+public class AreaCommand extends CommandBase {
 
-    public AreaCommand(CommonProxy proxy, boolean onlyPlayer, String... aliases) {
-        super(onlyPlayer, aliases);
-        addSub(new ICommand(true, "pos1") {
-            @Override
-            public void execute(EntityPlayerMP player, Args args) {
-                proxy.setPos1(player, new Vec3i(player), true);
-            }
-        });
-        addSub(new ICommand(true, "pos2") {
-            @Override
-            public void execute(EntityPlayerMP player, Args args) {
-                proxy.setPos2(player, new Vec3i(player), true);
-            }
-        });
-        addSub(new ICommand(true, "create") {
-            @Override
-            public void execute(EntityPlayerMP player, Args args) {
-                try {
-                    float lightness = args.size() >= 1 ? Float.parseFloat(args.get(0)) : 90.0F;
-                    float duration = args.size() >= 2 ? Float.parseFloat(args.get(1)) : 1.0F;
-                    proxy.createArea(player, lightness, duration);
-                } catch (Throwable e) {
-                    proxy.sendChatTranslation(player, "invalid.float");
-                }
-            }
-        });
-        addSub(new ICommand(true, "delete") {
-            @Override
-            public void execute(EntityPlayerMP player, Args args) {
-                proxy.deleteArea(player);
-            }
-        });
-        addSub(new ICommand(true, "info") {
-            @Override
-            public void execute(EntityPlayerMP player, Args args) {
-                Area area = proxy.findAreaAt(player);
-                if (area != null) {
-                    proxy.sendChatTranslation(player, "info.pos1", area.pos1());
-                    proxy.sendChatTranslation(player, "info.pos2", area.pos2());
-                    proxy.sendChatTranslation(player, "info.lightness", area.lightness);
-                    proxy.sendChatTranslation(player, "info.duration", area.duration);
-                    proxy.setPos1(player, area.vec1(), false);
-                    proxy.setPos2(player, area.vec2(), false);
-                } else {
-                    proxy.sendChatTranslation(player, "info.notInArea");
-                }
-            }
-        });
-        addSub(new ICommand(true, "list") {
-            @Override
-            public void execute(EntityPlayerMP player, Args args) {
-                if (args.empty()) {
-                    proxy.showList(player, player.dimension, false);
-                    return;
-                }
-                if ("all".equals(args.first())) {
-                    proxy.showList(player, 0, true);
-                    return;
-                }
-                try {
-                    proxy.showList(player, Integer.parseInt(args.first()), false);
-                } catch (Throwable ignored) {
-                    proxy.sendChatTranslation(player, "invalid.int");
-                }
-            }
-        });
-        addSub(new ICommand(true, "tp") {
-            @Override
-            public void execute(EntityPlayerMP player, Args args) {
-                if (args.notEmpty()) {
-                    try {
-                        proxy.tpAreaById(player, Integer.parseInt(args.first()));
-                    } catch (Throwable e) {
-                        proxy.sendChatTranslation(player, "invalid.int");
-                    }
-                } else {
-                    proxy.sendChatTranslation(player, "empty.args");
-                }
-            }
-        });
-        addSub(new ICommand(true, "lightness") {
-            @Override
-            public void execute(EntityPlayerMP player, Args args) {
-                Area area = proxy.findAreaAt(player);
-                if (area != null) {
-                    if (args.notEmpty()) {
-                        try {
-                            float value = Float.parseFloat(args.first());
-                            if (!(value >= 0.0F)) {
-                                value = 0.0F;
-                            }
-                            if (value > 100.0F) {
-                                value = 100.0F;
-                            }
-                            float old = area.lightness;
-                            area.lightness = value;
-                            if (old != area.lightness) {
-                                if (CommonProxy.isDedicated(player)) {
-                                    proxy.sendLightnessToAll(player.dimension, area.id, area.lightness);
-                                }
-                                proxy.save();
-                            }
-                            proxy.sendChatTranslation(player, "info.lightness", area.lightness);
-                        } catch (Throwable e) {
-                            proxy.sendChatTranslation(player, "invalid.float");
-                        }
-                    } else {
-                        proxy.sendChatTranslation(player, "info.lightness", area.lightness);
-                    }
-                } else {
-                    proxy.sendChatTranslation(player, "info.notInArea");
-                }
-            }
-        });
-        addSub(new ICommand(true, "duration") {
-            @Override
-            public void execute(EntityPlayerMP player, Args args) {
-                Area area = proxy.findAreaAt(player);
-                if (area != null) {
-                    if (args.notEmpty()) {
-                        try {
-                            float value = Float.parseFloat(args.first());
-                            if (!(value >= 0.05F)) {
-                                value = 0.05F;
-                            }
-                            if (value > 60.0F) {
-                                value = 60.0F;
-                            }
-                            float old = area.duration;
-                            area.duration = value;
-                            if (old != area.duration) {
-                                if (CommonProxy.isDedicated(player)) {
-                                    proxy.sendDurationToAll(player.dimension, area.id, area.duration);
-                                }
-                                proxy.save();
-                            }
-                            proxy.sendChatTranslation(player, "info.duration", area.duration);
-                        } catch (Throwable e) {
-                            proxy.sendChatTranslation(player, "invalid.float");
-                        }
-                    } else {
-                        proxy.sendChatTranslation(player, "info.duration", area.duration);
-                    }
-                } else {
-                    proxy.sendChatTranslation(player, "info.notInArea");
-                }
-            }
-        });
-        addSub(new ICommand(true, "tool") {
-            @Override
-            public void execute(EntityPlayerMP player, Args args) {
-                proxy.commandTool(player);
-            }
-        });
+    private static final String[] SUBS = {"pos1", "pos2", "create", "delete", "info", "list", "tp", "lightness", "duration", "tool"};
+
+    private final String name;
+    private final CommonProxy proxy;
+    private final String[] aliases;
+
+    public AreaCommand(CommonProxy proxy, String... aliases) {
+        this.proxy = proxy;
+        this.name = aliases != null && aliases.length > 0 ? aliases[0] : "areaeffect";
+        this.aliases = aliases != null && aliases.length > 1
+                ? Arrays.copyOfRange(aliases, 1, aliases.length)
+                : new String[0];
     }
 
     @Override
     public String getCommandName() {
-        return getAlias(0);
+        return name;
     }
+
     @Override
     public String getCommandUsage(ICommandSender sender) {
-        return "/areaeffect pos1/pos2/create/lightness/duration/info/delete/tool";
+        return "/areaeffect pos1|pos2|create|lightness|duration|info|delete|tool";
     }
+
     @Override
     public List<String> getCommandAliases() {
-        return super.getAliases();
+        List<String> aliases = new ArrayList<>();
+        Collections.addAll(aliases, this.aliases);
+        return aliases;
     }
-    @Override
-    public List<String> getAliases() {
-        return getAliases();
-    }
+
     @Override
     public void processCommand(ICommandSender sender, String[] args) {
-        execute(sender, new Args(args));
+        if (!(sender instanceof EntityPlayerMP)) {
+            return;
+        }
+        EntityPlayerMP player = (EntityPlayerMP) sender;
+        String sub = args.length > 0 ? args[0] : "";
+        if ("pos1".equals(sub)) {
+            proxy.setPos1(player, new Vec3i(player), true);
+        } else if ("pos2".equals(sub)) {
+            proxy.setPos2(player, new Vec3i(player), true);
+        } else if ("create".equals(sub)) {
+            try {
+                float lightness = args.length >= 2 ? Float.parseFloat(args[1]) : 90.0F;
+                float duration = args.length >= 3 ? Float.parseFloat(args[2]) : 1.0F;
+                proxy.createArea(player, lightness, duration);
+            } catch (Throwable t) {
+                proxy.sendChatTranslation(player, "invalid.float");
+            }
+        } else if ("delete".equals(sub)) {
+            proxy.deleteArea(player);
+        } else if ("info".equals(sub)) {
+            Area area = proxy.findAreaAt(player);
+            if (area != null) {
+                proxy.sendChatTranslation(player, "info.pos1", area.pos1());
+                proxy.sendChatTranslation(player, "info.pos2", area.pos2());
+                proxy.sendChatTranslation(player, "info.lightness", area.lightness);
+                proxy.sendChatTranslation(player, "info.duration", area.duration);
+                proxy.setPos1(player, area.vec1(), false);
+                proxy.setPos2(player, area.vec2(), false);
+            } else {
+                proxy.sendChatTranslation(player, "info.notInArea");
+            }
+        } else if ("list".equals(sub)) {
+            if (args.length < 2) {
+                proxy.showList(player, player.dimension, false);
+            } else if ("all".equals(args[1])) {
+                proxy.showList(player, 0, true);
+            } else {
+                try {
+                    proxy.showList(player, Integer.parseInt(args[1]), false);
+                } catch (Throwable t) {
+                    proxy.sendChatTranslation(player, "invalid.int");
+                }
+            }
+        } else if ("tp".equals(sub)) {
+            if (args.length >= 2) {
+                try {
+                    proxy.tpAreaById(player, Integer.parseInt(args[1]));
+                } catch (Throwable t) {
+                    proxy.sendChatTranslation(player, "invalid.int");
+                }
+            } else {
+                proxy.sendChatTranslation(player, "empty.args");
+            }
+        } else if ("lightness".equals(sub)) {
+            Area area = proxy.findAreaAt(player);
+            if (area != null) {
+                if (args.length >= 2) {
+                    try {
+                        float value = Float.parseFloat(args[1]);
+                        if (!(value >= 0.0F)) {
+                            value = 0.0F;
+                        }
+                        if (value > 100.0F) {
+                            value = 100.0F;
+                        }
+                        float old = area.lightness;
+                        area.lightness = value;
+                        if (old != area.lightness) {
+                            if (CommonProxy.isDedicated(player)) {
+                                proxy.sendLightnessToAll(player.dimension, area.id, area.lightness);
+                            }
+                            proxy.save();
+                        }
+                    } catch (Throwable t) {
+                        proxy.sendChatTranslation(player, "invalid.float");
+                    }
+                }
+                proxy.sendChatTranslation(player, "info.lightness", area.lightness);
+            } else {
+                proxy.sendChatTranslation(player, "info.notInArea");
+            }
+        } else if ("duration".equals(sub)) {
+            Area area = proxy.findAreaAt(player);
+            if (area != null) {
+                if (args.length >= 2) {
+                    try {
+                        float value = Float.parseFloat(args[1]);
+                        if (!(value >= 0.05F)) {
+                            value = 0.05F;
+                        }
+                        if (value > 60.0F) {
+                            value = 60.0F;
+                        }
+                        float old = area.duration;
+                        area.duration = value;
+                        if (old != area.duration) {
+                            if (CommonProxy.isDedicated(player)) {
+                                proxy.sendDurationToAll(player.dimension, area.id, area.duration);
+                            }
+                            proxy.save();
+                        }
+                    } catch (Throwable t) {
+                        proxy.sendChatTranslation(player, "invalid.float");
+                    }
+                }
+                proxy.sendChatTranslation(player, "info.duration", area.duration);
+            } else {
+                proxy.sendChatTranslation(player, "info.notInArea");
+            }
+        } else if ("tool".equals(sub)) {
+            proxy.commandTool(player);
+        }
     }
+
     @Override
     public boolean canCommandSenderUseCommand(ICommandSender sender) {
         return sender.canCommandSenderUseCommand(2, "gamemode");
     }
+
     @Override
     public List<String> addTabCompletionOptions(ICommandSender sender, String[] args) {
-        return tabCompletions(new Args(args));
-    }
-    @Override
-    public boolean isUsernameIndex(String[] args, int index) {
-        return false;
-    }
-    public int compareTo(Object o) {
-        if (o instanceof net.minecraft.command.ICommand) {
-            return this.getCommandName().compareTo(((net.minecraft.command.ICommand) o).getCommandName());
-        } else {
-            return 1;
+        if (args.length == 1) {
+            return getListOfStringsMatchingLastWord(args, SUBS);
         }
+        return null;
     }
 }

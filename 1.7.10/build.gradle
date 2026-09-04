@@ -21,13 +21,11 @@ minecraft {
 
 repositories {
     maven {
-        name = 'GTNH Maven'
-        url = 'https://nexus.gtnewhorizons.com/repository/public/'
-    }
-    mavenCentral()
-    maven {
-        name = 'CurseMaven'
-        url = 'https://www.cursemaven.com/'
+        credentials {
+            username = System.getenv('ALIYUN_MVN_USERNAME')
+            password = System.getenv('ALIYUN_MVN_PASSWORD')
+        }
+        url = System.getenv('ALIYUN_MVN_URL')
     }
 }
 

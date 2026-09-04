@@ -3,9 +3,9 @@ package org.soraworld.areaeffect.network;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import net.minecraft.entity.player.EntityPlayer;
+import org.soraworld.areaeffect.util.GammaCurve;
 import org.soraworld.areaeffect.util.Vec3d;
 import org.soraworld.areaeffect.util.Vec3i;
-import org.soraworld.areaeffect.util.GammaCurve;
 
 public class Area {
 
