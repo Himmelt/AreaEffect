@@ -2,46 +2,35 @@ package org.soraworld.areaeffect.proxy;
 
 import io.netty.buffer.ByteBuf;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiVideoSettings;
-import net.minecraft.client.settings.GameSettings;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.init.Items;
 import cpw.mods.fml.common.FMLCommonHandler;
-import cpw.mods.fml.common.event.FMLInitializationEvent;
 import cpw.mods.fml.common.event.FMLPreInitializationEvent;
-import org.soraworld.areaeffect.handler.EventBusClientHandler;
 import org.soraworld.areaeffect.handler.FMLClientHandler;
+import org.soraworld.areaeffect.handler.LightmapHook;
 import org.soraworld.areaeffect.network.Area;
 import org.soraworld.areaeffect.network.AreaPacket;
+import org.soraworld.areaeffect.util.GammaCurve;
 
 import java.util.HashMap;
 import java.util.Map;
-import org.soraworld.areaeffect.util.GammaCurve;
 
 public class ClientProxy extends CommonProxy {
 
-    private float originGamma = 0.0F;
-    private double originLightness = 0.0D;
+    private double curDL = 0.0D;
+    private double fromDL = 0.0D;
     private int elapsed = Integer.MAX_VALUE;
     private boolean inArea = false;
     private int lastAreaId = -1;
     private float lastLightness = -1.0F;
 
     private final Minecraft mc = Minecraft.getMinecraft();
-    private final GameSettings gameSettings = mc.gameSettings;
 
     @Override
     public void onPreInit(FMLPreInitializationEvent event) {
         super.onPreInit(event);
-        cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new FMLClientHandler(this));
+        FMLCommonHandler.instance().bus().register(new FMLClientHandler(this));
         channel.register(new FMLClientHandler(this));
-        originGamma = mc.gameSettings.gammaSetting;
-    }
-
-    @Override
-    public void onInit(FMLInitializationEvent event) {
-        super.onInit(event);
-        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new EventBusClientHandler(this));
     }
 
     public void handlePacket(ByteBuf buf) {
@@ -93,20 +82,22 @@ public class ClientProxy extends CommonProxy {
         }
     }
 
-    public void updateClientGamma(EntityPlayer player) {
-        if (mc.currentScreen instanceof GuiVideoSettings) {
-            return;
-        }
+    /**
+     * Per tick client update: keeps the lightmap a uniform CIE L* offset away
+     * from what the player's own gamma setting would currently produce. The
+     * gamma setting itself is only ever read, never written.
+     */
+    public void updateClientLight(EntityPlayer player) {
+        LightmapHook.tryInstall(mc);
         double raw = rawLightAt(player);
-        double targetGamma;
-        double targetLightness;
+        double liveGamma = mc.gameSettings.gammaSetting;
+        double toDL;
         float seconds;
         boolean restart = false;
         Area area = findAreaAt(player);
         if (area != null) {
             seconds = area.duration;
-            targetLightness = area.lightness;
-            targetGamma = GammaCurve.gammaFromLightness(area.lightness, raw);
+            toDL = area.lightness - GammaCurve.perceive(liveGamma, raw);
             if (!inArea || area.id != lastAreaId || area.lightness != lastLightness) {
                 restart = true;
             }
@@ -116,8 +107,7 @@ public class ClientProxy extends CommonProxy {
             duration = area.duration;
         } else {
             seconds = duration;
-            targetGamma = originGamma;
-            targetLightness = GammaCurve.perceive(originGamma, raw);
+            toDL = 0.0D;
             if (inArea) {
                 restart = true;
             }
@@ -125,29 +115,22 @@ public class ClientProxy extends CommonProxy {
             lastAreaId = -1;
         }
         if (restart) {
-            originLightness = GammaCurve.perceive(gameSettings.gammaSetting, raw);
+            fromDL = curDL;
             elapsed = 0;
         }
         int ticks = Math.max(1, Math.round(seconds * 20.0F));
-        double gamma;
         if (elapsed >= ticks) {
-            gamma = targetGamma;
+            curDL = toDL;
         } else {
-            double lightness = GammaCurve.glide(originLightness, targetLightness, elapsed, ticks);
-            gamma = GammaCurve.gammaFromLightness(lightness, raw);
+            curDL = GammaCurve.glide(fromDL, toDL, elapsed, ticks);
             elapsed++;
         }
-        gameSettings.gammaSetting = (float) gamma;
+        LightmapHook.setOffset(curDL);
     }
-
 
     /** Scene base light level (the lightmap's raw value) at the player's position. */
     private double rawLightAt(EntityPlayer player) {
         return player.worldObj.getLightBrightness((int) Math.floor(player.posX), (int) Math.floor(player.posY), (int) Math.floor(player.posZ));
-    }
-
-    public void saveLight() {
-        originGamma = mc.gameSettings.gammaSetting;
     }
 
     public void clientReset() {
@@ -160,6 +143,8 @@ public class ClientProxy extends CommonProxy {
         lightAreas.clear();
         pos1s.clear();
         pos2s.clear();
-        mc.gameSettings.gammaSetting = originGamma;
+        curDL = 0.0D;
+        fromDL = 0.0D;
+        LightmapHook.setOffset(0.0D);
     }
 }

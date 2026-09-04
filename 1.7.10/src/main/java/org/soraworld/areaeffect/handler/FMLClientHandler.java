@@ -21,7 +21,7 @@ public class FMLClientHandler {
             return;
         }
         if (event.player instanceof EntityPlayerSP) {
-            proxy.updateClientGamma(event.player);
+            proxy.updateClientLight(event.player);
         }
     }
 

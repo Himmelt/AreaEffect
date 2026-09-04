@@ -62,6 +62,11 @@ public final class GammaCurve {
         return lightness(toLinear(lightmap(raw, gamma)));
     }
 
+    /** sRGB code value (0..1) -> CIE L* (0..100). */
+    public static double lightnessFromCode(double code) {
+        return lightness(toLinear(code));
+    }
+
     // ------------------------------------------------------------------
     // inverse chain: perceived lightness -> (raw, gamma)
     // ------------------------------------------------------------------
