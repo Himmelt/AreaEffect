@@ -1,7 +1,11 @@
 package org.soraworld.areaeffect.proxy;
 
+import cpw.mods.fml.common.FMLCommonHandler;
 import cpw.mods.fml.common.event.FMLInitializationEvent;
 import cpw.mods.fml.common.event.FMLPreInitializationEvent;
+import cpw.mods.fml.common.network.FMLEventChannel;
+import cpw.mods.fml.common.network.NetworkRegistry;
+import cpw.mods.fml.common.network.internal.FMLProxyPacket;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import net.minecraft.command.ICommandSender;
@@ -160,11 +164,11 @@ public class CommonProxy {
     }
 
     private void sendTo(ByteBuf buf, EntityPlayerMP player) {
-        channel.sendTo(new cpw.mods.fml.common.network.internal.FMLProxyPacket(buf, "light"), player);
+        channel.sendTo(new FMLProxyPacket(buf, "light"), player);
     }
 
     private void sendToAll(ByteBuf buf) {
-        channel.sendToAll(new cpw.mods.fml.common.network.internal.FMLProxyPacket(buf, "light"));
+        channel.sendToAll(new FMLProxyPacket(buf, "light"));
     }
 
     public void sendAllAreasTo(EntityPlayerMP player) {

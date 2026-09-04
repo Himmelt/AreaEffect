@@ -26,7 +26,7 @@ public class FMLHandler {
     }
 
     @SubscribeEvent
-    public void onChangeDim(cpw.mods.fml.common.gameevent.PlayerEvent.PlayerChangedDimensionEvent event) {
+    public void onChangeDim(PlayerEvent.PlayerChangedDimensionEvent event) {
         proxy.clearSelect(event.player);
     }
 }

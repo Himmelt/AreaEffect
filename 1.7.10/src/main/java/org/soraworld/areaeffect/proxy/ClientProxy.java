@@ -89,15 +89,14 @@ public class ClientProxy extends CommonProxy {
      */
     public void updateClientLight(EntityPlayer player) {
         LightmapHook.tryInstall(mc);
-        double raw = rawLightAt(player);
-        double liveGamma = mc.gameSettings.gammaSetting;
         double toDL;
         float seconds;
         boolean restart = false;
         Area area = findAreaAt(player);
         if (area != null) {
             seconds = area.duration;
-            toDL = area.lightness - GammaCurve.perceive(liveGamma, raw);
+            // 区域内恒定输出设定的亮度，不受环境光/方块亮度影响
+            toDL = area.lightness;
             if (!inArea || area.id != lastAreaId || area.lightness != lastLightness) {
                 restart = true;
             }
@@ -126,13 +125,6 @@ public class ClientProxy extends CommonProxy {
             elapsed++;
         }
         LightmapHook.setOffset(curDL);
-    }
-
-    /**
-     * Scene base light level (the lightmap's raw value) at the player's position.
-     */
-    private double rawLightAt(EntityPlayer player) {
-        return player.worldObj.getLightBrightness((int) Math.floor(player.posX), (int) Math.floor(player.posY), (int) Math.floor(player.posZ));
     }
 
     public void clientReset() {

@@ -8,6 +8,7 @@ import net.minecraft.client.renderer.texture.DynamicTexture;
 import org.soraworld.areaeffect.util.GammaCurve;
 
 import java.lang.reflect.Field;
+import java.util.Arrays;
 
 /**
  * Takes over the receiving end of the vanilla lightmap without ever touching
@@ -107,7 +108,9 @@ public final class LightmapHook {
     }
 
     /**
-     * 256 entry LUT: code value -> code value, shifted by {@code offset} in CIE L* space.
+     * 256 entry LUT: every row maps to the same sRGB code, i.e. the CIE L* in
+     * {@code offset}, so the whole region renders at a fixed lightness that is
+     * completely independent of the ambient light and block brightness.
      */
     private static int[] getLut() {
         double dl = offset;
@@ -115,11 +118,9 @@ public final class LightmapHook {
         if (table != null && lutFor == dl) {
             return table;
         }
+        int target = (int) Math.round(255.0D * clamp(GammaCurve.toCode(GammaCurve.toLuminance(clamp(dl, 0.0D, 100.0D))), 0.0D, 1.0D));
         table = new int[256];
-        for (int c = 0; c < 256; c++) {
-            double l = clamp(GammaCurve.lightnessFromCode(c / 255.0D) + dl, 0.0D, 100.0D);
-            table[c] = (int) Math.round(255.0D * clamp(GammaCurve.toCode(GammaCurve.toLuminance(l)), 0.0D, 1.0D));
-        }
+        Arrays.fill(table, target);
         lut = table;
         lutFor = dl;
         return table;
