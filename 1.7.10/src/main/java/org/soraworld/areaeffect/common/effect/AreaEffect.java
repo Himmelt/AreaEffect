@@ -25,11 +25,6 @@ public abstract class AreaEffect {
     public abstract void writeToBuf(ByteBuf buf);
 
     /**
-     * 深拷贝一份，供读盘/网络反序列化后独立持有。
-     */
-    public abstract AreaEffect copy();
-
-    /**
      * 对参数做边界处理（如亮度 0..100、时长 0.05..60）。默认空，子类覆写。
      */
     public void sanitize() {

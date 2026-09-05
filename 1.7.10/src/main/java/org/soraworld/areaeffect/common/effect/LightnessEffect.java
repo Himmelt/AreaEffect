@@ -39,11 +39,6 @@ public class LightnessEffect extends AreaEffect {
     }
 
     @Override
-    public AreaEffect copy() {
-        return new LightnessEffect(lightness, duration);
-    }
-
-    @Override
     public void sanitize() {
         lightness = floatIsNaN(lightness) ? 90.0F : Math.max(0.0F, Math.min(100.0F, lightness));
         duration = !(duration > 0.0F) ? 1.0F : Math.min(60.0F, duration);
@@ -63,13 +58,6 @@ public class LightnessEffect extends AreaEffect {
 
     public void setDuration(float duration) {
         this.duration = !(duration > 0.0F) ? 1.0F : Math.min(60.0F, duration);
-    }
-
-    /**
-     * Gamma that makes the current scene appear at this effect's target lightness.
-     */
-    public double targetGamma(double raw) {
-        return GammaCurve.gammaFromLightness(lightness, raw);
     }
 
     private static boolean floatIsNaN(float value) {

@@ -37,12 +37,13 @@ import org.soraworld.areaeffect.common.util.Vec3i;
 
 import java.io.*;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class CommonProxy {
 
     protected final HashMap<UUID, Vec3i> pos1s = new HashMap<>();
     protected final HashMap<UUID, Vec3i> pos2s = new HashMap<>();
-    protected final HashMap<Integer, HashMap<Integer, Area>> lightAreas = new HashMap<>();
+    protected final Map<Integer, Map<Integer, Area>> lightAreas = new ConcurrentHashMap<>();
     protected final AreaServerHandler serverHandler = new AreaServerHandler(this);
     public Configuration config;
     protected File storeFile = null;
@@ -98,10 +99,6 @@ public class CommonProxy {
         MinecraftForge.EVENT_BUS.register(serverHandler);
     }
 
-    public void regEventBus(Object object) {
-        MinecraftForge.EVENT_BUS.register(object);
-    }
-
     /**
      * 设置随世界存储的区域文件路径（一个世界一个文件）。
      */
@@ -145,7 +142,7 @@ public class CommonProxy {
                         90.0F, 1.0F);
                 area.setEffects(readEffectsNbt(tag.getTagList("effects", 10)));
                 area.id = tag.getInteger("id");
-                lightAreas.computeIfAbsent(dim, d -> new HashMap<>()).put(area.id, area);
+                lightAreas.computeIfAbsent(dim, d -> new ConcurrentHashMap<Integer, Area>()).put(area.id, area);
                 if (area.id > AREA_ID) {
                     AREA_ID = area.id;
                 }
@@ -349,7 +346,7 @@ public class CommonProxy {
         } else {
             AREA_ID++;
             area.id = AREA_ID;
-            lightAreas.computeIfAbsent(dim, d -> new HashMap<>()).put(AREA_ID, area);
+            lightAreas.computeIfAbsent(dim, d -> new ConcurrentHashMap<Integer, Area>()).put(AREA_ID, area);
             return area;
         }
     }
@@ -435,9 +432,9 @@ public class CommonProxy {
         if (player == null) {
             return;
         }
-        for (Map.Entry<Integer, HashMap<Integer, Area>> entry : lightAreas.entrySet()) {
+        for (Map.Entry<Integer, Map<Integer, Area>> entry : lightAreas.entrySet()) {
             int dim = entry.getKey();
-            HashMap<Integer, Area> areas = entry.getValue();
+            Map<Integer, Area> areas = entry.getValue();
             Area area = areas.get(id);
             if (area != null) {
                 if (player.dimension != dim) {

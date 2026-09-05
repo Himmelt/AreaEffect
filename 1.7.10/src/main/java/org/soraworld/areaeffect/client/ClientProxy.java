@@ -30,9 +30,10 @@ import org.soraworld.areaeffect.common.network.MessageSetProps;
 import org.soraworld.areaeffect.common.network.PacketChannel;
 import org.soraworld.areaeffect.common.util.Vec3i;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class ClientProxy extends CommonProxy {
 
@@ -46,6 +47,9 @@ public class ClientProxy extends CommonProxy {
     private Vec3i selPos2 = null;
 
     private EffectRenderers renderers = new EffectRenderers();
+
+    /** netty 线程投递、需在客户端主线程执行的逻辑（GUI 必须回主线程操作）。 */
+    private final ConcurrentLinkedQueue<Runnable> clientTasks = new ConcurrentLinkedQueue<>();
 
     private final Minecraft mc = Minecraft.getMinecraft();
 
@@ -79,7 +83,7 @@ public class ClientProxy extends CommonProxy {
     }
 
     public void handleUpdate(MessageAreaUpdate packet) {
-        lightAreas.computeIfAbsent(packet.dim, dim -> new HashMap<>()).put(packet.id, packet.data);
+        lightAreas.computeIfAbsent(packet.dim, dim -> new ConcurrentHashMap<Integer, Area>()).put(packet.id, packet.data);
     }
 
     public void handleDelete(MessageAreaDelete packet) {
@@ -115,7 +119,24 @@ public class ClientProxy extends CommonProxy {
     }
 
     public void handleListReply(MessageListReply packet) {
-        mc.displayGuiScreen(new GuiAreaList(this, packet.dim, packet.areas));
+        // netty 线程回调：GUI 操作必须回客户端主线程
+        runOnClientThread(() -> mc.displayGuiScreen(new GuiAreaList(this, packet.dim, packet.areas)));
+    }
+
+    /** netty 线程投递需在客户端主线程执行的逻辑（参考 CNpcUI：回调只做线程安全操作，其余进队）。 */
+    private void runOnClientThread(Runnable task) {
+        clientTasks.add(task);
+    }
+
+    /** 在客户端主线程（PlayerTick 驱动）排空待执行任务。 */
+    private void drainClientTasks() {
+        Runnable task;
+        while ((task = clientTasks.poll()) != null) {
+            try {
+                task.run();
+            } catch (Throwable ignored) {
+            }
+        }
     }
 
     public Vec3i getSelPos1() {
@@ -132,6 +153,7 @@ public class ClientProxy extends CommonProxy {
      */
     public void updateClientLight(EntityPlayer player) {
         LightmapHook.tryInstall(mc);
+        drainClientTasks();
         Area area = findAreaAt(player);
         if (area != null) {
             boolean areaChanged = !inArea || area.id != lastAreaId;
@@ -167,6 +189,7 @@ public class ClientProxy extends CommonProxy {
         selPos1 = null;
         selPos2 = null;
         renderers = new EffectRenderers();
+        clientTasks.clear();
         LightmapHook.setOffset(0.0D);
     }
 }
