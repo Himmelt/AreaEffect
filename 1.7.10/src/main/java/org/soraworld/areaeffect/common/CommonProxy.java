@@ -239,7 +239,7 @@ public class CommonProxy {
     public void setPos1(EntityPlayerMP player, Vec3i pos1, boolean msg) {
         pos1s.put(player.getUniqueID(), pos1);
         if (msg) {
-            sendChatTranslation(player, "set.pos1", pos1);
+            sendChatTranslation(player, "chat.set.pos1", pos1);
         }
         updateSelection(player);
     }
@@ -247,7 +247,7 @@ public class CommonProxy {
     public void setPos2(EntityPlayerMP player, Vec3i pos2, boolean msg) {
         pos2s.put(player.getUniqueID(), pos2);
         if (msg) {
-            sendChatTranslation(player, "set.pos2", pos2);
+            sendChatTranslation(player, "chat.set.pos2", pos2);
         }
         updateSelection(player);
     }
@@ -278,7 +278,7 @@ public class CommonProxy {
      */
     public void handleSetProps(EntityPlayerMP player, MessageSetProps packet) {
         if (!hasPerm(player)) {
-            sendChatTranslation(player, "perm.denied");
+            sendChatTranslation(player, "chat.perm.denied");
             return;
         }
         Map<Integer, Area> areas = lightAreas.get(packet.dim);
@@ -287,7 +287,7 @@ public class CommonProxy {
         }
         Area area = areas.get(packet.id);
         if (area == null) {
-            sendChatTranslation(player, "areaIdNotFound");
+            sendChatTranslation(player, "chat.area.notfound");
             return;
         }
         // 以客户端回写的整组效果替换，并对每条做参数边界处理
@@ -298,7 +298,7 @@ public class CommonProxy {
         area.setEffects(incoming);
         save();
         sendUpdateToAll(packet.dim, area.id, area);
-        sendChatTranslation(player, "gui.set.done");
+        sendChatTranslation(player, "chat.area.updated");
     }
 
     /**
@@ -306,12 +306,12 @@ public class CommonProxy {
      */
     public void handleDeleteRequest(EntityPlayerMP player, MessageDeleteRequest packet) {
         if (!hasPerm(player)) {
-            sendChatTranslation(player, "perm.denied");
+            sendChatTranslation(player, "chat.perm.denied");
             return;
         }
         Map<Integer, Area> areas = lightAreas.get(packet.dim);
         if (areas == null || areas.remove(packet.id) == null) {
-            sendChatTranslation(player, "areaIdNotFound");
+            sendChatTranslation(player, "chat.area.notfound");
             return;
         }
         save();
@@ -325,7 +325,7 @@ public class CommonProxy {
      */
     public void handleTpRequest(EntityPlayerMP player, MessageTpRequest packet) {
         if (!hasPerm(player)) {
-            sendChatTranslation(player, "perm.denied");
+            sendChatTranslation(player, "chat.perm.denied");
             return;
         }
         tpAreaById(player, packet.id);
@@ -355,16 +355,16 @@ public class CommonProxy {
         if (pos1 != null && pos2 != null) {
             Area area = addArea(player.dimension, pos1, pos2, lightness, duration);
             if (area == null) {
-                sendChatTranslation(player, "create.conflict");
+                sendChatTranslation(player, "chat.create.conflict");
             } else {
-                sendChatTranslation(player, "create.area");
+                sendChatTranslation(player, "chat.create.done");
                 if (isDedicated(player)) {
                     sendUpdateToAll(player.dimension, area.id, area);
                 }
                 save();
             }
         } else {
-            sendChatTranslation(player, "notSelect");
+            sendChatTranslation(player, "chat.create.noselect");
         }
     }
 
@@ -425,9 +425,9 @@ public class CommonProxy {
         if (stack != null) {
             tool = stack.getItem();
             save();
-            sendChatTranslation2(player, "tool.set", tool.getUnlocalizedName(stack) + ".name");
+            sendChatTranslation2(player, "chat.tool.set", tool.getUnlocalizedName(stack) + ".name");
         } else {
-            sendChatTranslation2(player, "tool.get", tool.getUnlocalizedName() + ".name");
+            sendChatTranslation2(player, "chat.tool.get", tool.getUnlocalizedName() + ".name");
         }
     }
 
@@ -443,15 +443,15 @@ public class CommonProxy {
                 if (player.dimension != dim) {
                     player.travelToDimension(dim);
                     area.center(player);
-                    sendChatTranslation(player, "areaTpSuccess");
+                    sendChatTranslation(player, "chat.area.tp");
                 } else {
                     area.center(player);
-                    sendChatTranslation(player, "areaTpSuccess");
+                    sendChatTranslation(player, "chat.area.tp");
                 }
                 return;
             }
         }
-        sendChatTranslation(player, "areaIdNotFound");
+        sendChatTranslation(player, "chat.area.notfound");
     }
 
     public boolean isSelectTool(ItemStack stack) {

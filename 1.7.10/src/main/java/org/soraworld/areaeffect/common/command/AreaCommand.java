@@ -62,7 +62,7 @@ public class AreaCommand extends CommandBase {
                 float duration = args.length >= 3 ? Float.parseFloat(args[2]) : 1.0F;
                 proxy.createArea(player, lightness, duration);
             } catch (Throwable t) {
-                proxy.sendChatTranslation(player, "invalid.float");
+                proxy.sendChatTranslation(player, "chat.invalid.float");
             }
         } else if ("tool".equals(sub)) {
             proxy.commandTool(player);
