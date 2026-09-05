@@ -3,11 +3,12 @@ package org.soraworld.areaeffect.client.handler;
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import cpw.mods.fml.common.gameevent.TickEvent;
 import cpw.mods.fml.common.network.FMLNetworkEvent;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
 import org.soraworld.areaeffect.client.ClientProxy;
 
 /**
- * 客户端业务事件处理：每 tick 更新光照与按键请求、接收 light 通道数据包、断线重置。
+ * 客户端业务事件处理：每 tick 处理按键请求、每帧驱动亮度过渡、断线重置。
  * 同一实例注册到 FML 总线与 light 通道两个订阅点。
  */
 public class AreaClientHandler {
@@ -24,10 +25,27 @@ public class AreaClientHandler {
             return;
         }
         if (event.player instanceof EntityPlayerSP) {
-            proxy.updateClientLight(event.player);
             if (ClientProxy.KEY_LIST.isPressed()) {
                 proxy.sendListRequest();
             }
+            if (ClientProxy.KEY_SEL_RENDER.isPressed()) {
+                proxy.toggleSelection();
+            }
+        }
+    }
+
+    /**
+     * 每帧驱动亮度过渡（渲染器内部按真实时间插值，帧率无关）。
+     * 同时承担 LightmapHook 安装与客户端任务队列排空（GUI 打开等）。
+     */
+    @SubscribeEvent
+    public void onRenderTick(TickEvent.RenderTickEvent event) {
+        if (event.phase != TickEvent.Phase.END) {
+            return;
+        }
+        Minecraft mc = Minecraft.getMinecraft();
+        if (mc.thePlayer != null) {
+            proxy.updateClientLight(mc.thePlayer);
         }
     }
 

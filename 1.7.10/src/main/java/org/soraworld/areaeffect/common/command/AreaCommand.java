@@ -58,7 +58,7 @@ public class AreaCommand extends CommandBase {
             proxy.setPos2(player, new Vec3i(player), true);
         } else if ("create".equals(sub)) {
             try {
-                float lightness = args.length >= 2 ? Float.parseFloat(args[1]) : 90.0F;
+                float lightness = args.length >= 2 ? Float.parseFloat(args[1]) : 100.0F;
                 float duration = args.length >= 3 ? Float.parseFloat(args[2]) : 1.0F;
                 proxy.createArea(player, lightness, duration);
             } catch (Throwable t) {

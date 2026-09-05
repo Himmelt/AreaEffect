@@ -8,6 +8,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.settings.KeyBinding;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.init.Items;
+import net.minecraft.util.ChatComponentTranslation;
 import net.minecraftforge.common.MinecraftForge;
 import org.lwjgl.input.Keyboard;
 import org.soraworld.areaeffect.client.effect.EffectRenderers;
@@ -30,14 +31,17 @@ import org.soraworld.areaeffect.common.network.MessageTpRequest;
 import org.soraworld.areaeffect.common.network.PacketChannel;
 import org.soraworld.areaeffect.common.util.Vec3i;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class ClientProxy extends CommonProxy {
 
     public static final KeyBinding KEY_LIST = new KeyBinding("key.areaeffect.list", Keyboard.KEY_J, "key.categories.areaeffect");
+    public static final KeyBinding KEY_SEL_RENDER = new KeyBinding("key.areaeffect.selrender", Keyboard.KEY_K, "key.categories.areaeffect");
 
     private boolean inArea = false;
     private int lastAreaId = -1;
@@ -45,6 +49,9 @@ public class ClientProxy extends CommonProxy {
 
     private Vec3i selPos1 = null;
     private Vec3i selPos2 = null;
+    private boolean showSelection = true;
+    /** 各维度中已开启线框显示的区域 id 集合（客户端本地设置）。 */
+    private final Map<Integer, Set<Integer>> visibleAreas = new ConcurrentHashMap<>();
 
     private EffectRenderers renderers = new EffectRenderers();
 
@@ -60,6 +67,7 @@ public class ClientProxy extends CommonProxy {
         FMLCommonHandler.instance().bus().register(handler);
         MinecraftForge.EVENT_BUS.register(new SelectionRenderHandler(this));
         ClientRegistry.registerKeyBinding(KEY_LIST);
+        ClientRegistry.registerKeyBinding(KEY_SEL_RENDER);
     }
 
     @Override
@@ -133,9 +141,86 @@ public class ClientProxy extends CommonProxy {
         return selPos2;
     }
 
+    public boolean isShowSelection() {
+        return showSelection;
+    }
+
+    /** 切换选区线框显示（客户端本地设置），并本地提示。 */
+    public void toggleSelection() {
+        showSelection = !showSelection;
+        if (mc.thePlayer != null) {
+            mc.thePlayer.addChatMessage(new ChatComponentTranslation(showSelection ? "chat.selection.on" : "chat.selection.off"));
+        }
+    }
+
+    /** 指定区域的线框显示是否开启（客户端本地设置）。 */
+    public boolean isAreaVisible(int dim, int id) {
+        Set<Integer> ids = visibleAreas.get(dim);
+        return ids != null && ids.contains(id);
+    }
+
+    /** 切换指定区域的线框显示（客户端本地设置），并本地提示。 */
+    public void toggleAreaVisible(int dim, int id) {
+        Set<Integer> ids = visibleAreas.computeIfAbsent(dim, d -> ConcurrentHashMap.newKeySet());
+        if (!ids.remove(id)) {
+            ids.add(id);
+        }
+        if (mc.thePlayer != null) {
+            mc.thePlayer.addChatMessage(new ChatComponentTranslation(
+                    isAreaVisible(dim, id) ? "chat.area.show" : "chat.area.hide", id));
+        }
+    }
+
+    /** 当前维度中已开启线框显示的区域列表。 */
+    public List<Area> getVisibleAreas(int dim) {
+        List<Area> result = new ArrayList<>();
+        Set<Integer> ids = visibleAreas.get(dim);
+        if (ids != null) {
+            Map<Integer, Area> areas = lightAreas.get(dim);
+            if (areas != null) {
+                for (Integer id : ids) {
+                    Area area = areas.get(id);
+                    if (area != null) {
+                        result.add(area);
+                    }
+                }
+            }
+        }
+        return result;
+    }
+
     /**
-     * 每 tick 客户端更新：判定当前所在区域，再把该区域挂载的各效果分发给对应的
-     * 客户端运行时驱动过渡。区域外则让所有运行时回退到 0。
+     * 编辑界面实时预览：只修改客户端本地区域副本的亮度/时长，渲染器下一帧即生效。
+     * 未保存退出时可用原值再次调用以还原。
+     */
+    public void previewAreaProps(int dim, int id, float lightness, float duration) {
+        Map<Integer, Area> areas = lightAreas.get(dim);
+        if (areas != null) {
+            Area target = areas.get(id);
+            if (target != null) {
+                target.setLightness(lightness);
+                target.setDuration(duration);
+            }
+        }
+    }
+
+    /** 客户端本地移除区域（用于删除后立即刷新界面；服务端广播到达后为幂等操作）。 */
+    public void clientRemoveArea(int dim, int id) {
+        Map<Integer, Area> areas = lightAreas.get(dim);
+        if (areas != null) {
+            areas.remove(id);
+        }
+    }
+
+    /** 客户端本地区域列表快照（用于返回列表界面，无需再走服务端请求）。 */
+    public List<Area> getAreasLocal(int dim) {
+        Map<Integer, Area> areas = lightAreas.get(dim);
+        return areas == null ? new ArrayList<>() : new ArrayList<>(areas.values());
+    }
+
+    /**
+     * 每帧客户端更新：判定当前所在区域，再把该区域挂载的各效果分发给对应的
+     * 客户端运行时驱动过渡（渲染器内部按真实时间插值）。区域外则让所有运行时回退到 0。
      */
     public void updateClientLight(EntityPlayer player) {
         LightmapHook.tryInstall(mc);
@@ -174,8 +259,9 @@ public class ClientProxy extends CommonProxy {
         pos2s.clear();
         selPos1 = null;
         selPos2 = null;
+        visibleAreas.clear();
         renderers = new EffectRenderers();
         clientTasks.clear();
-        LightmapHook.setOffset(0.0D);
+        LightmapHook.setOffset(0.0D, 0.0D);
     }
 }

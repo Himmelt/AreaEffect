@@ -3,6 +3,7 @@ package org.soraworld.areaeffect.common.network;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.entity.player.EntityPlayerMP;
 import org.soraworld.areaeffect.common.effect.AreaEffect;
 import org.soraworld.areaeffect.common.effect.EffectTypes;
 import org.soraworld.areaeffect.common.effect.LightnessEffect;
@@ -57,11 +58,11 @@ public class Area {
     }
 
     /**
-     * 亮度效果的当前目标亮度（CIE L*），无亮度效果时返回默认 90。
+     * 亮度效果的当前目标亮度（CIE L*），无亮度效果时返回默认 100。
      */
     public float getLightness() {
         LightnessEffect effect = lightnessEffect();
-        return effect == null ? 90.0F : effect.getLightness();
+        return effect == null ? 100.0F : effect.getLightness();
     }
 
     /**
@@ -122,7 +123,7 @@ public class Area {
         int x2 = buf.readInt();
         int y2 = buf.readInt();
         int z2 = buf.readInt();
-        Area area = new Area(x1, y1, z1, x2, y2, z2, 90.0F, 1.0F);
+        Area area = new Area(x1, y1, z1, x2, y2, z2, 100.0F, 1.0F);
         area.effects.clear();
         int size = buf.readInt();
         for (int i = 0; i < size; i++) {
@@ -168,6 +169,14 @@ public class Area {
     }
 
     public void center(EntityPlayer player) {
-        player.setPosition((x1 + x2) / 2.0, (y1 + y2) / 2.0, (z1 + z2) / 2.0);
+        double x = (x1 + x2) / 2.0;
+        double y = (y1 + y2) / 2.0;
+        double z = (z1 + z2) / 2.0;
+        if (player instanceof EntityPlayerMP) {
+            // 服务端必须用 setPositionAndUpdate 才会把位置同步到客户端
+            ((EntityPlayerMP) player).setPositionAndUpdate(x, y, z);
+        } else {
+            player.setPosition(x, y, z);
+        }
     }
 }

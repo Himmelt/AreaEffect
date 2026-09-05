@@ -34,6 +34,11 @@ public class GuiAreaList extends GuiScreen {
     }
 
     @Override
+    public boolean doesGuiPauseGame() {
+        return false;
+    }
+
+    @Override
     public void initGui() {
         super.initGui();
         listWidth = width - LIST_LEFT * 2;

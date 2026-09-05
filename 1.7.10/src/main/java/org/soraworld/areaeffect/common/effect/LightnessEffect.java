@@ -13,11 +13,11 @@ public class LightnessEffect extends AreaEffect {
     private float duration;
 
     public LightnessEffect() {
-        this(90.0F, 1.0F);
+        this(100.0F, 1.0F);
     }
 
     public LightnessEffect(float lightness, float duration) {
-        this.lightness = floatIsNaN(lightness) ? 90.0F : Math.max(0.0F, Math.min(100.0F, lightness));
+        this.lightness = floatIsNaN(lightness) ? 100.0F : Math.max(0.0F, Math.min(100.0F, lightness));
         this.duration = !(duration > 0.0F) ? 1.0F : Math.min(60.0F, duration);
     }
 
@@ -40,7 +40,7 @@ public class LightnessEffect extends AreaEffect {
 
     @Override
     public void sanitize() {
-        lightness = floatIsNaN(lightness) ? 90.0F : Math.max(0.0F, Math.min(100.0F, lightness));
+        lightness = floatIsNaN(lightness) ? 100.0F : Math.max(0.0F, Math.min(100.0F, lightness));
         duration = !(duration > 0.0F) ? 1.0F : Math.min(60.0F, duration);
     }
 
@@ -49,7 +49,7 @@ public class LightnessEffect extends AreaEffect {
     }
 
     public void setLightness(float lightness) {
-        this.lightness = floatIsNaN(lightness) ? 90.0F : Math.max(0.0F, Math.min(100.0F, lightness));
+        this.lightness = floatIsNaN(lightness) ? 100.0F : Math.max(0.0F, Math.min(100.0F, lightness));
     }
 
     public float getDuration() {

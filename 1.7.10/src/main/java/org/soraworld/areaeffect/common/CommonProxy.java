@@ -146,7 +146,7 @@ public class CommonProxy {
                 int dim = tag.getInteger("dim");
                 Area area = new Area(tag.getInteger("x1"), tag.getInteger("y1"), tag.getInteger("z1"),
                         tag.getInteger("x2"), tag.getInteger("y2"), tag.getInteger("z2"),
-                        90.0F, 1.0F);
+                        100.0F, 1.0F);
                 area.setEffects(readEffectsNbt(tag.getTagList("effects", 10)));
                 area.id = tag.getInteger("id");
                 lightAreas.computeIfAbsent(dim, d -> new ConcurrentHashMap<Integer, Area>()).put(area.id, area);
