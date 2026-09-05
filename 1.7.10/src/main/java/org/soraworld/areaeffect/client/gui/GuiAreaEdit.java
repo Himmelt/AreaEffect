@@ -14,12 +14,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 区域详情界面：展示区域信息，并允许修改目标亮度与过渡时长。
+ * 区域详情界面：展示区域信息，修改目标亮度/过渡时长，以及传送/删除区域。
  */
 public class GuiAreaEdit extends GuiScreen {
 
     private static final int BTN_SAVE = 0;
     private static final int BTN_BACK = 1;
+    private static final int BTN_TP = 2;
+    private static final int BTN_DELETE = 3;
     private static final int FIELD_W = 140;
 
     private final ClientProxy proxy;
@@ -39,6 +41,8 @@ public class GuiAreaEdit extends GuiScreen {
     public void initGui() {
         super.initGui();
         buttonList.clear();
+        buttonList.add(new GuiButton(BTN_TP, width - 316, height - 30, 70, 20, translate("gui.areaeffect.edit.tp")));
+        buttonList.add(new GuiButton(BTN_DELETE, width - 240, height - 30, 70, 20, translate("gui.areaeffect.edit.del")));
         buttonList.add(new GuiButton(BTN_SAVE, width - 160, height - 30, 70, 20, translate("gui.areaeffect.edit.save")));
         buttonList.add(new GuiButton(BTN_BACK, width - 84, height - 30, 70, 20, translate("gui.areaeffect.edit.cancel")));
 
@@ -94,6 +98,12 @@ public class GuiAreaEdit extends GuiScreen {
         if (button.id == BTN_SAVE) {
             save();
         } else if (button.id == BTN_BACK) {
+            mc.displayGuiScreen(null);
+        } else if (button.id == BTN_TP) {
+            proxy.sendTpRequest(area.id);
+            mc.displayGuiScreen(null);
+        } else if (button.id == BTN_DELETE) {
+            proxy.sendDeleteRequest(dim, area.id);
             mc.displayGuiScreen(null);
         }
     }

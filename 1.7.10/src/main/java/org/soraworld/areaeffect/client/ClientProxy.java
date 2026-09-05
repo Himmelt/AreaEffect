@@ -21,12 +21,12 @@ import org.soraworld.areaeffect.common.effect.AreaEffect;
 import org.soraworld.areaeffect.common.network.Area;
 import org.soraworld.areaeffect.common.network.MessageAreaDelete;
 import org.soraworld.areaeffect.common.network.MessageAreaUpdate;
-import org.soraworld.areaeffect.common.network.MessageDurationUpdate;
-import org.soraworld.areaeffect.common.network.MessageLightnessUpdate;
+import org.soraworld.areaeffect.common.network.MessageDeleteRequest;
 import org.soraworld.areaeffect.common.network.MessageListReply;
 import org.soraworld.areaeffect.common.network.MessageListRequest;
 import org.soraworld.areaeffect.common.network.MessageSelection;
 import org.soraworld.areaeffect.common.network.MessageSetProps;
+import org.soraworld.areaeffect.common.network.MessageTpRequest;
 import org.soraworld.areaeffect.common.network.PacketChannel;
 import org.soraworld.areaeffect.common.util.Vec3i;
 
@@ -68,8 +68,6 @@ public class ClientProxy extends CommonProxy {
         // 客户端方向消息的处理逻辑绑定
         PacketChannel.bindClient(MessageAreaUpdate.class, this::handleUpdate);
         PacketChannel.bindClient(MessageAreaDelete.class, this::handleDelete);
-        PacketChannel.bindClient(MessageLightnessUpdate.class, this::handleLightness);
-        PacketChannel.bindClient(MessageDurationUpdate.class, this::handleDuration);
         PacketChannel.bindClient(MessageSelection.class, this::handleSelection);
         PacketChannel.bindClient(MessageListReply.class, this::handleListReply);
     }
@@ -82,6 +80,14 @@ public class ClientProxy extends CommonProxy {
         PacketChannel.sendToServer(new MessageSetProps(dim, id, effects));
     }
 
+    public void sendDeleteRequest(int dim, int id) {
+        PacketChannel.sendToServer(new MessageDeleteRequest(dim, id));
+    }
+
+    public void sendTpRequest(int id) {
+        PacketChannel.sendToServer(new MessageTpRequest(id));
+    }
+
     public void handleUpdate(MessageAreaUpdate packet) {
         lightAreas.computeIfAbsent(packet.dim, dim -> new ConcurrentHashMap<Integer, Area>()).put(packet.id, packet.data);
     }
@@ -90,26 +96,6 @@ public class ClientProxy extends CommonProxy {
         Map<Integer, Area> areas = lightAreas.get(packet.dim);
         if (areas != null && !areas.isEmpty()) {
             areas.remove(packet.id);
-        }
-    }
-
-    public void handleLightness(MessageLightnessUpdate packet) {
-        Map<Integer, Area> areas = lightAreas.get(packet.dim);
-        if (areas != null && !areas.isEmpty()) {
-            Area area = areas.get(packet.id);
-            if (area != null) {
-                area.setLightness(packet.lightness);
-            }
-        }
-    }
-
-    public void handleDuration(MessageDurationUpdate packet) {
-        Map<Integer, Area> areas = lightAreas.get(packet.dim);
-        if (areas != null && !areas.isEmpty()) {
-            Area area = areas.get(packet.id);
-            if (area != null) {
-                area.setDuration(packet.duration);
-            }
         }
     }
 

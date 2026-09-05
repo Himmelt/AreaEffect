@@ -3,34 +3,30 @@ package org.soraworld.areaeffect.common.network;
 import io.netty.buffer.ByteBuf;
 
 /**
- * 服务端 → 客户端：/areaeffect duration 指令专用，更新亮度效果的过渡时长。
+ * 客户端 → 服务端：按 id 删除某个维度下的区域（服务端仍需再次鉴权）。
  */
-public class MessageDurationUpdate implements IPacket {
+public class MessageDeleteRequest implements IPacket {
 
     public int dim;
     public int id;
-    public float duration;
 
-    public MessageDurationUpdate() {
+    public MessageDeleteRequest() {
     }
 
-    public MessageDurationUpdate(int dim, int id, float duration) {
+    public MessageDeleteRequest(int dim, int id) {
         this.dim = dim;
         this.id = id;
-        this.duration = duration;
     }
 
     @Override
     public void toBytes(ByteBuf buf) {
         buf.writeInt(dim);
         buf.writeInt(id);
-        buf.writeFloat(duration);
     }
 
     @Override
     public void fromBytes(ByteBuf buf) {
         dim = buf.readInt();
         id = buf.readInt();
-        duration = buf.readFloat();
     }
 }

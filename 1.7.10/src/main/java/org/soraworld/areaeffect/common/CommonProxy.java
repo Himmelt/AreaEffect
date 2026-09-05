@@ -14,9 +14,6 @@ import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.ChatComponentTranslation;
-import net.minecraft.util.ChatStyle;
-import net.minecraft.util.EnumChatFormatting;
-import net.minecraft.util.IChatComponent;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.common.config.Configuration;
 import org.soraworld.areaeffect.common.effect.AreaEffect;
@@ -25,12 +22,12 @@ import org.soraworld.areaeffect.common.handler.AreaServerHandler;
 import org.soraworld.areaeffect.common.network.Area;
 import org.soraworld.areaeffect.common.network.MessageAreaDelete;
 import org.soraworld.areaeffect.common.network.MessageAreaUpdate;
-import org.soraworld.areaeffect.common.network.MessageDurationUpdate;
-import org.soraworld.areaeffect.common.network.MessageLightnessUpdate;
+import org.soraworld.areaeffect.common.network.MessageDeleteRequest;
 import org.soraworld.areaeffect.common.network.MessageListReply;
 import org.soraworld.areaeffect.common.network.MessageListRequest;
 import org.soraworld.areaeffect.common.network.MessageSelection;
 import org.soraworld.areaeffect.common.network.MessageSetProps;
+import org.soraworld.areaeffect.common.network.MessageTpRequest;
 import org.soraworld.areaeffect.common.network.PacketChannel;
 import org.soraworld.areaeffect.common.util.Vec3d;
 import org.soraworld.areaeffect.common.util.Vec3i;
@@ -71,16 +68,16 @@ public class CommonProxy {
         networkRegistered = true;
         PacketChannel.register(1, MessageAreaUpdate.class);
         PacketChannel.register(2, MessageAreaDelete.class);
-        PacketChannel.register(3, MessageLightnessUpdate.class);
-        PacketChannel.register(4, MessageDurationUpdate.class);
         PacketChannel.register(5, MessageSelection.class);
         PacketChannel.register(6, MessageListRequest.class);
         PacketChannel.register(7, MessageListReply.class);
         PacketChannel.register(8, MessageSetProps.class);
+        PacketChannel.register(9, MessageDeleteRequest.class);
+        PacketChannel.register(10, MessageTpRequest.class);
     }
 
     /**
-     * 绑定服务端方向消息的处理逻辑（列表请求/写回）。lambda 位于公共层，引用服务端逻辑方法。
+     * 绑定服务端方向消息的处理逻辑。lambda 位于公共层，引用服务端逻辑方法。
      */
     protected void bindServerPacketHandlers() {
         PacketChannel.bindServer(MessageListRequest.class, (message, player) -> {
@@ -91,6 +88,16 @@ public class CommonProxy {
         PacketChannel.bindServer(MessageSetProps.class, (message, player) -> {
             if (player != null) {
                 handleSetProps(player, message);
+            }
+        });
+        PacketChannel.bindServer(MessageDeleteRequest.class, (message, player) -> {
+            if (player != null) {
+                handleDeleteRequest(player, message);
+            }
+        });
+        PacketChannel.bindServer(MessageTpRequest.class, (message, player) -> {
+            if (player != null) {
+                handleTpRequest(player, message);
             }
         });
     }
@@ -294,6 +301,36 @@ public class CommonProxy {
         sendChatTranslation(player, "gui.set.done");
     }
 
+    /**
+     * 服务端按 id 删除区域：再次校验 OP 权限，成功则持久化并广播。
+     */
+    public void handleDeleteRequest(EntityPlayerMP player, MessageDeleteRequest packet) {
+        if (!hasPerm(player)) {
+            sendChatTranslation(player, "perm.denied");
+            return;
+        }
+        Map<Integer, Area> areas = lightAreas.get(packet.dim);
+        if (areas == null || areas.remove(packet.id) == null) {
+            sendChatTranslation(player, "areaIdNotFound");
+            return;
+        }
+        save();
+        if (isDedicated(player)) {
+            sendDeleteToAll(packet.dim, packet.id);
+        }
+    }
+
+    /**
+     * 服务端按 id 传送：再次校验 OP 权限后跳转到区域中心。
+     */
+    public void handleTpRequest(EntityPlayerMP player, MessageTpRequest packet) {
+        if (!hasPerm(player)) {
+            sendChatTranslation(player, "perm.denied");
+            return;
+        }
+        tpAreaById(player, packet.id);
+    }
+
     public void sendAllAreasTo(EntityPlayerMP player) {
         if (isDedicated(player)) {
             lightAreas.forEach((dim, areas) -> areas.forEach((id, area) -> sendUpdateTo(player, dim, id, area)));
@@ -310,14 +347,6 @@ public class CommonProxy {
 
     public void sendDeleteToAll(int dim, int id) {
         PacketChannel.sendToAll(new MessageAreaDelete(dim, id));
-    }
-
-    public void sendLightnessToAll(int dim, int id, float lightness) {
-        PacketChannel.sendToAll(new MessageLightnessUpdate(dim, id, lightness));
-    }
-
-    public void sendDurationToAll(int dim, int id, float duration) {
-        PacketChannel.sendToAll(new MessageDurationUpdate(dim, id, duration));
     }
 
     public void createArea(EntityPlayerMP player, float lightness, float duration) {
@@ -348,17 +377,6 @@ public class CommonProxy {
             area.id = AREA_ID;
             lightAreas.computeIfAbsent(dim, d -> new ConcurrentHashMap<Integer, Area>()).put(AREA_ID, area);
             return area;
-        }
-    }
-
-    public void deleteArea(EntityPlayerMP player) {
-        Area area = findAreaAt(player);
-        if (area != null) {
-            lightAreas.getOrDefault(player.dimension, new HashMap<>()).remove(area.id);
-            save();
-            if (isDedicated(player)) {
-                sendDeleteToAll(player.dimension, area.id);
-            }
         }
     }
 
@@ -402,13 +420,6 @@ public class CommonProxy {
         player.addChatMessage(new ChatComponentTranslation(key, new ChatComponentTranslation(objKey)));
     }
 
-    public void sendAreaInfo(EntityPlayerMP player, int dim, int id, Area area) {
-        ChatStyle style = new ChatStyle().setColor(EnumChatFormatting.GREEN).setBold(true)
-                .setChatClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/areaeffect tp " + id));
-        IChatComponent click = new ChatComponentTranslation("text.click").setChatStyle(style);
-        player.addChatMessage(new ChatComponentTranslation("info.list", id, dim, area.pos1(), area.pos2(), area.getLightness(), area.getDuration(), click));
-    }
-
     public void commandTool(EntityPlayerMP player) {
         ItemStack stack = player.getHeldItem();
         if (stack != null) {
@@ -417,14 +428,6 @@ public class CommonProxy {
             sendChatTranslation2(player, "tool.set", tool.getUnlocalizedName(stack) + ".name");
         } else {
             sendChatTranslation2(player, "tool.get", tool.getUnlocalizedName() + ".name");
-        }
-    }
-
-    public void showList(EntityPlayerMP player, int dim, boolean all) {
-        if (all) {
-            lightAreas.forEach((dimId, dimAreas) -> dimAreas.forEach((id, area) -> sendAreaInfo(player, dimId, id, area)));
-        } else {
-            lightAreas.getOrDefault(dim, new HashMap<>()).forEach((id, area) -> sendAreaInfo(player, dim, id, area));
         }
     }
 

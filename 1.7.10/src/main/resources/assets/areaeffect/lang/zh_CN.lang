@@ -28,3 +28,5 @@ gui.areaeffect.edit.lightness=目标亮度 (CIE L*):
 gui.areaeffect.edit.duration=过渡时长 (秒):
 gui.areaeffect.edit.save=保存
 gui.areaeffect.edit.cancel=返回
+gui.areaeffect.edit.tp=传送
+gui.areaeffect.edit.del=删除
