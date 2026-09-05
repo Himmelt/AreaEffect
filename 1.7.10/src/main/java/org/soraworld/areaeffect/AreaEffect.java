@@ -7,8 +7,8 @@ import cpw.mods.fml.common.event.FMLPreInitializationEvent;
 import cpw.mods.fml.common.event.FMLServerStartingEvent;
 import net.minecraft.world.WorldServer;
 import net.minecraftforge.common.config.Configuration;
-import org.soraworld.areaeffect.command.AreaCommand;
-import org.soraworld.areaeffect.proxy.CommonProxy;
+import org.soraworld.areaeffect.common.command.AreaCommand;
+import org.soraworld.areaeffect.common.CommonProxy;
 
 import java.io.File;
 
@@ -25,13 +25,14 @@ public class AreaEffect {
     public static final String MOD_VERSION = "1.3.0";
 
     @SidedProxy(
-            clientSide = "org.soraworld.areaeffect.proxy.ClientProxy",
-            serverSide = "org.soraworld.areaeffect.proxy.CommonProxy"
+            clientSide = "org.soraworld.areaeffect.client.ClientProxy",
+            serverSide = "org.soraworld.areaeffect.common.CommonProxy"
     )
     private static CommonProxy proxy;
 
     @Mod.EventHandler
     public void onPreInit(FMLPreInitializationEvent event) {
+        proxy.config = new Configuration(event.getSuggestedConfigurationFile());
         proxy.onPreInit(event);
     }
 
@@ -45,8 +46,6 @@ public class AreaEffect {
         event.registerServerCommand(new AreaCommand(proxy, "areaeffect"));
         if (event.getServer().getEntityWorld() instanceof WorldServer) {
             WorldServer world = (WorldServer) event.getServer().getEntityWorld();
-            File conf = new File(world.getChunkSaveLocation(), MOD_ID + ".cfg");
-            proxy.config = new Configuration(conf);
             File store = new File(world.getChunkSaveLocation(), "areaeffect.dat");
             proxy.setStoreFile(store);
             proxy.load();

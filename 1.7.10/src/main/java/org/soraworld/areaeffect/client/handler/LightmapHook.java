@@ -1,11 +1,11 @@
-package org.soraworld.areaeffect.handler;
+package org.soraworld.areaeffect.client.handler;
 
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.EntityRenderer;
 import net.minecraft.client.renderer.texture.DynamicTexture;
-import org.soraworld.areaeffect.util.GammaCurve;
+import org.soraworld.areaeffect.common.util.GammaCurve;
 
 import java.lang.reflect.Field;
 import java.util.Arrays;

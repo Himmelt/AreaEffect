@@ -1,4 +1,4 @@
-package org.soraworld.areaeffect.util;
+package org.soraworld.areaeffect.common.util;
 
 /**
  * Perceptual gamma mapping and a duration based transition engine.

@@ -5,8 +5,8 @@ import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.GuiTextField;
 import net.minecraft.util.StatCollector;
 import org.lwjgl.input.Keyboard;
-import org.soraworld.areaeffect.network.Area;
-import org.soraworld.areaeffect.proxy.ClientProxy;
+import org.soraworld.areaeffect.common.network.Area;
+import org.soraworld.areaeffect.client.ClientProxy;
 
 /**
  * 区域详情界面：展示区域信息，并允许修改目标亮度与过渡时长。

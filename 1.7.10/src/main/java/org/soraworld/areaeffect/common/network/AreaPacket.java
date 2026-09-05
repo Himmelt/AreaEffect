@@ -1,7 +1,7 @@
-package org.soraworld.areaeffect.network;
+package org.soraworld.areaeffect.common.network;
 
 import io.netty.buffer.ByteBuf;
-import org.soraworld.areaeffect.util.Vec3i;
+import org.soraworld.areaeffect.common.util.Vec3i;
 
 import java.util.ArrayList;
 import java.util.List;

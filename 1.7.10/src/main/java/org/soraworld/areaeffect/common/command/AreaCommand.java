@@ -1,12 +1,12 @@
-package org.soraworld.areaeffect.command;
+package org.soraworld.areaeffect.common.command;
 
 import net.minecraft.command.CommandBase;
 import net.minecraft.command.ICommandSender;
 import net.minecraft.entity.player.EntityPlayerMP;
 
-import org.soraworld.areaeffect.network.Area;
-import org.soraworld.areaeffect.proxy.CommonProxy;
-import org.soraworld.areaeffect.util.Vec3i;
+import org.soraworld.areaeffect.common.network.Area;
+import org.soraworld.areaeffect.common.CommonProxy;
+import org.soraworld.areaeffect.common.util.Vec3i;
 
 import java.util.ArrayList;
 import java.util.Arrays;

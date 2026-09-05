@@ -1,4 +1,4 @@
-package org.soraworld.areaeffect.proxy;
+package org.soraworld.areaeffect.common;
 
 import cpw.mods.fml.common.event.FMLInitializationEvent;
 import cpw.mods.fml.common.event.FMLPreInitializationEvent;
@@ -24,13 +24,11 @@ import net.minecraft.util.EnumChatFormatting;
 import net.minecraft.util.IChatComponent;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.common.config.Configuration;
-import org.soraworld.areaeffect.handler.EventBusHandler;
-import org.soraworld.areaeffect.handler.FMLHandler;
-import org.soraworld.areaeffect.handler.FMLServerHandler;
-import org.soraworld.areaeffect.network.Area;
-import org.soraworld.areaeffect.network.AreaPacket;
-import org.soraworld.areaeffect.util.Vec3d;
-import org.soraworld.areaeffect.util.Vec3i;
+import org.soraworld.areaeffect.common.handler.AreaServerHandler;
+import org.soraworld.areaeffect.common.network.Area;
+import org.soraworld.areaeffect.common.network.AreaPacket;
+import org.soraworld.areaeffect.common.util.Vec3d;
+import org.soraworld.areaeffect.common.util.Vec3i;
 
 import java.io.*;
 import java.util.*;
@@ -50,6 +48,7 @@ public class CommonProxy {
     protected final HashMap<UUID, Vec3i> pos2s = new HashMap<>();
     protected final HashMap<Integer, HashMap<Integer, Area>> lightAreas = new HashMap<>();
     protected final FMLEventChannel channel = NetworkRegistry.INSTANCE.newEventDrivenChannel("light");
+    protected final AreaServerHandler serverHandler = new AreaServerHandler(this);
     public Configuration config;
     protected File storeFile = null;
     protected Item tool = Items.wooden_axe;
@@ -57,12 +56,12 @@ public class CommonProxy {
     protected int AREA_ID = 0;
 
     public void onPreInit(FMLPreInitializationEvent event) {
-        cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new FMLHandler(this));
-        channel.register(new FMLServerHandler(this));
+        cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(serverHandler);
+        channel.register(serverHandler);
     }
 
     public void onInit(FMLInitializationEvent event) {
-        MinecraftForge.EVENT_BUS.register(new EventBusHandler(this));
+        MinecraftForge.EVENT_BUS.register(serverHandler);
     }
 
     public void regEventBus(Object object) {

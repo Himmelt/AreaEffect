@@ -1,4 +1,4 @@
-package org.soraworld.areaeffect.proxy;
+package org.soraworld.areaeffect.client;
 
 import cpw.mods.fml.client.registry.ClientRegistry;
 import cpw.mods.fml.common.FMLCommonHandler;
@@ -13,13 +13,14 @@ import net.minecraft.init.Items;
 import net.minecraftforge.common.MinecraftForge;
 import org.lwjgl.input.Keyboard;
 import org.soraworld.areaeffect.client.gui.GuiAreaList;
-import org.soraworld.areaeffect.handler.FMLClientHandler;
-import org.soraworld.areaeffect.handler.LightmapHook;
-import org.soraworld.areaeffect.handler.SelectionRenderHandler;
-import org.soraworld.areaeffect.network.Area;
-import org.soraworld.areaeffect.network.AreaPacket;
-import org.soraworld.areaeffect.util.GammaCurve;
-import org.soraworld.areaeffect.util.Vec3i;
+import org.soraworld.areaeffect.client.handler.AreaClientHandler;
+import org.soraworld.areaeffect.client.handler.LightmapHook;
+import org.soraworld.areaeffect.client.handler.SelectionRenderHandler;
+import org.soraworld.areaeffect.common.CommonProxy;
+import org.soraworld.areaeffect.common.network.Area;
+import org.soraworld.areaeffect.common.network.AreaPacket;
+import org.soraworld.areaeffect.common.util.GammaCurve;
+import org.soraworld.areaeffect.common.util.Vec3i;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -44,8 +45,9 @@ public class ClientProxy extends CommonProxy {
     @Override
     public void onPreInit(FMLPreInitializationEvent event) {
         super.onPreInit(event);
-        FMLCommonHandler.instance().bus().register(new FMLClientHandler(this));
-        channel.register(new FMLClientHandler(this));
+        AreaClientHandler handler = new AreaClientHandler(this);
+        FMLCommonHandler.instance().bus().register(handler);
+        channel.register(handler);
         MinecraftForge.EVENT_BUS.register(new SelectionRenderHandler(this));
         ClientRegistry.registerKeyBinding(KEY_LIST);
     }

@@ -4,8 +4,8 @@ import net.minecraft.client.gui.Gui;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.util.StatCollector;
 import org.lwjgl.input.Mouse;
-import org.soraworld.areaeffect.network.Area;
-import org.soraworld.areaeffect.proxy.ClientProxy;
+import org.soraworld.areaeffect.common.network.Area;
+import org.soraworld.areaeffect.client.ClientProxy;
 
 import java.util.List;
 

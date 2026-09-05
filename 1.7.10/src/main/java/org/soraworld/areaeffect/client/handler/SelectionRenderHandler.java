@@ -1,12 +1,12 @@
-package org.soraworld.areaeffect.handler;
+package org.soraworld.areaeffect.client.handler;
 
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.Tessellator;
 import net.minecraftforge.client.event.RenderWorldLastEvent;
 import org.lwjgl.opengl.GL11;
-import org.soraworld.areaeffect.proxy.ClientProxy;
-import org.soraworld.areaeffect.util.Vec3i;
+import org.soraworld.areaeffect.client.ClientProxy;
+import org.soraworld.areaeffect.common.util.Vec3i;
 
 /**
  * 客户端自绘选区线框，替代原 WECUI 依赖。

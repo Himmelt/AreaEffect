@@ -1,4 +1,4 @@
-package org.soraworld.areaeffect.util;
+package org.soraworld.areaeffect.common.util;
 
 import net.minecraft.entity.player.EntityPlayer;
 
