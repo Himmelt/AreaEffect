@@ -32,11 +32,6 @@ public class AreaClientHandler {
     }
 
     @SubscribeEvent
-    public void onReceivePacket(FMLNetworkEvent.ClientCustomPacketEvent event) {
-        proxy.handlePacket(event.packet.payload());
-    }
-
-    @SubscribeEvent
     public void onLogout(FMLNetworkEvent.ClientDisconnectionFromServerEvent event) {
         proxy.clientReset();
     }

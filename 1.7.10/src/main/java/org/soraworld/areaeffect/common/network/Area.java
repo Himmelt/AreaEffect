@@ -3,15 +3,18 @@ package org.soraworld.areaeffect.common.network;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import net.minecraft.entity.player.EntityPlayer;
-import org.soraworld.areaeffect.common.util.GammaCurve;
+import org.soraworld.areaeffect.common.effect.AreaEffect;
+import org.soraworld.areaeffect.common.effect.EffectTypes;
+import org.soraworld.areaeffect.common.effect.LightnessEffect;
 import org.soraworld.areaeffect.common.util.Vec3d;
 import org.soraworld.areaeffect.common.util.Vec3i;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class Area {
 
     public int id;
-    public float lightness;
-    public float duration;
 
     public final int x1;
     public final int y1;
@@ -20,6 +23,8 @@ public class Area {
     public final int y2;
     public final int z2;
 
+    private final List<AreaEffect> effects = new ArrayList<>();
+
     public Area(int x1, int y1, int z1, int x2, int y2, int z2, float lightness, float duration) {
         this.x1 = Math.min(x1, x2);
         this.y1 = Math.min(y1, y2);
@@ -27,8 +32,70 @@ public class Area {
         this.x2 = Math.max(x1, x2);
         this.y2 = Math.max(y1, y2);
         this.z2 = Math.max(z1, z2);
-        this.lightness = Float.isNaN(lightness) ? 90.0F : Math.max(0.0F, Math.min(100.0F, lightness));
-        this.duration = !(duration > 0.0F) ? 1.0F : Math.min(60.0F, duration);
+        this.effects.add(new LightnessEffect(lightness, duration));
+    }
+
+    /**
+     * 该区域挂载的效果列表（每种效果类型至多一个实例）。
+     */
+    public List<AreaEffect> getEffects() {
+        return effects;
+    }
+
+    public void setEffects(List<AreaEffect> list) {
+        effects.clear();
+        if (list != null) {
+            effects.addAll(list);
+        }
+    }
+
+    public void addEffect(AreaEffect effect) {
+        if (effect != null) {
+            effects.removeIf(e -> e.typeId().equals(effect.typeId()));
+            effects.add(effect);
+        }
+    }
+
+    /**
+     * 亮度效果的当前目标亮度（CIE L*），无亮度效果时返回默认 90。
+     */
+    public float getLightness() {
+        LightnessEffect effect = lightnessEffect();
+        return effect == null ? 90.0F : effect.getLightness();
+    }
+
+    /**
+     * 亮度效果的过渡时长（秒），无亮度效果时返回默认 1。
+     */
+    public float getDuration() {
+        LightnessEffect effect = lightnessEffect();
+        return effect == null ? 1.0F : effect.getDuration();
+    }
+
+    public void setLightness(float lightness) {
+        ensureLightnessEffect().setLightness(lightness);
+    }
+
+    public void setDuration(float duration) {
+        ensureLightnessEffect().setDuration(duration);
+    }
+
+    private LightnessEffect lightnessEffect() {
+        for (AreaEffect effect : effects) {
+            if (effect instanceof LightnessEffect) {
+                return (LightnessEffect) effect;
+            }
+        }
+        return null;
+    }
+
+    private LightnessEffect ensureLightnessEffect() {
+        LightnessEffect effect = lightnessEffect();
+        if (effect == null) {
+            effect = new LightnessEffect();
+            effects.add(effect);
+        }
+        return effect;
     }
 
     public static ByteBuf toByteBuf(Area area) {
@@ -39,8 +106,12 @@ public class Area {
         buf.writeInt(area.x2);
         buf.writeInt(area.y2);
         buf.writeInt(area.z2);
-        buf.writeFloat(area.lightness);
-        buf.writeFloat(area.duration);
+        List<AreaEffect> effects = area.effects;
+        buf.writeInt(effects.size());
+        for (AreaEffect effect : effects) {
+            EffectTypes.writeString(buf, effect.typeId());
+            effect.writeToBuf(buf);
+        }
         return buf;
     }
 
@@ -51,9 +122,16 @@ public class Area {
         int x2 = buf.readInt();
         int y2 = buf.readInt();
         int z2 = buf.readInt();
-        float lightness = buf.readFloat();
-        float duration = buf.readFloat();
-        return new Area(x1, y1, z1, x2, y2, z2, lightness, duration);
+        Area area = new Area(x1, y1, z1, x2, y2, z2, 90.0F, 1.0F);
+        area.effects.clear();
+        int size = buf.readInt();
+        for (int i = 0; i < size; i++) {
+            AreaEffect effect = EffectTypes.fromBuf(buf);
+            if (effect != null) {
+                area.effects.add(effect);
+            }
+        }
+        return area;
     }
 
     public boolean contains(double x, double y, double z) {
@@ -70,7 +148,7 @@ public class Area {
 
     @Override
     public String toString() {
-        return x1 + "," + y1 + "," + z1 + "," + x2 + "," + y2 + "," + z2 + "," + lightness + "," + duration;
+        return x1 + "," + y1 + "," + z1 + "," + x2 + "," + y2 + "," + z2 + "," + getLightness() + "," + getDuration();
     }
 
     public String pos1() {
@@ -91,12 +169,5 @@ public class Area {
 
     public void center(EntityPlayer player) {
         player.setPosition((x1 + x2) / 2.0, (y1 + y2) / 2.0, (z1 + z2) / 2.0);
-    }
-
-    /**
-     * Gamma that makes the current scene appear at this area's target lightness.
-     */
-    public double targetGamma(double raw) {
-        return GammaCurve.gammaFromLightness(lightness, raw);
     }
 }

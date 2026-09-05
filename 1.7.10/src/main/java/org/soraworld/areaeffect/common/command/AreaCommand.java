@@ -72,8 +72,8 @@ public class AreaCommand extends CommandBase {
             if (area != null) {
                 proxy.sendChatTranslation(player, "info.pos1", area.pos1());
                 proxy.sendChatTranslation(player, "info.pos2", area.pos2());
-                proxy.sendChatTranslation(player, "info.lightness", area.lightness);
-                proxy.sendChatTranslation(player, "info.duration", area.duration);
+                proxy.sendChatTranslation(player, "info.lightness", area.getLightness());
+                proxy.sendChatTranslation(player, "info.duration", area.getDuration());
                 proxy.setPos1(player, area.vec1(), false);
                 proxy.setPos2(player, area.vec2(), false);
             } else {
@@ -113,11 +113,11 @@ public class AreaCommand extends CommandBase {
                         if (value > 100.0F) {
                             value = 100.0F;
                         }
-                        float old = area.lightness;
-                        area.lightness = value;
-                        if (old != area.lightness) {
+                        float old = area.getLightness();
+                        area.setLightness(value);
+                        if (old != area.getLightness()) {
                             if (CommonProxy.isDedicated(player)) {
-                                proxy.sendLightnessToAll(player.dimension, area.id, area.lightness);
+                                proxy.sendLightnessToAll(player.dimension, area.id, area.getLightness());
                             }
                             proxy.save();
                         }
@@ -125,7 +125,7 @@ public class AreaCommand extends CommandBase {
                         proxy.sendChatTranslation(player, "invalid.float");
                     }
                 }
-                proxy.sendChatTranslation(player, "info.lightness", area.lightness);
+                proxy.sendChatTranslation(player, "info.lightness", area.getLightness());
             } else {
                 proxy.sendChatTranslation(player, "info.notInArea");
             }
@@ -141,11 +141,11 @@ public class AreaCommand extends CommandBase {
                         if (value > 60.0F) {
                             value = 60.0F;
                         }
-                        float old = area.duration;
-                        area.duration = value;
-                        if (old != area.duration) {
+                        float old = area.getDuration();
+                        area.setDuration(value);
+                        if (old != area.getDuration()) {
                             if (CommonProxy.isDedicated(player)) {
-                                proxy.sendDurationToAll(player.dimension, area.id, area.duration);
+                                proxy.sendDurationToAll(player.dimension, area.id, area.getDuration());
                             }
                             proxy.save();
                         }
@@ -153,7 +153,7 @@ public class AreaCommand extends CommandBase {
                         proxy.sendChatTranslation(player, "invalid.float");
                     }
                 }
-                proxy.sendChatTranslation(player, "info.duration", area.duration);
+                proxy.sendChatTranslation(player, "info.duration", area.getDuration());
             } else {
                 proxy.sendChatTranslation(player, "info.notInArea");
             }

@@ -70,7 +70,7 @@ public class GuiAreaList extends GuiScreen {
             String line = "#" + area.id + "  " + area.x1 + "," + area.y1 + "," + area.z1
                     + " -> " + area.x2 + "," + area.y2 + "," + area.z2;
             fontRendererObj.drawStringWithShadow(line, left + 2, rowY + 2, 0xE0E0E0);
-            String rightText = "L:" + fmt(area.lightness) + "  T:" + fmt(area.duration) + "s";
+            String rightText = "L:" + fmt(area.getLightness()) + "  T:" + fmt(area.getDuration()) + "s";
             fontRendererObj.drawStringWithShadow(rightText, right - fontRendererObj.getStringWidth(rightText) - 2, rowY + 2, 0x9ADE91);
             rowY += ROW_H;
         }

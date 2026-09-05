@@ -2,11 +2,6 @@ package org.soraworld.areaeffect.common;
 
 import cpw.mods.fml.common.event.FMLInitializationEvent;
 import cpw.mods.fml.common.event.FMLPreInitializationEvent;
-import cpw.mods.fml.common.network.FMLEventChannel;
-import cpw.mods.fml.common.network.NetworkRegistry;
-import cpw.mods.fml.common.network.internal.FMLProxyPacket;
-import io.netty.buffer.ByteBuf;
-import io.netty.buffer.Unpooled;
 import net.minecraft.command.ICommandSender;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
@@ -24,9 +19,19 @@ import net.minecraft.util.EnumChatFormatting;
 import net.minecraft.util.IChatComponent;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.common.config.Configuration;
+import org.soraworld.areaeffect.common.effect.AreaEffect;
+import org.soraworld.areaeffect.common.effect.EffectTypes;
 import org.soraworld.areaeffect.common.handler.AreaServerHandler;
 import org.soraworld.areaeffect.common.network.Area;
-import org.soraworld.areaeffect.common.network.AreaPacket;
+import org.soraworld.areaeffect.common.network.MessageAreaDelete;
+import org.soraworld.areaeffect.common.network.MessageAreaUpdate;
+import org.soraworld.areaeffect.common.network.MessageDurationUpdate;
+import org.soraworld.areaeffect.common.network.MessageLightnessUpdate;
+import org.soraworld.areaeffect.common.network.MessageListReply;
+import org.soraworld.areaeffect.common.network.MessageListRequest;
+import org.soraworld.areaeffect.common.network.MessageSelection;
+import org.soraworld.areaeffect.common.network.MessageSetProps;
+import org.soraworld.areaeffect.common.network.PacketChannel;
 import org.soraworld.areaeffect.common.util.Vec3d;
 import org.soraworld.areaeffect.common.util.Vec3i;
 
@@ -35,19 +40,9 @@ import java.util.*;
 
 public class CommonProxy {
 
-    public static final byte UPDATE = 1;
-    public static final byte DELETE = 2;
-    public static final byte LIGHTNESS = 3;
-    public static final byte DURATION = 4;
-    public static final byte SELECTION = 5;
-    public static final byte REQ_LIST = 6;
-    public static final byte LIST_REPLY = 7;
-    public static final byte REQ_SET = 8;
-
     protected final HashMap<UUID, Vec3i> pos1s = new HashMap<>();
     protected final HashMap<UUID, Vec3i> pos2s = new HashMap<>();
     protected final HashMap<Integer, HashMap<Integer, Area>> lightAreas = new HashMap<>();
-    protected final FMLEventChannel channel = NetworkRegistry.INSTANCE.newEventDrivenChannel("light");
     protected final AreaServerHandler serverHandler = new AreaServerHandler(this);
     public Configuration config;
     protected File storeFile = null;
@@ -55,9 +50,48 @@ public class CommonProxy {
     protected float duration = 1.0F;
     protected int AREA_ID = 0;
 
+    /** 网络消息是否已注册（每进程恰一次，见 registerAllMessagePackets）。 */
+    private static boolean networkRegistered = false;
+
     public void onPreInit(FMLPreInitializationEvent event) {
+        registerAllMessagePackets();
+        bindServerPacketHandlers();
         cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(serverHandler);
-        channel.register(serverHandler);
+    }
+
+    /**
+     * 注册全部 opcode ↔ 消息类型（幂等）：发送编码与接收解码共表，故无条件全量注册。
+     * 单机时客户端与服务端同进程各会调用一次，静态标志保证只真正注册一次。
+     */
+    protected void registerAllMessagePackets() {
+        if (networkRegistered) {
+            return;
+        }
+        networkRegistered = true;
+        PacketChannel.register(1, MessageAreaUpdate.class);
+        PacketChannel.register(2, MessageAreaDelete.class);
+        PacketChannel.register(3, MessageLightnessUpdate.class);
+        PacketChannel.register(4, MessageDurationUpdate.class);
+        PacketChannel.register(5, MessageSelection.class);
+        PacketChannel.register(6, MessageListRequest.class);
+        PacketChannel.register(7, MessageListReply.class);
+        PacketChannel.register(8, MessageSetProps.class);
+    }
+
+    /**
+     * 绑定服务端方向消息的处理逻辑（列表请求/写回）。lambda 位于公共层，引用服务端逻辑方法。
+     */
+    protected void bindServerPacketHandlers() {
+        PacketChannel.bindServer(MessageListRequest.class, (message, player) -> {
+            if (player != null) {
+                handleListRequest(player);
+            }
+        });
+        PacketChannel.bindServer(MessageSetProps.class, (message, player) -> {
+            if (player != null) {
+                handleSetProps(player, message);
+            }
+        });
     }
 
     public void onInit(FMLInitializationEvent event) {
@@ -108,7 +142,8 @@ public class CommonProxy {
                 int dim = tag.getInteger("dim");
                 Area area = new Area(tag.getInteger("x1"), tag.getInteger("y1"), tag.getInteger("z1"),
                         tag.getInteger("x2"), tag.getInteger("y2"), tag.getInteger("z2"),
-                        tag.getFloat("lightness"), tag.getFloat("duration"));
+                        90.0F, 1.0F);
+                area.setEffects(readEffectsNbt(tag.getTagList("effects", 10)));
                 area.id = tag.getInteger("id");
                 lightAreas.computeIfAbsent(dim, d -> new HashMap<>()).put(area.id, area);
                 if (area.id > AREA_ID) {
@@ -117,6 +152,20 @@ public class CommonProxy {
             }
         } catch (Throwable ignored) {
         }
+    }
+
+    /**
+     * 从 NBT 效果列表反序列化出效果集合。
+     */
+    private List<AreaEffect> readEffectsNbt(NBTTagList list) {
+        List<AreaEffect> effects = new ArrayList<>();
+        for (int i = 0; i < list.tagCount(); i++) {
+            AreaEffect effect = EffectTypes.fromNbt(list.getCompoundTagAt(i));
+            if (effect != null) {
+                effects.add(effect);
+            }
+        }
+        return effects;
     }
 
     /**
@@ -135,8 +184,14 @@ public class CommonProxy {
             tag.setInteger("x2", area.x2);
             tag.setInteger("y2", area.y2);
             tag.setInteger("z2", area.z2);
-            tag.setFloat("lightness", area.lightness);
-            tag.setFloat("duration", area.duration);
+            NBTTagList effectList = new NBTTagList();
+            for (AreaEffect effect : area.getEffects()) {
+                NBTTagCompound effectTag = new NBTTagCompound();
+                effectTag.setString("type", effect.typeId());
+                effect.writeToNbt(effectTag);
+                effectList.appendTag(effectTag);
+            }
+            tag.setTag("effects", effectList);
             areas.appendTag(tag);
         }));
         root.setTag("areas", areas);
@@ -194,19 +249,12 @@ public class CommonProxy {
     }
 
     /**
-     * 将当前选区同步到客户端，由客户端自绘选区线框，不再依赖 WECUI。
+     * 将当前选区同步到客户端，由客户端自绘选区线框。
      */
     protected void updateSelection(EntityPlayerMP player) {
         Vec3i pos1 = pos1s.get(player.getUniqueID());
         Vec3i pos2 = pos2s.get(player.getUniqueID());
-        ByteBuf buf = Unpooled.buffer();
-        buf.writeByte(SELECTION);
-        AreaPacket.Selection.encode(new AreaPacket.Selection(pos1, pos2), buf);
-        sendTo(buf, player);
-    }
-
-    private void sendTo(ByteBuf buf, EntityPlayerMP player) {
-        channel.sendTo(new FMLProxyPacket(buf, "light"), player);
+        PacketChannel.sendTo(new MessageSelection(pos1, pos2), player);
     }
 
     /**
@@ -218,16 +266,13 @@ public class CommonProxy {
         }
         Map<Integer, Area> areas = lightAreas.get(player.dimension);
         List<Area> list = areas == null ? Collections.emptyList() : new ArrayList<>(areas.values());
-        ByteBuf buf = Unpooled.buffer();
-        buf.writeByte(LIST_REPLY);
-        AreaPacket.ListReply.encode(new AreaPacket.ListReply(player.dimension, list), buf);
-        sendTo(buf, player);
+        PacketChannel.sendTo(new MessageListReply(player.dimension, list), player);
     }
 
     /**
      * 服务端应用写回：再次校验 OP 权限后再修改，并广播给所有客户端。
      */
-    public void handleSetProps(EntityPlayerMP player, AreaPacket.SetProps packet) {
+    public void handleSetProps(EntityPlayerMP player, MessageSetProps packet) {
         if (!hasPerm(player)) {
             sendChatTranslation(player, "perm.denied");
             return;
@@ -241,23 +286,15 @@ public class CommonProxy {
             sendChatTranslation(player, "areaIdNotFound");
             return;
         }
-        area.lightness = applyLightness(packet.lightness);
-        area.duration = applyDuration(packet.duration);
+        // 以客户端回写的整组效果替换，并对每条做参数边界处理
+        List<AreaEffect> incoming = packet.effects;
+        for (AreaEffect effect : incoming) {
+            effect.sanitize();
+        }
+        area.setEffects(incoming);
         save();
         sendUpdateToAll(packet.dim, area.id, area);
         sendChatTranslation(player, "gui.set.done");
-    }
-
-    private float applyLightness(float lightness) {
-        return Float.isNaN(lightness) ? 90.0F : Math.max(0.0F, Math.min(100.0F, lightness));
-    }
-
-    private float applyDuration(float duration) {
-        return !(duration > 0.0F) ? 1.0F : Math.min(60.0F, duration);
-    }
-
-    private void sendToAll(ByteBuf buf) {
-        channel.sendToAll(new FMLProxyPacket(buf, "light"));
     }
 
     public void sendAllAreasTo(EntityPlayerMP player) {
@@ -267,38 +304,23 @@ public class CommonProxy {
     }
 
     public void sendUpdateTo(EntityPlayerMP player, int dim, int id, Area area) {
-        ByteBuf buf = Unpooled.buffer();
-        buf.writeByte(UPDATE);
-        AreaPacket.Update.encode(new AreaPacket.Update(dim, id, area), buf);
-        sendTo(buf, player);
+        PacketChannel.sendTo(new MessageAreaUpdate(dim, id, area), player);
     }
 
     public void sendUpdateToAll(int dim, int id, Area area) {
-        ByteBuf buf = Unpooled.buffer();
-        buf.writeByte(UPDATE);
-        AreaPacket.Update.encode(new AreaPacket.Update(dim, id, area), buf);
-        sendToAll(buf);
+        PacketChannel.sendToAll(new MessageAreaUpdate(dim, id, area));
     }
 
     public void sendDeleteToAll(int dim, int id) {
-        ByteBuf buf = Unpooled.buffer();
-        buf.writeByte(DELETE);
-        AreaPacket.Delete.encode(new AreaPacket.Delete(dim, id), buf);
-        sendToAll(buf);
+        PacketChannel.sendToAll(new MessageAreaDelete(dim, id));
     }
 
     public void sendLightnessToAll(int dim, int id, float lightness) {
-        ByteBuf buf = Unpooled.buffer();
-        buf.writeByte(LIGHTNESS);
-        AreaPacket.Lightness.encode(new AreaPacket.Lightness(dim, id, lightness), buf);
-        sendToAll(buf);
+        PacketChannel.sendToAll(new MessageLightnessUpdate(dim, id, lightness));
     }
 
     public void sendDurationToAll(int dim, int id, float duration) {
-        ByteBuf buf = Unpooled.buffer();
-        buf.writeByte(DURATION);
-        AreaPacket.Duration.encode(new AreaPacket.Duration(dim, id, duration), buf);
-        sendToAll(buf);
+        PacketChannel.sendToAll(new MessageDurationUpdate(dim, id, duration));
     }
 
     public void createArea(EntityPlayerMP player, float lightness, float duration) {
@@ -387,7 +409,7 @@ public class CommonProxy {
         ChatStyle style = new ChatStyle().setColor(EnumChatFormatting.GREEN).setBold(true)
                 .setChatClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/areaeffect tp " + id));
         IChatComponent click = new ChatComponentTranslation("text.click").setChatStyle(style);
-        player.addChatMessage(new ChatComponentTranslation("info.list", id, dim, area.pos1(), area.pos2(), area.lightness, area.duration, click));
+        player.addChatMessage(new ChatComponentTranslation("info.list", id, dim, area.pos1(), area.pos2(), area.getLightness(), area.getDuration(), click));
     }
 
     public void commandTool(EntityPlayerMP player) {

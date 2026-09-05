@@ -5,8 +5,13 @@ import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.GuiTextField;
 import net.minecraft.util.StatCollector;
 import org.lwjgl.input.Keyboard;
-import org.soraworld.areaeffect.common.network.Area;
 import org.soraworld.areaeffect.client.ClientProxy;
+import org.soraworld.areaeffect.common.effect.AreaEffect;
+import org.soraworld.areaeffect.common.effect.LightnessEffect;
+import org.soraworld.areaeffect.common.network.Area;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * 区域详情界面：展示区域信息，并允许修改目标亮度与过渡时长。
@@ -39,11 +44,11 @@ public class GuiAreaEdit extends GuiScreen {
 
         int fieldX = width / 2 + 20;
         lightnessField = new GuiTextField(fontRendererObj, fieldX, height / 2 - 34, FIELD_W, 20);
-        lightnessField.setText(fmt(area.lightness));
+        lightnessField.setText(fmt(area.getLightness()));
         lightnessField.setFocused(true);
 
         durationField = new GuiTextField(fontRendererObj, fieldX, height / 2, FIELD_W, 20);
-        durationField.setText(fmt(area.duration));
+        durationField.setText(fmt(area.getDuration()));
     }
 
     @Override
@@ -99,14 +104,16 @@ public class GuiAreaEdit extends GuiScreen {
         try {
             lightness = Float.parseFloat(lightnessField.getText().trim());
         } catch (NumberFormatException e) {
-            lightness = area.lightness;
+            lightness = area.getLightness();
         }
         try {
             duration = Float.parseFloat(durationField.getText().trim());
         } catch (NumberFormatException e) {
-            duration = area.duration;
+            duration = area.getDuration();
         }
-        proxy.sendSetProps(dim, area.id, lightness, duration);
+        List<AreaEffect> effects = new ArrayList<>();
+        effects.add(new LightnessEffect(lightness, duration));
+        proxy.sendSetProps(dim, area.id, effects);
         mc.displayGuiScreen(null);
     }
 
