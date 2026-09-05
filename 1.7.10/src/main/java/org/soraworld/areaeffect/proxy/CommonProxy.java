@@ -1,6 +1,5 @@
 package org.soraworld.areaeffect.proxy;
 
-import cpw.mods.fml.common.FMLCommonHandler;
 import cpw.mods.fml.common.event.FMLInitializationEvent;
 import cpw.mods.fml.common.event.FMLPreInitializationEvent;
 import cpw.mods.fml.common.network.FMLEventChannel;
@@ -15,8 +14,9 @@ import net.minecraft.event.ClickEvent;
 import net.minecraft.init.Items;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
-import net.minecraft.network.Packet;
-import net.minecraft.network.play.server.S3FPacketCustomPayload;
+import net.minecraft.nbt.CompressedStreamTools;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.nbt.NBTTagList;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.ChatComponentTranslation;
 import net.minecraft.util.ChatStyle;
@@ -26,13 +26,13 @@ import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.common.config.Configuration;
 import org.soraworld.areaeffect.handler.EventBusHandler;
 import org.soraworld.areaeffect.handler.FMLHandler;
+import org.soraworld.areaeffect.handler.FMLServerHandler;
 import org.soraworld.areaeffect.network.Area;
 import org.soraworld.areaeffect.network.AreaPacket;
-import org.soraworld.areaeffect.util.GammaCurve;
 import org.soraworld.areaeffect.util.Vec3d;
 import org.soraworld.areaeffect.util.Vec3i;
 
-import java.nio.charset.StandardCharsets;
+import java.io.*;
 import java.util.*;
 
 public class CommonProxy {
@@ -41,20 +41,24 @@ public class CommonProxy {
     public static final byte DELETE = 2;
     public static final byte LIGHTNESS = 3;
     public static final byte DURATION = 4;
+    public static final byte SELECTION = 5;
+    public static final byte REQ_LIST = 6;
+    public static final byte LIST_REPLY = 7;
+    public static final byte REQ_SET = 8;
 
-    private static final byte[] CUBOID = "s|cuboid".getBytes(StandardCharsets.UTF_8);
-    private static final String WECUI_CHANNEL = "WECUI";
     protected final HashMap<UUID, Vec3i> pos1s = new HashMap<>();
     protected final HashMap<UUID, Vec3i> pos2s = new HashMap<>();
     protected final HashMap<Integer, HashMap<Integer, Area>> lightAreas = new HashMap<>();
-    protected final cpw.mods.fml.common.network.FMLEventChannel channel = cpw.mods.fml.common.network.NetworkRegistry.INSTANCE.newEventDrivenChannel("light");
+    protected final FMLEventChannel channel = NetworkRegistry.INSTANCE.newEventDrivenChannel("light");
     public Configuration config;
+    protected File storeFile = null;
     protected Item tool = Items.wooden_axe;
     protected float duration = 1.0F;
     protected int AREA_ID = 0;
 
     public void onPreInit(FMLPreInitializationEvent event) {
         cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new FMLHandler(this));
+        channel.register(new FMLServerHandler(this));
     }
 
     public void onInit(FMLInitializationEvent event) {
@@ -65,44 +69,89 @@ public class CommonProxy {
         MinecraftForge.EVENT_BUS.register(object);
     }
 
+    /**
+     * 设置随世界存储的区域文件路径（一个世界一个文件）。
+     */
+    public void setStoreFile(File file) {
+        this.storeFile = file;
+    }
+
     public void load() {
         config.load();
         setSelectTool(config.getString("tool", "general", "wooden_axe", "Select Tool"));
-        String[] list = config.getStringList("areas", "general", new String[]{}, "Light Areas");
         lightAreas.clear();
         AREA_ID = 0;
-        if (list != null) {
-            for (String text : list) {
-                String[] ss = text.split(",");
-                try {
-                    int off = "2".equals(ss[0]) ? 1 : 0;
-                    int dim = Integer.parseInt(ss[off]);
-                    Vec3i pos1 = new Vec3i(Integer.parseInt(ss[off + 1]), Integer.parseInt(ss[off + 2]), Integer.parseInt(ss[off + 3]));
-                    Vec3i pos2 = new Vec3i(Integer.parseInt(ss[off + 4]), Integer.parseInt(ss[off + 5]), Integer.parseInt(ss[off + 6]));
-                    float lightness;
-                    float duration;
-                    if (off == 0) {
-                        // legacy row: field 8 is an old gamma value, convert it with the old reference scene
-                        float gamma = ss.length >= 8 ? Float.parseFloat(ss[7]) : 1.0F;
-                        lightness = (float) GammaCurve.perceive(gamma, 0.05);
-                        duration = 1.0F;
-                    } else {
-                        lightness = ss.length >= 9 ? Float.parseFloat(ss[8]) : 90.0F;
-                        duration = ss.length >= 10 ? Float.parseFloat(ss[9]) : 1.0F;
-                    }
-                    addArea(dim, pos1, pos2, lightness, duration);
-                } catch (Throwable ignored) {
-                }
-            }
+        if (storeFile != null && storeFile.exists()) {
+            readAreasNbt(storeFile);
         }
     }
 
     public void save() {
         config.get("general", "tool", "wooden_axe", "Select Tool").set(getToolName());
-        List<String> list = new ArrayList<>();
-        lightAreas.forEach((dim, areas) -> areas.values().forEach(area -> list.add("2," + dim + "," + area)));
-        config.get("general", "areas", new String[]{}, "Light Areas").set(list.toArray(new String[]{}));
         config.save();
+        if (storeFile != null) {
+            writeAreasNbt(storeFile);
+        }
+    }
+
+    /**
+     * 从随世界的 NBT 文件读入区域（一个世界一个文件）。
+     */
+    private void readAreasNbt(File file) {
+        try {
+            NBTTagCompound root;
+            try (DataInputStream in = new DataInputStream(new FileInputStream(file))) {
+                root = CompressedStreamTools.readCompressed(in);
+            }
+            NBTTagList areas = root.getTagList("areas", 10);
+            for (int i = 0; i < areas.tagCount(); i++) {
+                NBTTagCompound tag = areas.getCompoundTagAt(i);
+                int dim = tag.getInteger("dim");
+                Area area = new Area(tag.getInteger("x1"), tag.getInteger("y1"), tag.getInteger("z1"),
+                        tag.getInteger("x2"), tag.getInteger("y2"), tag.getInteger("z2"),
+                        tag.getFloat("lightness"), tag.getFloat("duration"));
+                area.id = tag.getInteger("id");
+                lightAreas.computeIfAbsent(dim, d -> new HashMap<>()).put(area.id, area);
+                if (area.id > AREA_ID) {
+                    AREA_ID = area.id;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 把区域以 NBT 原子写入随世界文件：先写临时文件再替换，避免崩溃损坏。
+     */
+    private void writeAreasNbt(File file) {
+        NBTTagCompound root = new NBTTagCompound();
+        NBTTagList areas = new NBTTagList();
+        lightAreas.forEach((dim, map) -> map.values().forEach(area -> {
+            NBTTagCompound tag = new NBTTagCompound();
+            tag.setInteger("dim", dim);
+            tag.setInteger("id", area.id);
+            tag.setInteger("x1", area.x1);
+            tag.setInteger("y1", area.y1);
+            tag.setInteger("z1", area.z1);
+            tag.setInteger("x2", area.x2);
+            tag.setInteger("y2", area.y2);
+            tag.setInteger("z2", area.z2);
+            tag.setFloat("lightness", area.lightness);
+            tag.setFloat("duration", area.duration);
+            areas.appendTag(tag);
+        }));
+        root.setTag("areas", areas);
+        File tmp = new File(file.getPath() + ".tmp");
+        try {
+            try (DataOutputStream out = new DataOutputStream(new FileOutputStream(tmp))) {
+                CompressedStreamTools.writeCompressed(root, out);
+            }
+            if (!tmp.renameTo(file)) {
+                java.nio.file.Files.copy(tmp.toPath(), file.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                tmp.delete();
+            }
+        } catch (Throwable ignored) {
+        }
     }
 
     private void setSelectTool(String toolName) {
@@ -134,7 +183,7 @@ public class CommonProxy {
         if (msg) {
             sendChatTranslation(player, "set.pos1", pos1);
         }
-        updateCUI(player);
+        updateSelection(player);
     }
 
     public void setPos2(EntityPlayerMP player, Vec3i pos2, boolean msg) {
@@ -142,29 +191,70 @@ public class CommonProxy {
         if (msg) {
             sendChatTranslation(player, "set.pos2", pos2);
         }
-        updateCUI(player);
+        updateSelection(player);
     }
 
-    public void updateCUI(EntityPlayerMP player) {
+    /**
+     * 将当前选区同步到客户端，由客户端自绘选区线框，不再依赖 WECUI。
+     */
+    protected void updateSelection(EntityPlayerMP player) {
         Vec3i pos1 = pos1s.get(player.getUniqueID());
         Vec3i pos2 = pos2s.get(player.getUniqueID());
-        if (pos1 == null) {
-            if (pos2 == null) {
-                return;
-            }
-            pos1 = pos2;
-        } else if (pos2 == null) {
-            pos2 = pos1;
-        }
-        long sizeLong = (long) (pos2.x - pos1.x + 1) * (pos2.y - pos1.y + 1) * (pos2.z - pos1.z + 1);
-        int size = (int) Math.min(sizeLong, Integer.MAX_VALUE);
-        player.playerNetServerHandler.sendPacket((Packet) new S3FPacketCustomPayload(WECUI_CHANNEL, CUBOID));
-        player.playerNetServerHandler.sendPacket((Packet) new S3FPacketCustomPayload(WECUI_CHANNEL, pos1.cui(1, size)));
-        player.playerNetServerHandler.sendPacket((Packet) new S3FPacketCustomPayload(WECUI_CHANNEL, pos2.cui(2, size)));
+        ByteBuf buf = Unpooled.buffer();
+        buf.writeByte(SELECTION);
+        AreaPacket.Selection.encode(new AreaPacket.Selection(pos1, pos2), buf);
+        sendTo(buf, player);
     }
 
     private void sendTo(ByteBuf buf, EntityPlayerMP player) {
         channel.sendTo(new FMLProxyPacket(buf, "light"), player);
+    }
+
+    /**
+     * 服务端响应列表请求：校验 OP 权限后回复当前维度的区域列表。
+     */
+    public void handleListRequest(EntityPlayerMP player) {
+        if (!hasPerm(player)) {
+            return; // 无权限，静默忽略，客户端不会收到回复也就不会打开 GUI
+        }
+        Map<Integer, Area> areas = lightAreas.get(player.dimension);
+        List<Area> list = areas == null ? Collections.emptyList() : new ArrayList<>(areas.values());
+        ByteBuf buf = Unpooled.buffer();
+        buf.writeByte(LIST_REPLY);
+        AreaPacket.ListReply.encode(new AreaPacket.ListReply(player.dimension, list), buf);
+        sendTo(buf, player);
+    }
+
+    /**
+     * 服务端应用写回：再次校验 OP 权限后再修改，并广播给所有客户端。
+     */
+    public void handleSetProps(EntityPlayerMP player, AreaPacket.SetProps packet) {
+        if (!hasPerm(player)) {
+            sendChatTranslation(player, "perm.denied");
+            return;
+        }
+        Map<Integer, Area> areas = lightAreas.get(packet.dim);
+        if (areas == null) {
+            return;
+        }
+        Area area = areas.get(packet.id);
+        if (area == null) {
+            sendChatTranslation(player, "areaIdNotFound");
+            return;
+        }
+        area.lightness = applyLightness(packet.lightness);
+        area.duration = applyDuration(packet.duration);
+        save();
+        sendUpdateToAll(packet.dim, area.id, area);
+        sendChatTranslation(player, "gui.set.done");
+    }
+
+    private float applyLightness(float lightness) {
+        return Float.isNaN(lightness) ? 90.0F : Math.max(0.0F, Math.min(100.0F, lightness));
+    }
+
+    private float applyDuration(float duration) {
+        return !(duration > 0.0F) ? 1.0F : Math.min(60.0F, duration);
     }
 
     private void sendToAll(ByteBuf buf) {
@@ -277,6 +367,9 @@ public class CommonProxy {
     public void clearSelect(EntityPlayer player) {
         pos1s.remove(player.getUniqueID());
         pos2s.remove(player.getUniqueID());
+        if (player instanceof EntityPlayerMP) {
+            updateSelection((EntityPlayerMP) player);
+        }
     }
 
     public boolean hasPerm(EntityPlayer player) {

@@ -47,6 +47,8 @@ public class AreaEffect {
             WorldServer world = (WorldServer) event.getServer().getEntityWorld();
             File conf = new File(world.getChunkSaveLocation(), MOD_ID + ".cfg");
             proxy.config = new Configuration(conf);
+            File store = new File(world.getChunkSaveLocation(), "areaeffect.dat");
+            proxy.setStoreFile(store);
             proxy.load();
         }
     }

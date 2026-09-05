@@ -21,6 +21,9 @@ public class FMLClientHandler {
         }
         if (event.player instanceof EntityPlayerSP) {
             proxy.updateClientLight(event.player);
+            if (ClientProxy.KEY_LIST.isPressed()) {
+                proxy.sendListRequest();
+            }
         }
     }
 
