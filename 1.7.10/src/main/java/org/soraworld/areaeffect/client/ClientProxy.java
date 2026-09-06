@@ -13,7 +13,7 @@ import net.minecraftforge.common.MinecraftForge;
 import org.lwjgl.input.Keyboard;
 import org.soraworld.areaeffect.client.effect.EffectRenderers;
 import org.soraworld.areaeffect.client.effect.EffectRenderer;
-import org.soraworld.areaeffect.client.gui.GuiAreaList;
+import org.soraworld.areaeffect.client.gui.GuiAreas;
 import org.soraworld.areaeffect.client.handler.AreaClientHandler;
 import org.soraworld.areaeffect.client.handler.LightmapHook;
 import org.soraworld.areaeffect.client.handler.SelectionRenderHandler;
@@ -32,6 +32,7 @@ import org.soraworld.areaeffect.common.network.PacketChannel;
 import org.soraworld.areaeffect.common.util.Vec3i;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -84,8 +85,8 @@ public class ClientProxy extends CommonProxy {
         PacketChannel.sendToServer(new MessageListRequest());
     }
 
-    public void sendSetProps(int dim, int id, List<AreaEffect> effects) {
-        PacketChannel.sendToServer(new MessageSetProps(dim, id, effects));
+    public void sendSetProps(int dim, int id, String remark, List<AreaEffect> effects) {
+        PacketChannel.sendToServer(new MessageSetProps(dim, id, remark, effects));
     }
 
     public void sendDeleteRequest(int dim, int id) {
@@ -105,6 +106,12 @@ public class ClientProxy extends CommonProxy {
         if (areas != null && !areas.isEmpty()) {
             areas.remove(packet.id);
         }
+        // 广播统一刷新：回主线程更新已打开的管理界面
+        runOnClientThread(() -> {
+            if (mc.currentScreen instanceof GuiAreas) {
+                ((GuiAreas) mc.currentScreen).refreshFromProxy();
+            }
+        });
     }
 
     public void handleSelection(MessageSelection packet) {
@@ -114,7 +121,14 @@ public class ClientProxy extends CommonProxy {
 
     public void handleListReply(MessageListReply packet) {
         // netty 线程回调：GUI 操作必须回客户端主线程
-        runOnClientThread(() -> mc.displayGuiScreen(new GuiAreaList(this, packet.dim, packet.areas)));
+        runOnClientThread(() -> {
+            // 已打开界面则刷新，否则打开主界面（读取全量本地数据，跨维度）
+            if (mc.currentScreen instanceof GuiAreas) {
+                ((GuiAreas) mc.currentScreen).refreshFromProxy();
+            } else {
+                mc.displayGuiScreen(new GuiAreas(this));
+            }
+        });
     }
 
     /** netty 线程投递需在客户端主线程执行的逻辑（参考 CNpcUI：回调只做线程安全操作，其余进队）。 */
@@ -204,11 +218,14 @@ public class ClientProxy extends CommonProxy {
         }
     }
 
-    /** 客户端本地移除区域（用于删除后立即刷新界面；服务端广播到达后为幂等操作）。 */
-    public void clientRemoveArea(int dim, int id) {
+    /** 本地立即写回备注（列表即时显示；服务端广播到达后幂等）。 */
+    public void previewAreaRemark(int dim, int id, String remark) {
         Map<Integer, Area> areas = lightAreas.get(dim);
         if (areas != null) {
-            areas.remove(id);
+            Area target = areas.get(id);
+            if (target != null) {
+                target.setRemark(remark);
+            }
         }
     }
 
@@ -216,6 +233,19 @@ public class ClientProxy extends CommonProxy {
     public List<Area> getAreasLocal(int dim) {
         Map<Integer, Area> areas = lightAreas.get(dim);
         return areas == null ? new ArrayList<>() : new ArrayList<>(areas.values());
+    }
+
+    /** 所有存在区域的维度列表（升序）。 */
+    public List<Integer> getDimsLocal() {
+        List<Integer> dims = new ArrayList<>(lightAreas.keySet());
+        Collections.sort(dims);
+        return dims;
+    }
+
+    /** 按 id 跨维度查找区域副本。 */
+    public Area findAreaLocal(int dim, int id) {
+        Map<Integer, Area> areas = lightAreas.get(dim);
+        return areas == null ? null : areas.get(id);
     }
 
     /**

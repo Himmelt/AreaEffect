@@ -3,9 +3,11 @@ package org.soraworld.areaeffect.client.handler;
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.Tessellator;
+import net.minecraftforge.client.event.RenderGameOverlayEvent;
 import net.minecraftforge.client.event.RenderWorldLastEvent;
 import org.lwjgl.opengl.GL11;
 import org.soraworld.areaeffect.client.ClientProxy;
+import org.soraworld.areaeffect.client.gui.GuiAreas;
 import org.soraworld.areaeffect.common.network.Area;
 import org.soraworld.areaeffect.common.util.Vec3i;
 
@@ -21,6 +23,17 @@ public class SelectionRenderHandler {
 
     public SelectionRenderHandler(ClientProxy proxy) {
         this.proxy = proxy;
+    }
+
+    /**
+     * 区域管理界面为全透明背景，HUD 准星会透出来；界面打开期间取消准星渲染。
+     */
+    @SubscribeEvent
+    public void onRenderOverlay(RenderGameOverlayEvent.Pre event) {
+        if (event.type == RenderGameOverlayEvent.ElementType.CROSSHAIRS
+                && mc.currentScreen instanceof GuiAreas) {
+            event.setCanceled(true);
+        }
     }
 
     @SubscribeEvent

@@ -15,6 +15,9 @@ import java.util.List;
 
 public class Area {
 
+    /** 备注最大长度（字符数）。 */
+    public static final int REMARK_MAX = 60;
+
     public int id;
 
     public final int x1;
@@ -23,6 +26,9 @@ public class Area {
     public final int x2;
     public final int y2;
     public final int z2;
+
+    /** 区域备注，供玩家标注用途；可为空串。 */
+    private String remark = "";
 
     private final List<AreaEffect> effects = new ArrayList<>();
 
@@ -34,6 +40,18 @@ public class Area {
         this.y2 = Math.max(y1, y2);
         this.z2 = Math.max(z1, z2);
         this.effects.add(new LightnessEffect(lightness, duration));
+    }
+
+    public String getRemark() {
+        return remark == null ? "" : remark;
+    }
+
+    public void setRemark(String remark) {
+        if (remark == null) {
+            this.remark = "";
+        } else {
+            this.remark = remark.length() > REMARK_MAX ? remark.substring(0, REMARK_MAX) : remark;
+        }
     }
 
     /**
@@ -107,6 +125,7 @@ public class Area {
         buf.writeInt(area.x2);
         buf.writeInt(area.y2);
         buf.writeInt(area.z2);
+        EffectTypes.writeString(buf, area.getRemark());
         List<AreaEffect> effects = area.effects;
         buf.writeInt(effects.size());
         for (AreaEffect effect : effects) {
@@ -124,6 +143,7 @@ public class Area {
         int y2 = buf.readInt();
         int z2 = buf.readInt();
         Area area = new Area(x1, y1, z1, x2, y2, z2, 100.0F, 1.0F);
+        area.setRemark(EffectTypes.readString(buf));
         area.effects.clear();
         int size = buf.readInt();
         for (int i = 0; i < size; i++) {

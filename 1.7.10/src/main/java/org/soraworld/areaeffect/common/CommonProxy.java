@@ -147,6 +147,7 @@ public class CommonProxy {
                 Area area = new Area(tag.getInteger("x1"), tag.getInteger("y1"), tag.getInteger("z1"),
                         tag.getInteger("x2"), tag.getInteger("y2"), tag.getInteger("z2"),
                         100.0F, 1.0F);
+                area.setRemark(tag.getString("remark"));
                 area.setEffects(readEffectsNbt(tag.getTagList("effects", 10)));
                 area.id = tag.getInteger("id");
                 lightAreas.computeIfAbsent(dim, d -> new ConcurrentHashMap<Integer, Area>()).put(area.id, area);
@@ -188,6 +189,7 @@ public class CommonProxy {
             tag.setInteger("x2", area.x2);
             tag.setInteger("y2", area.y2);
             tag.setInteger("z2", area.z2);
+            tag.setString("remark", area.getRemark());
             NBTTagList effectList = new NBTTagList();
             for (AreaEffect effect : area.getEffects()) {
                 NBTTagCompound effectTag = new NBTTagCompound();
@@ -238,17 +240,11 @@ public class CommonProxy {
 
     public void setPos1(EntityPlayerMP player, Vec3i pos1, boolean msg) {
         pos1s.put(player.getUniqueID(), pos1);
-        if (msg) {
-            sendChatTranslation(player, "chat.set.pos1", pos1);
-        }
         updateSelection(player);
     }
 
     public void setPos2(EntityPlayerMP player, Vec3i pos2, boolean msg) {
         pos2s.put(player.getUniqueID(), pos2);
-        if (msg) {
-            sendChatTranslation(player, "chat.set.pos2", pos2);
-        }
         updateSelection(player);
     }
 
@@ -290,19 +286,20 @@ public class CommonProxy {
             sendChatTranslation(player, "chat.area.notfound");
             return;
         }
-        // 以客户端回写的整组效果替换，并对每条做参数边界处理
+        // 以客户端回写的整组效果替换，并对每条做参数边界处理；备注一并写回
         List<AreaEffect> incoming = packet.effects;
         for (AreaEffect effect : incoming) {
             effect.sanitize();
         }
         area.setEffects(incoming);
+        area.setRemark(packet.remark);
         save();
         sendUpdateToAll(packet.dim, area.id, area);
-        sendChatTranslation(player, "chat.area.updated");
     }
 
     /**
-     * 服务端按 id 删除区域：再次校验 OP 权限，成功则持久化并广播。
+     * 服务端按 id 删除区域：再次校验 OP 权限，成功则持久化并广播（含单机，
+     * 客户端依赖广播统一刷新本地数据，本地不提前移除以免竞态）。
      */
     public void handleDeleteRequest(EntityPlayerMP player, MessageDeleteRequest packet) {
         if (!hasPerm(player)) {
@@ -315,9 +312,7 @@ public class CommonProxy {
             return;
         }
         save();
-        if (isDedicated(player)) {
-            sendDeleteToAll(packet.dim, packet.id);
-        }
+        sendDeleteToAll(packet.dim, packet.id);
     }
 
     /**
@@ -442,12 +437,8 @@ public class CommonProxy {
             if (area != null) {
                 if (player.dimension != dim) {
                     player.travelToDimension(dim);
-                    area.center(player);
-                    sendChatTranslation(player, "chat.area.tp");
-                } else {
-                    area.center(player);
-                    sendChatTranslation(player, "chat.area.tp");
                 }
+                area.center(player);
                 return;
             }
         }

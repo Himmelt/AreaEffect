@@ -14,14 +14,16 @@ public class MessageSetProps implements IPacket {
 
     public int dim;
     public int id;
+    public String remark = "";
     public List<AreaEffect> effects = new ArrayList<>();
 
     public MessageSetProps() {
     }
 
-    public MessageSetProps(int dim, int id, List<AreaEffect> effects) {
+    public MessageSetProps(int dim, int id, String remark, List<AreaEffect> effects) {
         this.dim = dim;
         this.id = id;
+        this.remark = remark == null ? "" : remark;
         this.effects = effects;
     }
 
@@ -29,6 +31,7 @@ public class MessageSetProps implements IPacket {
     public void toBytes(ByteBuf buf) {
         buf.writeInt(dim);
         buf.writeInt(id);
+        EffectTypes.writeString(buf, remark);
         buf.writeInt(effects.size());
         for (AreaEffect effect : effects) {
             EffectTypes.writeString(buf, effect.typeId());
@@ -40,6 +43,7 @@ public class MessageSetProps implements IPacket {
     public void fromBytes(ByteBuf buf) {
         dim = buf.readInt();
         id = buf.readInt();
+        remark = EffectTypes.readString(buf);
         int size = buf.readInt();
         effects = new ArrayList<>(size);
         for (int i = 0; i < size; i++) {
