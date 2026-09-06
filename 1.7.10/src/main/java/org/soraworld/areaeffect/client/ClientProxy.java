@@ -8,6 +8,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.settings.KeyBinding;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.init.Items;
+import net.minecraft.item.Item;
 import net.minecraft.util.ChatComponentTranslation;
 import net.minecraftforge.common.MinecraftForge;
 import org.lwjgl.input.Keyboard;
@@ -15,6 +16,7 @@ import org.soraworld.areaeffect.client.effect.EffectRenderers;
 import org.soraworld.areaeffect.client.effect.EffectRenderer;
 import org.soraworld.areaeffect.client.gui.GuiAreas;
 import org.soraworld.areaeffect.client.handler.AreaClientHandler;
+import org.soraworld.areaeffect.client.handler.ClientSelectionHandler;
 import org.soraworld.areaeffect.client.handler.LightmapHook;
 import org.soraworld.areaeffect.client.handler.SelectionRenderHandler;
 import org.soraworld.areaeffect.common.CommonProxy;
@@ -22,13 +24,17 @@ import org.soraworld.areaeffect.common.effect.AreaEffect;
 import org.soraworld.areaeffect.common.network.Area;
 import org.soraworld.areaeffect.common.network.MessageAreaDelete;
 import org.soraworld.areaeffect.common.network.MessageAreaUpdate;
+import org.soraworld.areaeffect.common.network.MessageConflictAreas;
 import org.soraworld.areaeffect.common.network.MessageDeleteRequest;
 import org.soraworld.areaeffect.common.network.MessageListReply;
 import org.soraworld.areaeffect.common.network.MessageListRequest;
 import org.soraworld.areaeffect.common.network.MessageSelection;
 import org.soraworld.areaeffect.common.network.MessageSetProps;
 import org.soraworld.areaeffect.common.network.MessageTpRequest;
+import org.soraworld.areaeffect.common.network.MessageSelectShape;
+import org.soraworld.areaeffect.common.network.MessageToolSync;
 import org.soraworld.areaeffect.common.network.PacketChannel;
+import org.soraworld.areaeffect.common.shape.Selection;
 import org.soraworld.areaeffect.common.util.Vec3i;
 
 import java.util.ArrayList;
@@ -48,8 +54,7 @@ public class ClientProxy extends CommonProxy {
     private int lastAreaId = -1;
     private float lastDuration = 1.0F;
 
-    private Vec3i selPos1 = null;
-    private Vec3i selPos2 = null;
+    private Selection selSelection = null;
     private boolean showSelection = true;
     /** 各维度中已开启线框显示的区域 id 集合（客户端本地设置）。 */
     private final Map<Integer, Set<Integer>> visibleAreas = new ConcurrentHashMap<>();
@@ -67,6 +72,7 @@ public class ClientProxy extends CommonProxy {
         AreaClientHandler handler = new AreaClientHandler(this);
         FMLCommonHandler.instance().bus().register(handler);
         MinecraftForge.EVENT_BUS.register(new SelectionRenderHandler(this));
+        MinecraftForge.EVENT_BUS.register(new ClientSelectionHandler(this));
         ClientRegistry.registerKeyBinding(KEY_LIST);
         ClientRegistry.registerKeyBinding(KEY_SEL_RENDER);
     }
@@ -79,6 +85,30 @@ public class ClientProxy extends CommonProxy {
         PacketChannel.bindClient(MessageAreaDelete.class, this::handleDelete);
         PacketChannel.bindClient(MessageSelection.class, this::handleSelection);
         PacketChannel.bindClient(MessageListReply.class, this::handleListReply);
+        PacketChannel.bindClient(MessageToolSync.class, this::handleToolSync);
+        PacketChannel.bindClient(MessageConflictAreas.class, this::handleConflictAreas);
+    }
+
+    /** 创建冲突：自动开启冲突区域的线框显示。 */
+    public void handleConflictAreas(MessageConflictAreas packet) {
+        runOnClientThread(() -> {
+            Set<Integer> ids = visibleAreas.computeIfAbsent(packet.dim, d -> ConcurrentHashMap.newKeySet());
+            ids.addAll(packet.ids);
+        });
+    }
+
+    /** 同步服务端设置的选区工具（MP 客户端不读 config）。 */
+    public void handleToolSync(MessageToolSync packet) {
+        try {
+            Object object = Item.itemRegistry.getObject(packet.toolName);
+            if (object instanceof Item) {
+                tool = (Item) object;
+            } else {
+                tool = Items.wooden_axe;
+            }
+        } catch (Throwable ignored) {
+            tool = Items.wooden_axe;
+        }
     }
 
     public void sendListRequest() {
@@ -115,8 +145,13 @@ public class ClientProxy extends CommonProxy {
     }
 
     public void handleSelection(MessageSelection packet) {
-        selPos1 = packet.pos1;
-        selPos2 = packet.pos2;
+        selSelection = new Selection();
+        selSelection.shapeType = packet.shapeType;
+        for (Vec3i anchor : packet.anchors) {
+            selSelection.anchors.add(anchor);
+        }
+        selSelection.closed = packet.closed;
+        selSelection.heightPhase = packet.heightPhase;
     }
 
     public void handleListReply(MessageListReply packet) {
@@ -148,11 +183,31 @@ public class ClientProxy extends CommonProxy {
     }
 
     public Vec3i getSelPos1() {
-        return selPos1;
+        return selSelection != null && selSelection.anchors.size() > 0 ? selSelection.anchors.get(0) : null;
     }
 
     public Vec3i getSelPos2() {
-        return selPos2;
+        return selSelection != null && selSelection.anchors.size() > 1 ? selSelection.anchors.get(1) : null;
+    }
+
+    /** 当前本地选区镜像（netty 线程写，渲染线程读，与旧 selPos1/2 模式一致）。 */
+    public Selection getLocalSelection() {
+        return selSelection;
+    }
+
+    /** 客户端发送切换选区形状请求。 */
+    public void sendSelectShape(String type) {
+        PacketChannel.sendToServer(new MessageSelectShape(type, false));
+    }
+
+    /** 客户端发送闭合多边形请求。 */
+    public void sendClosePolygon() {
+        PacketChannel.sendToServer(new MessageSelectShape("", true));
+    }
+
+    /** 客户端发送撤回多边形上一个顶点请求。 */
+    public void sendUndoVertex() {
+        PacketChannel.sendToServer(new MessageSelectShape(true, true, ""));
     }
 
     public boolean isShowSelection() {
@@ -229,10 +284,15 @@ public class ClientProxy extends CommonProxy {
         }
     }
 
-    /** 客户端本地区域列表快照（用于返回列表界面，无需再走服务端请求）。 */
+    /** 客户端本地区域列表快照（按 id 升序，用于返回列表界面，无需再走服务端请求）。 */
     public List<Area> getAreasLocal(int dim) {
         Map<Integer, Area> areas = lightAreas.get(dim);
-        return areas == null ? new ArrayList<>() : new ArrayList<>(areas.values());
+        if (areas == null || areas.isEmpty()) {
+            return new ArrayList<>();
+        }
+        List<Area> list = new ArrayList<>(areas.values());
+        Collections.sort(list, (a, b) -> Integer.compare(a.id, b.id));
+        return list;
     }
 
     /** 所有存在区域的维度列表（升序）。 */
@@ -285,10 +345,8 @@ public class ClientProxy extends CommonProxy {
         lastDuration = 1.0F;
         AREA_ID = 0;
         lightAreas.clear();
-        pos1s.clear();
-        pos2s.clear();
-        selPos1 = null;
-        selPos2 = null;
+        selections.clear();
+        selSelection = null;
         visibleAreas.clear();
         renderers = new EffectRenderers();
         clientTasks.clear();

@@ -22,7 +22,7 @@ public class AreaEffect {
 
     public static final String MOD_ID = "areaeffect";
     public static final String MOD_NAME = "AreaEffect";
-    public static final String MOD_VERSION = "1.3.0";
+    public static final String MOD_VERSION = "1.4.0";
 
     @SidedProxy(
             clientSide = "org.soraworld.areaeffect.client.ClientProxy",

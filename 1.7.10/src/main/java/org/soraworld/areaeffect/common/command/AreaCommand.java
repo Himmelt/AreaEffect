@@ -53,9 +53,9 @@ public class AreaCommand extends CommandBase {
         EntityPlayerMP player = (EntityPlayerMP) sender;
         String sub = args.length > 0 ? args[0] : "";
         if ("pos1".equals(sub)) {
-            proxy.setPos1(player, new Vec3i(player), true);
+            proxy.onSelectToolLeft(player, new Vec3i(player));
         } else if ("pos2".equals(sub)) {
-            proxy.setPos2(player, new Vec3i(player), true);
+            proxy.onSelectToolRight(player, new Vec3i(player));
         } else if ("create".equals(sub)) {
             try {
                 float lightness = args.length >= 2 ? Float.parseFloat(args[1]) : 100.0F;

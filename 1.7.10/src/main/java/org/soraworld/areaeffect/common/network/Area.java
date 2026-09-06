@@ -7,10 +7,14 @@ import net.minecraft.entity.player.EntityPlayerMP;
 import org.soraworld.areaeffect.common.effect.AreaEffect;
 import org.soraworld.areaeffect.common.effect.EffectTypes;
 import org.soraworld.areaeffect.common.effect.LightnessEffect;
+import org.soraworld.areaeffect.common.shape.AreaShape;
+import org.soraworld.areaeffect.common.shape.PrismShape;
+import org.soraworld.areaeffect.common.shape.ShapeTypes;
 import org.soraworld.areaeffect.common.util.Vec3d;
 import org.soraworld.areaeffect.common.util.Vec3i;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public class Area {
@@ -20,26 +24,27 @@ public class Area {
 
     public int id;
 
-    public final int x1;
-    public final int y1;
-    public final int z1;
-    public final int x2;
-    public final int y2;
-    public final int z2;
+    private final AreaShape shape;
 
     /** 区域备注，供玩家标注用途；可为空串。 */
     private String remark = "";
 
     private final List<AreaEffect> effects = new ArrayList<>();
 
-    public Area(int x1, int y1, int z1, int x2, int y2, int z2, float lightness, float duration) {
-        this.x1 = Math.min(x1, x2);
-        this.y1 = Math.min(y1, y2);
-        this.z1 = Math.min(z1, z2);
-        this.x2 = Math.max(x1, x2);
-        this.y2 = Math.max(y1, y2);
-        this.z2 = Math.max(z1, z2);
+    public Area(AreaShape shape, float lightness, float duration) {
+        this.shape = shape;
         this.effects.add(new LightnessEffect(lightness, duration));
+    }
+
+    /** 旧存档兼容工厂：以六坐标构造长方体区域。 */
+    public static Area box(int x1, int y1, int z1, int x2, int y2, int z2, float lightness, float duration) {
+        AreaShape shape = new PrismShape(PrismShape.Section.RECT, PrismShape.Height.BOUNDED,
+                Arrays.asList(new Vec3i(x1, y1, z1), new Vec3i(x2, y2, z2)), false);
+        return new Area(shape, lightness, duration);
+    }
+
+    public AreaShape shape() {
+        return shape;
     }
 
     public String getRemark() {
@@ -119,12 +124,7 @@ public class Area {
 
     public static ByteBuf toByteBuf(Area area) {
         ByteBuf buf = Unpooled.buffer();
-        buf.writeInt(area.x1);
-        buf.writeInt(area.y1);
-        buf.writeInt(area.z1);
-        buf.writeInt(area.x2);
-        buf.writeInt(area.y2);
-        buf.writeInt(area.z2);
+        ShapeTypes.writeBuf(area.shape(), buf);
         EffectTypes.writeString(buf, area.getRemark());
         List<AreaEffect> effects = area.effects;
         buf.writeInt(effects.size());
@@ -136,13 +136,11 @@ public class Area {
     }
 
     public static Area fromByteBuf(ByteBuf buf) {
-        int x1 = buf.readInt();
-        int y1 = buf.readInt();
-        int z1 = buf.readInt();
-        int x2 = buf.readInt();
-        int y2 = buf.readInt();
-        int z2 = buf.readInt();
-        Area area = new Area(x1, y1, z1, x2, y2, z2, 100.0F, 1.0F);
+        AreaShape shape = ShapeTypes.fromBuf(buf);
+        if (shape == null) {
+            return null;
+        }
+        Area area = new Area(shape, 100.0F, 1.0F);
         area.setRemark(EffectTypes.readString(buf));
         area.effects.clear();
         int size = buf.readInt();
@@ -156,7 +154,7 @@ public class Area {
     }
 
     public boolean contains(double x, double y, double z) {
-        return x >= x1 && x <= x2 + 1 && y >= y1 && y < y2 + 1 && z >= z1 && z <= z2 + 1;
+        return shape.contains(x, y, z);
     }
 
     public boolean contains(Vec3d pos) {
@@ -164,39 +162,40 @@ public class Area {
     }
 
     public boolean conflict(Area area) {
-        return x1 <= area.x2 && x2 >= area.x1 && y1 <= area.y2 && y2 >= area.y1 && z1 <= area.z2 && z2 >= area.z1;
+        return shape.conflict(area.shape());
     }
 
     @Override
     public String toString() {
-        return x1 + "," + y1 + "," + z1 + "," + x2 + "," + y2 + "," + z2 + "," + getLightness() + "," + getDuration();
+        return shape.describe() + "," + getLightness() + "," + getDuration();
     }
 
+    /** 详情页展示文本（旧接口保留，委托形状描述）。 */
     public String pos1() {
-        return "(" + x1 + "," + y1 + "," + z1 + ')';
+        return shape.describe();
     }
 
     public String pos2() {
-        return "(" + x2 + "," + y2 + "," + z2 + ')';
+        return "";
     }
 
     public Vec3i vec1() {
-        return new Vec3i(x1, y1, z1);
+        AreaShape.Bounds b = shape.bounds();
+        return new Vec3i(b.minX, b.minY, b.minZ);
     }
 
     public Vec3i vec2() {
-        return new Vec3i(x2, y2, z2);
+        AreaShape.Bounds b = shape.bounds();
+        return new Vec3i(b.maxX, b.maxY, b.maxZ);
     }
 
     public void center(EntityPlayer player) {
-        double x = (x1 + x2) / 2.0;
-        double y = (y1 + y2) / 2.0;
-        double z = (z1 + z2) / 2.0;
+        Vec3d c = shape.center();
         if (player instanceof EntityPlayerMP) {
             // 服务端必须用 setPositionAndUpdate 才会把位置同步到客户端
-            ((EntityPlayerMP) player).setPositionAndUpdate(x, y, z);
+            ((EntityPlayerMP) player).setPositionAndUpdate(c.x, c.y, c.z);
         } else {
-            player.setPosition(x, y, z);
+            player.setPosition(c.x, c.y, c.z);
         }
     }
 }

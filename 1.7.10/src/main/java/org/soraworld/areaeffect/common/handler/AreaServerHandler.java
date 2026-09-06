@@ -28,10 +28,10 @@ public class AreaServerHandler {
         ItemStack stack = player.getHeldItem();
         if (player instanceof EntityPlayerMP && proxy.hasPerm(player) && proxy.isSelectTool(stack)) {
             if (event.action == PlayerInteractEvent.Action.LEFT_CLICK_BLOCK) {
-                proxy.setPos1((EntityPlayerMP) player, new Vec3i(event.x, event.y, event.z), true);
+                proxy.onSelectToolLeft((EntityPlayerMP) player, new Vec3i(event.x, event.y, event.z));
                 event.setCanceled(true);
             } else if (event.action == PlayerInteractEvent.Action.RIGHT_CLICK_BLOCK) {
-                proxy.setPos2((EntityPlayerMP) player, new Vec3i(event.x, event.y, event.z), true);
+                proxy.onSelectToolRight((EntityPlayerMP) player, new Vec3i(event.x, event.y, event.z));
                 event.setCanceled(true);
             }
         }
@@ -40,6 +40,7 @@ public class AreaServerHandler {
     @SubscribeEvent
     public void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
         if (event.player instanceof EntityPlayerMP) {
+            proxy.sendToolSync((EntityPlayerMP) event.player);
             proxy.sendAllAreasTo((EntityPlayerMP) event.player);
         }
     }

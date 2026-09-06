@@ -1,6 +1,9 @@
 package org.soraworld.areaeffect.common.network;
 
 import io.netty.buffer.ByteBuf;
+import org.soraworld.areaeffect.common.effect.EffectTypes;
+import org.soraworld.areaeffect.common.shape.Selection;
+import org.soraworld.areaeffect.common.shape.ShapeTypes;
 import org.soraworld.areaeffect.common.util.Vec3i;
 
 /**
@@ -8,36 +11,51 @@ import org.soraworld.areaeffect.common.util.Vec3i;
  */
 public class MessageSelection implements IPacket {
 
-    public Vec3i pos1;
-    public Vec3i pos2;
+    public String shapeType = ShapeTypes.TYPE_BOX;
+    public Vec3i[] anchors = new Vec3i[0];
+    public boolean closed = false;
+    public int heightPhase = Selection.PHASE_VERTICES;
 
     public MessageSelection() {
     }
 
-    public MessageSelection(Vec3i pos1, Vec3i pos2) {
-        this.pos1 = pos1;
-        this.pos2 = pos2;
+    public MessageSelection(Selection sel) {
+        if (sel != null) {
+            this.shapeType = sel.shapeType;
+            this.anchors = sel.anchors.toArray(new Vec3i[0]);
+            this.closed = sel.closed;
+            this.heightPhase = sel.heightPhase;
+        }
     }
 
     @Override
     public void toBytes(ByteBuf buf) {
-        buf.writeBoolean(pos1 != null);
-        if (pos1 != null) {
-            buf.writeInt(pos1.x);
-            buf.writeInt(pos1.y);
-            buf.writeInt(pos1.z);
+        EffectTypes.writeString(buf, shapeType);
+        buf.writeInt(anchors.length);
+        for (Vec3i anchor : anchors) {
+            if (anchor != null) {
+                buf.writeInt(anchor.x);
+                buf.writeInt(anchor.y);
+                buf.writeInt(anchor.z);
+            } else {
+                buf.writeInt(0);
+                buf.writeInt(0);
+                buf.writeInt(0);
+            }
         }
-        buf.writeBoolean(pos2 != null);
-        if (pos2 != null) {
-            buf.writeInt(pos2.x);
-            buf.writeInt(pos2.y);
-            buf.writeInt(pos2.z);
-        }
+        buf.writeBoolean(closed);
+        buf.writeByte(heightPhase);
     }
 
     @Override
     public void fromBytes(ByteBuf buf) {
-        pos1 = buf.readBoolean() ? new Vec3i(buf.readInt(), buf.readInt(), buf.readInt()) : null;
-        pos2 = buf.readBoolean() ? new Vec3i(buf.readInt(), buf.readInt(), buf.readInt()) : null;
+        shapeType = EffectTypes.readString(buf);
+        int size = Math.min(Math.max(buf.readInt(), 0), Selection.MAX_ANCHORS);
+        anchors = new Vec3i[size];
+        for (int i = 0; i < size; i++) {
+            anchors[i] = new Vec3i(buf.readInt(), buf.readInt(), buf.readInt());
+        }
+        closed = buf.readBoolean();
+        heightPhase = buf.readByte();
     }
 }

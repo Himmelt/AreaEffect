@@ -22,6 +22,7 @@ import org.soraworld.areaeffect.common.handler.AreaServerHandler;
 import org.soraworld.areaeffect.common.network.Area;
 import org.soraworld.areaeffect.common.network.MessageAreaDelete;
 import org.soraworld.areaeffect.common.network.MessageAreaUpdate;
+import org.soraworld.areaeffect.common.network.MessageConflictAreas;
 import org.soraworld.areaeffect.common.network.MessageDeleteRequest;
 import org.soraworld.areaeffect.common.network.MessageListReply;
 import org.soraworld.areaeffect.common.network.MessageListRequest;
@@ -29,6 +30,11 @@ import org.soraworld.areaeffect.common.network.MessageSelection;
 import org.soraworld.areaeffect.common.network.MessageSetProps;
 import org.soraworld.areaeffect.common.network.MessageTpRequest;
 import org.soraworld.areaeffect.common.network.PacketChannel;
+import org.soraworld.areaeffect.common.network.MessageSelectShape;
+import org.soraworld.areaeffect.common.network.MessageToolSync;
+import org.soraworld.areaeffect.common.shape.AreaShape;
+import org.soraworld.areaeffect.common.shape.Selection;
+import org.soraworld.areaeffect.common.shape.ShapeTypes;
 import org.soraworld.areaeffect.common.util.Vec3d;
 import org.soraworld.areaeffect.common.util.Vec3i;
 
@@ -38,8 +44,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class CommonProxy {
 
-    protected final HashMap<UUID, Vec3i> pos1s = new HashMap<>();
-    protected final HashMap<UUID, Vec3i> pos2s = new HashMap<>();
+    protected final Map<UUID, Selection> selections = new HashMap<>();
     protected final Map<Integer, Map<Integer, Area>> lightAreas = new ConcurrentHashMap<>();
     protected final AreaServerHandler serverHandler = new AreaServerHandler(this);
     public Configuration config;
@@ -74,6 +79,9 @@ public class CommonProxy {
         PacketChannel.register(8, MessageSetProps.class);
         PacketChannel.register(9, MessageDeleteRequest.class);
         PacketChannel.register(10, MessageTpRequest.class);
+        PacketChannel.register(11, MessageSelectShape.class);
+        PacketChannel.register(12, MessageToolSync.class);
+        PacketChannel.register(13, MessageConflictAreas.class);
     }
 
     /**
@@ -98,6 +106,11 @@ public class CommonProxy {
         PacketChannel.bindServer(MessageTpRequest.class, (message, player) -> {
             if (player != null) {
                 handleTpRequest(player, message);
+            }
+        });
+        PacketChannel.bindServer(MessageSelectShape.class, (message, player) -> {
+            if (player != null) {
+                handleSelectShape(player, message);
             }
         });
     }
@@ -144,9 +157,19 @@ public class CommonProxy {
             for (int i = 0; i < areas.tagCount(); i++) {
                 NBTTagCompound tag = areas.getCompoundTagAt(i);
                 int dim = tag.getInteger("dim");
-                Area area = new Area(tag.getInteger("x1"), tag.getInteger("y1"), tag.getInteger("z1"),
-                        tag.getInteger("x2"), tag.getInteger("y2"), tag.getInteger("z2"),
-                        100.0F, 1.0F);
+                Area area;
+                if (tag.hasKey("shape")) {
+                    AreaShape shape = ShapeTypes.fromNbt(tag.getCompoundTag("shape"));
+                    if (shape == null) {
+                        continue;
+                    }
+                    area = new Area(shape, 100.0F, 1.0F);
+                } else {
+                    // 旧存档兼容：无 shape 键按 box 从 x1..z2 读取
+                    area = Area.box(tag.getInteger("x1"), tag.getInteger("y1"), tag.getInteger("z1"),
+                            tag.getInteger("x2"), tag.getInteger("y2"), tag.getInteger("z2"),
+                            100.0F, 1.0F);
+                }
                 area.setRemark(tag.getString("remark"));
                 area.setEffects(readEffectsNbt(tag.getTagList("effects", 10)));
                 area.id = tag.getInteger("id");
@@ -183,12 +206,9 @@ public class CommonProxy {
             NBTTagCompound tag = new NBTTagCompound();
             tag.setInteger("dim", dim);
             tag.setInteger("id", area.id);
-            tag.setInteger("x1", area.x1);
-            tag.setInteger("y1", area.y1);
-            tag.setInteger("z1", area.z1);
-            tag.setInteger("x2", area.x2);
-            tag.setInteger("y2", area.y2);
-            tag.setInteger("z2", area.z2);
+            NBTTagCompound shapeTag = new NBTTagCompound();
+            ShapeTypes.writeNbt(area.shape(), shapeTag);
+            tag.setTag("shape", shapeTag);
             tag.setString("remark", area.getRemark());
             NBTTagList effectList = new NBTTagList();
             for (AreaEffect effect : area.getEffects()) {
@@ -238,23 +258,39 @@ public class CommonProxy {
         return "wooden_axe";
     }
 
-    public void setPos1(EntityPlayerMP player, Vec3i pos1, boolean msg) {
-        pos1s.put(player.getUniqueID(), pos1);
+    public void onSelectToolLeft(EntityPlayerMP player, Vec3i pos) {
+        selectionOf(player).onClickLeft(pos);
         updateSelection(player);
     }
 
-    public void setPos2(EntityPlayerMP player, Vec3i pos2, boolean msg) {
-        pos2s.put(player.getUniqueID(), pos2);
+    public void onSelectToolRight(EntityPlayerMP player, Vec3i pos) {
+        selectionOf(player).onClickRight(pos);
         updateSelection(player);
+    }
+
+    /** 切换选区形状（重置锚点/闭合/高度阶段）。 */
+    public void selectShape(EntityPlayerMP player, String type) {
+        selectionOf(player).reset(type);
+        updateSelection(player);
+    }
+
+    /** 闭合当前多边形选区；返回是否成功。 */
+    public boolean closePolygon(EntityPlayerMP player) {
+        boolean ok = selectionOf(player).closePolygon();
+        updateSelection(player);
+        return ok;
+    }
+
+    public Selection selectionOf(EntityPlayerMP player) {
+        return selections.computeIfAbsent(player.getUniqueID(), uuid -> new Selection());
     }
 
     /**
      * 将当前选区同步到客户端，由客户端自绘选区线框。
      */
     protected void updateSelection(EntityPlayerMP player) {
-        Vec3i pos1 = pos1s.get(player.getUniqueID());
-        Vec3i pos2 = pos2s.get(player.getUniqueID());
-        PacketChannel.sendTo(new MessageSelection(pos1, pos2), player);
+        Selection sel = selections.get(player.getUniqueID());
+        PacketChannel.sendTo(new MessageSelection(sel), player);
     }
 
     /**
@@ -265,7 +301,13 @@ public class CommonProxy {
             return; // 无权限，静默忽略，客户端不会收到回复也就不会打开 GUI
         }
         Map<Integer, Area> areas = lightAreas.get(player.dimension);
-        List<Area> list = areas == null ? Collections.emptyList() : new ArrayList<>(areas.values());
+        List<Area> list;
+        if (areas == null || areas.isEmpty()) {
+            list = Collections.emptyList();
+        } else {
+            list = new ArrayList<>(areas.values());
+            list.sort((a, b) -> Integer.compare(a.id, b.id));
+        }
         PacketChannel.sendTo(new MessageListReply(player.dimension, list), player);
     }
 
@@ -326,6 +368,37 @@ public class CommonProxy {
         tpAreaById(player, packet.id);
     }
 
+    /**
+     * 服务端响应选区形状设置 / 多边形闭合 / 撤回：校验 OP 权限与工具。
+     */
+    public void handleSelectShape(EntityPlayerMP player, MessageSelectShape packet) {
+        if (!hasPerm(player)) {
+            sendChatTranslation(player, "chat.perm.denied");
+            return;
+        }
+        if (packet.type != null && !packet.type.isEmpty()) {
+            selectShape(player, packet.type);
+        } else if (packet.close) {
+            closePolygon(player);
+        } else if (packet.undo) {
+            undoVertex(player);
+        }
+    }
+
+    /** 撤回多边形最后一个顶点。 */
+    public void undoVertex(EntityPlayerMP player) {
+        Selection sel = selections.get(player.getUniqueID());
+        if (sel != null) {
+            sel.undoLastVertex();
+            updateSelection(player);
+        }
+    }
+
+    /** 向客户端同步当前选区工具（MP 客户端不读 config）。 */
+    public void sendToolSync(EntityPlayerMP player) {
+        PacketChannel.sendTo(new MessageToolSync(getToolName()), player);
+    }
+
     public void sendAllAreasTo(EntityPlayerMP player) {
         if (isDedicated(player)) {
             lightAreas.forEach((dim, areas) -> areas.forEach((id, area) -> sendUpdateTo(player, dim, id, area)));
@@ -345,10 +418,17 @@ public class CommonProxy {
     }
 
     public void createArea(EntityPlayerMP player, float lightness, float duration) {
-        Vec3i pos1 = pos1s.get(player.getUniqueID());
-        Vec3i pos2 = pos2s.get(player.getUniqueID());
-        if (pos1 != null && pos2 != null) {
-            Area area = addArea(player.dimension, pos1, pos2, lightness, duration);
+        Selection sel = selections.get(player.getUniqueID());
+        if (sel != null && sel.isBuildable()) {
+            AreaShape intent = sel.build();
+            List<Integer> conflicts = findConflictIds(player.dimension, intent);
+            if (!conflicts.isEmpty()) {
+                sendChatTranslation(player, "chat.create.conflict");
+                // 把冲突区域的框线都显示出来
+                PacketChannel.sendTo(new MessageConflictAreas(player.dimension, conflicts), player);
+                return;
+            }
+            Area area = addArea(player.dimension, intent, lightness, duration);
             if (area == null) {
                 sendChatTranslation(player, "chat.create.conflict");
             } else {
@@ -356,6 +436,11 @@ public class CommonProxy {
                 if (isDedicated(player)) {
                     sendUpdateToAll(player.dimension, area.id, area);
                 }
+                // 创建成功后重置选区（保留形状类型，锚点清空），可直接开始下一个选区
+                sel.anchors.clear();
+                sel.closed = false;
+                sel.heightPhase = Selection.PHASE_VERTICES;
+                updateSelection(player);
                 save();
             }
         } else {
@@ -363,8 +448,19 @@ public class CommonProxy {
         }
     }
 
-    public Area addArea(int dim, Vec3i pos1, Vec3i pos2, float lightness, float duration) {
-        Area area = new Area(pos1.x, pos1.y, pos1.z, pos2.x, pos2.y, pos2.z, lightness, duration);
+    /** 找出与给定形状 AABB 冲突的全部已存区域 id。 */
+    public List<Integer> findConflictIds(int dim, AreaShape intent) {
+        List<Integer> conflicts = new ArrayList<>();
+        for (Map.Entry<Integer, Area> entry : lightAreas.getOrDefault(dim, new HashMap<>()).entrySet()) {
+            if (intent.conflict(entry.getValue().shape())) {
+                conflicts.add(entry.getKey());
+            }
+        }
+        return conflicts;
+    }
+
+    public Area addArea(int dim, AreaShape shape, float lightness, float duration) {
+        Area area = new Area(shape, lightness, duration);
         if (checkConflict(dim, area)) {
             return null;
         } else {
@@ -396,8 +492,7 @@ public class CommonProxy {
     }
 
     public void clearSelect(EntityPlayer player) {
-        pos1s.remove(player.getUniqueID());
-        pos2s.remove(player.getUniqueID());
+        selections.remove(player.getUniqueID());
         if (player instanceof EntityPlayerMP) {
             updateSelection((EntityPlayerMP) player);
         }
