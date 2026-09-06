@@ -2,8 +2,10 @@ package org.soraworld.areaeffect.client.handler;
 
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.renderer.Tessellator;
 import net.minecraft.client.renderer.entity.RenderManager;
+import net.minecraft.util.StatCollector;
 import net.minecraftforge.client.event.RenderGameOverlayEvent;
 import net.minecraftforge.client.event.RenderWorldLastEvent;
 import org.lwjgl.opengl.GL11;
@@ -38,6 +40,156 @@ public class SelectionRenderHandler {
                 && mc.currentScreen instanceof GuiAreas) {
             event.setCanceled(true);
         }
+    }
+
+    /**
+     * 选区形状轮切 overlay：Shift+右键轮切后显示图标+文字，1.5 秒无操作后 1.5 秒淡出。
+     * 纯 HUD 绘制，不打断游戏内容。
+     */
+    @SubscribeEvent
+    public void onRenderShapeOverlay(RenderGameOverlayEvent.Text event) {
+        String type = proxy.getOverlayShape();
+        if (type == null || mc.currentScreen != null || mc.thePlayer == null) {
+            return;
+        }
+        long elapsed = Minecraft.getSystemTime() - proxy.getOverlayLastAction();
+        float alpha;
+        if (elapsed < 1500L) {
+            alpha = 1.0F;
+        } else if (elapsed < 3000L) {
+            alpha = 1.0F - (float) (elapsed - 1500L) / 1500.0F;
+        } else {
+            return;
+        }
+        if (alpha <= 0.01F) {
+            return;
+        }
+
+        ScaledResolution res = event.resolution;
+        int cx = res.getScaledWidth() / 2;
+        int cy = res.getScaledHeight() / 2 - 44;
+        String label = StatCollector.translateToLocal("gui.areaeffect.shape.now")
+                + StatCollector.translateToLocal("gui.areaeffect.shape." + type);
+        int textWidth = mc.fontRenderer.getStringWidth(label);
+        int iconSize = 12;
+        int iconX = cx - textWidth / 2 - iconSize - 6;
+        int iconY = cy + 1;
+
+        drawOverlayIcon(type, iconX, iconY, iconSize, alpha);
+        GL11.glEnable(GL11.GL_TEXTURE_2D);
+        GL11.glEnable(GL11.GL_BLEND);
+        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        mc.fontRenderer.drawStringWithShadow(label, cx - textWidth / 2, cy,
+                0xFFFFFF | ((int) (alpha * 255.0F) << 24));
+    }
+
+    /** 绘制 overlay 图标：半透明底板 + 按形状族绘制的白色线框图形。 */
+    private void drawOverlayIcon(String type, int x, int y, int size, float alpha) {
+        GL11.glDisable(GL11.GL_TEXTURE_2D);
+        GL11.glEnable(GL11.GL_BLEND);
+        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        Tessellator tessellator = Tessellator.instance;
+        GL11.glColor4f(0.0F, 0.0F, 0.0F, 0.45F * alpha);
+        tessellator.startDrawingQuads();
+        tessellator.addVertex(x, y + size, 0.0D);
+        tessellator.addVertex(x + size, y + size, 0.0D);
+        tessellator.addVertex(x + size, y, 0.0D);
+        tessellator.addVertex(x, y, 0.0D);
+        tessellator.draw();
+
+        float[] rgb = iconColor(type);
+        GL11.glColor4f(rgb[0], rgb[1], rgb[2], alpha);
+        GL11.glLineWidth(2.0F);
+        tessellator.startDrawing(GL11.GL_LINES);
+        iconGlyph(tessellator, type, x, y, size);
+        tessellator.draw();
+    }
+
+    /** 各形状族的图标线框。 */
+    private static void iconGlyph(Tessellator tessellator, String type, int x, int y, int s) {
+        float f = s;
+        float cx = x + f / 2.0F;
+        float cy = y + f / 2.0F;
+        float r = f / 2.0F;
+        switch (type) {
+            case ShapeTypes.TYPE_BOX:
+                rect(tessellator, x, y, x + f, y + f);
+                break;
+            case ShapeTypes.TYPE_SQUARE_PILLAR:
+                rect(tessellator, x + f * 0.2F, y, x + f * 0.8F, y + f);
+                break;
+            case ShapeTypes.TYPE_CYLINDER:
+                circle(tessellator, cx, cy, r);
+                break;
+            case ShapeTypes.TYPE_ROUND_PILLAR:
+                circle(tessellator, cx, cy, r);
+                line(tessellator, cx, y + f * 0.15F, cx, y + f * 0.85F);
+                break;
+            case ShapeTypes.TYPE_SPHERE:
+                circle(tessellator, cx, cy, r);
+                line(tessellator, x, cy, x + f, cy);
+                line(tessellator, cx, y, cx, y + f);
+                break;
+            case ShapeTypes.TYPE_POLYGON:
+                polygon(tessellator, x, y, s);
+                break;
+            default: // polygon_pillar
+                polygon(tessellator, x, y, s);
+                break;
+        }
+    }
+
+    private static float[] iconColor(String type) {
+        switch (type) {
+            case ShapeTypes.TYPE_BOX:
+                return new float[]{0.9F, 0.9F, 0.9F};
+            case ShapeTypes.TYPE_SQUARE_PILLAR:
+                return new float[]{1.0F, 0.85F, 0.2F};
+            case ShapeTypes.TYPE_CYLINDER:
+                return new float[]{0.4F, 0.8F, 1.0F};
+            case ShapeTypes.TYPE_ROUND_PILLAR:
+                return new float[]{0.5F, 1.0F, 0.6F};
+            case ShapeTypes.TYPE_SPHERE:
+                return new float[]{1.0F, 0.5F, 0.9F};
+            case ShapeTypes.TYPE_POLYGON:
+                return new float[]{1.0F, 0.65F, 0.3F};
+            default:
+                return new float[]{1.0F, 0.4F, 0.4F};
+        }
+    }
+
+    private static void rect(Tessellator tessellator, float x1, float y1, float x2, float y2) {
+        line(tessellator, x1, y1, x2, y1);
+        line(tessellator, x2, y1, x2, y2);
+        line(tessellator, x2, y2, x1, y2);
+        line(tessellator, x1, y2, x1, y1);
+    }
+
+    private static void circle(Tessellator tessellator, float cx, float cy, float r) {
+        for (int i = 0; i < 12; i++) {
+            double a1 = Math.PI * 2.0D * i / 12;
+            double a2 = Math.PI * 2.0D * (i + 1) / 12;
+            line(tessellator, (float) (cx + r * Math.cos(a1)), (float) (cy + r * Math.sin(a1)),
+                    (float) (cx + r * Math.cos(a2)), (float) (cy + r * Math.sin(a2)));
+        }
+    }
+
+    /** 五边形轮廓（多边形族）。 */
+    private static void polygon(Tessellator tessellator, int x, int y, int s) {
+        float cx = x + s / 2.0F;
+        float cy = y + s / 2.0F;
+        float r = s * 0.48F;
+        for (int i = 0; i < 5; i++) {
+            double a1 = -Math.PI / 2.0D + Math.PI * 2.0D * i / 5;
+            double a2 = -Math.PI / 2.0D + Math.PI * 2.0D * (i + 1) / 5;
+            line(tessellator, (float) (cx + r * Math.cos(a1)), (float) (cy + r * Math.sin(a1)),
+                    (float) (cx + r * Math.cos(a2)), (float) (cy + r * Math.sin(a2)));
+        }
+    }
+
+    private static void line(Tessellator tessellator, float x1, float y1, float x2, float y2) {
+        tessellator.addVertex(x1, y1, 0.0D);
+        tessellator.addVertex(x2, y2, 0.0D);
     }
 
     @SubscribeEvent

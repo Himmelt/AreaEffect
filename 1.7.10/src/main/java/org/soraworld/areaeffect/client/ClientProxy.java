@@ -24,6 +24,7 @@ import org.soraworld.areaeffect.common.effect.AreaEffect;
 import org.soraworld.areaeffect.common.network.Area;
 import org.soraworld.areaeffect.common.network.MessageAreaDelete;
 import org.soraworld.areaeffect.common.network.MessageAreaUpdate;
+import org.soraworld.areaeffect.common.network.MessageClickAir;
 import org.soraworld.areaeffect.common.network.MessageConflictAreas;
 import org.soraworld.areaeffect.common.network.MessageDeleteRequest;
 import org.soraworld.areaeffect.common.network.MessageListReply;
@@ -58,6 +59,10 @@ public class ClientProxy extends CommonProxy {
     private boolean showSelection = true;
     /** 各维度中已开启线框显示的区域 id 集合（客户端本地设置）。 */
     private final Map<Integer, Set<Integer>> visibleAreas = new ConcurrentHashMap<>();
+
+    /** 选区形状轮切 overlay 状态：当前提示的形状与最近一次轮切时间（毫秒）。 */
+    private String overlayShape = null;
+    private long overlayLastAction = 0L;
 
     private EffectRenderers renderers = new EffectRenderers();
 
@@ -205,13 +210,29 @@ public class ClientProxy extends CommonProxy {
         PacketChannel.sendToServer(new MessageSelectShape("", true));
     }
 
-    /** 客户端发送撤回多边形上一个顶点请求。 */
-    public void sendUndoVertex() {
-        PacketChannel.sendToServer(new MessageSelectShape(true, true, ""));
+    /** 客户端发送撤回/右键空气事件（服务端与右键方块同入口处理，作为多边形撤回）。 */
+    public void sendClickAir() {
+        PacketChannel.sendToServer(new MessageClickAir());
     }
 
     public boolean isShowSelection() {
         return showSelection;
+    }
+
+    /** 触发选区形状轮切 overlay 显示（重置 1.5 秒停留计时）。 */
+    public void showShapeOverlay(String type) {
+        overlayShape = type;
+        overlayLastAction = Minecraft.getSystemTime();
+    }
+
+    /** overlay 当前展示的形状类型；无则返回 null。 */
+    public String getOverlayShape() {
+        return overlayShape;
+    }
+
+    /** overlay 最近一次轮切触发时间（Minecraft 毫秒时间）。 */
+    public long getOverlayLastAction() {
+        return overlayLastAction;
     }
 
     /** 切换选区线框显示（客户端本地设置），并本地提示。 */
@@ -347,6 +368,8 @@ public class ClientProxy extends CommonProxy {
         lightAreas.clear();
         selections.clear();
         selSelection = null;
+        overlayShape = null;
+        overlayLastAction = 0L;
         visibleAreas.clear();
         renderers = new EffectRenderers();
         clientTasks.clear();

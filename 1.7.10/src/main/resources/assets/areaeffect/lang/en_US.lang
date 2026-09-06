@@ -29,6 +29,7 @@ gui.areaeffect.edit.cancel=Back
 gui.areaeffect.edit.tp=Teleport
 gui.areaeffect.edit.del=Delete
 gui.areaeffect.shape.title=Selection Shape
+gui.areaeffect.shape.now=Selection Mode: 
 gui.areaeffect.shape.box=Box
 gui.areaeffect.shape.square_pillar=Square Pillar (Full)
 gui.areaeffect.shape.cylinder=Cylinder

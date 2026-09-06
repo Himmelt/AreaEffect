@@ -5,15 +5,16 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import org.soraworld.areaeffect.client.ClientProxy;
-import org.soraworld.areaeffect.client.gui.GuiShapeSelect;
 import org.soraworld.areaeffect.common.shape.Selection;
+import org.soraworld.areaeffect.common.shape.ShapeTypes;
 
 /**
  * 客户端选区交互：
  * <ul>
- *   <li>Shift+右键空气（持工具）→ 打开形状选择菜单</li>
+ *   <li>Shift+右键空气（持工具）→ 沿 {@link ShapeTypes#ALL} 轮切选区形状，overlay 图标+文字提示（无 GUI）</li>
  *   <li>Shift+左键（空气/方块，多边形顶点 ≥3）→ 闭合多边形（取消本次左键并发送闭合请求）</li>
- *   <li>非 Shift 右键空气（多边形）→ 撤回上一个顶点</li>
+ *   <li>非 Shift 右键空气（多边形）→ 以自定义消息 {@link org.soraworld.areaeffect.common.network.MessageClickAir}
+ *       发送到服务端，与右键方块同入口处理，作为撤回上一顶点的触发事件</li>
  * </ul>
  * 注意：普通（非 Shift）左键/右键方块不得取消，否则 C02/C08 不发、服务端收不到锚点。
  */
@@ -33,17 +34,38 @@ public class ClientSelectionHandler {
             return;
         }
         if (event.action == PlayerInteractEvent.Action.RIGHT_CLICK_AIR) {
-            // 菜单 / 撤回
             if (mc.thePlayer.isSneaking()) {
+                // 轮切选区形状：按注册表顺序取下一项，overlay 提示
                 event.setCanceled(true);
-                mc.displayGuiScreen(new GuiShapeSelect(proxy));
+                String next = nextShape(currentShape());
+                proxy.sendSelectShape(next);
+                proxy.showShapeOverlay(next);
             } else {
                 Selection sel = proxy.getLocalSelection();
                 if (sel != null && sel.isPolygon()) {
+                    // 右键空气 → 自定义消息，服务端与右键方块同入口处理（撤回顶点）
                     event.setCanceled(true);
-                    proxy.sendUndoVertex();
+                    proxy.sendClickAir();
                 }
             }
         }
+    }
+
+    /** 当前本地选区形状（无选区时按 box）。 */
+    private String currentShape() {
+        Selection sel = proxy.getLocalSelection();
+        String type = sel == null ? null : sel.shapeType;
+        return type == null || type.isEmpty() ? ShapeTypes.TYPE_BOX : type;
+    }
+
+    /** 沿 ShapeTypes.ALL 顺序轮切到下一形状。 */
+    private static String nextShape(String current) {
+        String[] all = ShapeTypes.ALL;
+        for (int i = 0; i < all.length; i++) {
+            if (all[i].equals(current)) {
+                return all[(i + 1) % all.length];
+            }
+        }
+        return all[0];
     }
 }

@@ -60,11 +60,11 @@ public class Selection {
         }
     }
 
-    /** 右键点击处理（服务端分派，BLOCK 交互）。多边形下撤回上一个点。 */
+    /** 右键点击处理（服务端分派，BLOCK / AIR 交互共用）。多边形下撤回上一个点；AIR 无坐标，二点形状忽略。 */
     public void onClickRight(Vec3i pos) {
         if (ShapeTypes.isPolygon(shapeType)) {
             undoLastVertex();
-        } else {
+        } else if (pos != null) {
             // 二点形状：覆盖槽位 1
             setAnchor(1, pos);
         }

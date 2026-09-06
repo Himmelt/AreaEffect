@@ -29,6 +29,7 @@ gui.areaeffect.edit.cancel=返回
 gui.areaeffect.edit.tp=传送
 gui.areaeffect.edit.del=删除
 gui.areaeffect.shape.title=选区形状
+gui.areaeffect.shape.now=选区模式：
 gui.areaeffect.shape.box=长方体
 gui.areaeffect.shape.square_pillar=方柱（通天）
 gui.areaeffect.shape.cylinder=圆柱

@@ -22,6 +22,7 @@ import org.soraworld.areaeffect.common.handler.AreaServerHandler;
 import org.soraworld.areaeffect.common.network.Area;
 import org.soraworld.areaeffect.common.network.MessageAreaDelete;
 import org.soraworld.areaeffect.common.network.MessageAreaUpdate;
+import org.soraworld.areaeffect.common.network.MessageClickAir;
 import org.soraworld.areaeffect.common.network.MessageConflictAreas;
 import org.soraworld.areaeffect.common.network.MessageDeleteRequest;
 import org.soraworld.areaeffect.common.network.MessageListReply;
@@ -82,6 +83,7 @@ public class CommonProxy {
         PacketChannel.register(11, MessageSelectShape.class);
         PacketChannel.register(12, MessageToolSync.class);
         PacketChannel.register(13, MessageConflictAreas.class);
+        PacketChannel.register(14, MessageClickAir.class);
     }
 
     /**
@@ -111,6 +113,11 @@ public class CommonProxy {
         PacketChannel.bindServer(MessageSelectShape.class, (message, player) -> {
             if (player != null) {
                 handleSelectShape(player, message);
+            }
+        });
+        PacketChannel.bindServer(MessageClickAir.class, (message, player) -> {
+            if (player != null) {
+                handleClickAir(player);
             }
         });
     }
@@ -369,7 +376,7 @@ public class CommonProxy {
     }
 
     /**
-     * 服务端响应选区形状设置 / 多边形闭合 / 撤回：校验 OP 权限与工具。
+     * 服务端响应选区形状设置 / 多边形闭合：校验 OP 权限与工具。
      */
     public void handleSelectShape(EntityPlayerMP player, MessageSelectShape packet) {
         if (!hasPerm(player)) {
@@ -380,18 +387,18 @@ public class CommonProxy {
             selectShape(player, packet.type);
         } else if (packet.close) {
             closePolygon(player);
-        } else if (packet.undo) {
-            undoVertex(player);
         }
     }
 
-    /** 撤回多边形最后一个顶点。 */
-    public void undoVertex(EntityPlayerMP player) {
-        Selection sel = selections.get(player.getUniqueID());
-        if (sel != null) {
-            sel.undoLastVertex();
-            updateSelection(player);
+    /**
+     * 服务端接收右键空气事件：与右键方块共用 {@link #onSelectToolRight} 入口
+     * （Selection.onClickRight），作为多边形选区的撤回触发；二点形状无坐标忽略。
+     */
+    public void handleClickAir(EntityPlayerMP player) {
+        if (!hasPerm(player)) {
+            return;
         }
+        onSelectToolRight(player, null);
     }
 
     /** 向客户端同步当前选区工具（MP 客户端不读 config）。 */
