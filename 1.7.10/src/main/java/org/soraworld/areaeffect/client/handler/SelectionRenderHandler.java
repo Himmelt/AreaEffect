@@ -72,14 +72,17 @@ public class SelectionRenderHandler {
                 + StatCollector.translateToLocal("gui.areaeffect.shape." + type);
         int textWidth = mc.fontRenderer.getStringWidth(label);
         int iconSize = 12;
-        int iconX = cx - textWidth / 2 - iconSize - 6;
-        int iconY = cy + 1;
+        int gap = 6;
+        // 图标+文字作为整体水平居中，避免不同长度的文字提示视觉偏移
+        int iconX = cx - (iconSize + gap + textWidth) / 2;
+        int textX = iconX + iconSize + gap;
+        int iconY = cy - 2; // 图标竖向中心与文字中心对齐（文字可视高约 8px）
 
         drawOverlayIcon(type, iconX, iconY, iconSize, alpha);
         GL11.glEnable(GL11.GL_TEXTURE_2D);
         GL11.glEnable(GL11.GL_BLEND);
         GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-        mc.fontRenderer.drawStringWithShadow(label, cx - textWidth / 2, cy,
+        mc.fontRenderer.drawStringWithShadow(label, textX, cy,
                 0xFFFFFF | ((int) (alpha * 255.0F) << 24));
     }
 

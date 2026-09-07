@@ -44,8 +44,8 @@ public class GuiAreas extends GuiScreen {
     static final int COLOR_HOVER_ROW = 0x55123B34;
     /** 强调文字（备注、L 值）。 */
     static final int COLOR_ACCENT = 0x2DD4BF;
-    /** 滑动条进度填充。 */
-    static final int COLOR_SLIDER_FILL = 0x8022D3EE;
+    /** 滑动条进度填充（半透明纯绿）。 */
+    static final int COLOR_SLIDER_FILL = 0x8000FF00;
     /** 面板 / 按钮 / 滑动条描边。 */
     static final int COLOR_BORDER = 0xFF4A6666;
     /** 按钮悬停底。 */
