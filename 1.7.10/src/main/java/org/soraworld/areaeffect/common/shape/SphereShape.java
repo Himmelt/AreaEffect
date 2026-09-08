@@ -64,26 +64,54 @@ public class SphereShape extends AreaShape {
         double xc = cx + 0.5D;
         double yc = cy + 0.5D;
         double zc = cz + 0.5D;
-        double[] cos = new double[RING_SEGMENTS + 1];
-        double[] sin = new double[RING_SEGMENTS + 1];
-        for (int i = 0; i <= RING_SEGMENTS; i++) {
-            double angle = 2.0D * Math.PI * i / RING_SEGMENTS;
-            cos[i] = radius * Math.cos(angle);
-            sin[i] = radius * Math.sin(angle);
+        // 纬线圈：赤道 + ±30°、±60° 纬度（高度 = R*sin，环半径 = sqrt(R²-h²)）
+        ring(result, xc, yc, zc, radius);
+        double halfSqrt3 = Math.sqrt(3.0D) / 2.0D;
+        for (double sinLat : new double[]{0.5D, -0.5D, halfSqrt3, -halfSqrt3}) {
+            double h = radius * sinLat;
+            double rr = Math.sqrt((double) radius * radius - h * h);
+            ring(result, xc, yc + h, zc, rr);
         }
-        // XZ 平面大圆（Y = 球心高度）
-        for (int i = 0; i < RING_SEGMENTS; i++) {
-            line(result, xc + cos[i], yc, zc + sin[i], xc + cos[i + 1], yc, zc + sin[i + 1]);
-        }
-        // XY 平面大圆（Z = 球心深度）
-        for (int i = 0; i < RING_SEGMENTS; i++) {
-            line(result, xc + cos[i], yc + sin[i], zc, xc + cos[i + 1], yc + sin[i + 1], zc);
-        }
-        // ZY 平面大圆（X = 球心横向）
-        for (int i = 0; i < RING_SEGMENTS; i++) {
-            line(result, xc, yc + sin[i], zc + cos[i], xc, yc + sin[i + 1], zc + cos[i + 1]);
+        // 经线圈：垂直大圆每 30° 一个（含原 XY/ZY 平面），共 6 个圆 = 12 条经线
+        for (int m = 0; m < 6; m++) {
+            double theta = Math.PI * m / 6.0D;
+            double cosT = Math.cos(theta);
+            double sinT = Math.sin(theta);
+            double prevX = 0.0D;
+            double prevY = 0.0D;
+            double prevZ = 0.0D;
+            for (int i = 0; i <= RING_SEGMENTS; i++) {
+                double angle = 2.0D * Math.PI * i / RING_SEGMENTS;
+                double ca = Math.cos(angle) * radius;
+                double sa = Math.sin(angle) * radius;
+                double x = xc + ca * cosT;
+                double z = zc + ca * sinT;
+                double y = yc + sa;
+                if (i > 0) {
+                    line(result, prevX, prevY, prevZ, x, y, z);
+                }
+                prevX = x;
+                prevY = y;
+                prevZ = z;
+            }
         }
         return result;
+    }
+
+    /** 在高度 y 处绕 XZ 平面画一圈水平环。 */
+    private static void ring(List<Edge> result, double xc, double y, double zc, double r) {
+        double prevX = 0.0D;
+        double prevZ = 0.0D;
+        for (int i = 0; i <= RING_SEGMENTS; i++) {
+            double angle = 2.0D * Math.PI * i / RING_SEGMENTS;
+            double x = xc + r * Math.cos(angle);
+            double z = zc + r * Math.sin(angle);
+            if (i > 0) {
+                line(result, prevX, y, prevZ, x, y, z);
+            }
+            prevX = x;
+            prevZ = z;
+        }
     }
 
     private static void line(List<Edge> result, double x1, double y1, double z1, double x2, double y2, double z2) {
