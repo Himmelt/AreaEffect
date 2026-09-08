@@ -59,9 +59,12 @@ public class SelectionRenderHandler {
         } else if (elapsed < 3000L) {
             alpha = 1.0F - (float) (elapsed - 1500L) / 1500.0F;
         } else {
+            // 淡出结束：清空 overlay 状态，避免残留状态在后续帧被再次绘制
+            proxy.clearShapeOverlay();
             return;
         }
         if (alpha <= 0.01F) {
+            proxy.clearShapeOverlay();
             return;
         }
 

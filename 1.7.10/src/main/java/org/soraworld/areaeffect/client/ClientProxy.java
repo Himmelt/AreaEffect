@@ -230,6 +230,11 @@ public class ClientProxy extends CommonProxy {
         return overlayShape;
     }
 
+    /** 清空 overlay 状态（淡出结束调用，防止残留状态被再次绘制）。 */
+    public void clearShapeOverlay() {
+        overlayShape = null;
+    }
+
     /** overlay 最近一次轮切触发时间（Minecraft 毫秒时间）。 */
     public long getOverlayLastAction() {
         return overlayLastAction;

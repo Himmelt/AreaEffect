@@ -43,7 +43,7 @@ public class AreaEffect {
 
     @Mod.EventHandler
     public void onServerStarting(FMLServerStartingEvent event) {
-        event.registerServerCommand(new AreaCommand(proxy, "areaeffect"));
+        event.registerServerCommand(new AreaCommand(proxy, "areaeffect", "aef"));
         if (event.getServer().getEntityWorld() instanceof WorldServer) {
             WorldServer world = (WorldServer) event.getServer().getEntityWorld();
             File store = new File(world.getChunkSaveLocation(), "areaeffect.dat");
