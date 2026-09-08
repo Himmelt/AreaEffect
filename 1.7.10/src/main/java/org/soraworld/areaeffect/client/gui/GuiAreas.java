@@ -36,20 +36,22 @@ public class GuiAreas extends GuiScreen {
     private static final float DIM_FRAC = 0.14F;
     private static final float AREA_FRAC = 0.26F;
 
-    // ===================== 配色方案（青蓝 Teal）=====================
+    // ===================== 配色方案 =====================
+    // 填充类常量以 RGBA(0xRRGGBBAA) 书写，使用时经 argb() 转成 Minecraft 需要的 ARGB。
+    // 文字类常量只有 24 位 RGB（无 alpha 位），直接交给字体渲染，无需转换。
     // 主题色
     /** 选中高亮（维度/区域行）。 */
-    static final int COLOR_SELECTED = 0xCC0D9488;
+    static final int COLOR_SELECTED = 0x00FFFFCC;
     /** 行悬停底。 */
-    static final int COLOR_HOVER_ROW = 0x55123B34;
+    static final int COLOR_HOVER_ROW = 0x00ffff54;
     /** 强调文字（备注、L 值）。 */
-    static final int COLOR_ACCENT = 0x2DD4BF;
+    static final int COLOR_ACCENT = 0xFFFF00;
     /** 滑动条进度填充（半透明纯绿）。 */
-    static final int COLOR_SLIDER_FILL = 0x8000FF00;
+    static final int COLOR_SLIDER_FILL = 0x64FF6480;
     /** 面板 / 按钮 / 滑动条描边。 */
-    static final int COLOR_BORDER = 0xFF4A6666;
+    static final int COLOR_BORDER = 0x4A6666FF;
     /** 按钮悬停底。 */
-    static final int COLOR_BTN_HOVER = 0xBB1A3A36;
+    static final int COLOR_BTN_HOVER = 0x00ffff54;
     // 中性色
     /** 标题 / 选中项文字。 */
     static final int COLOR_TEXT_HEAD = 0xFFFFFF;
@@ -60,19 +62,24 @@ public class GuiAreas extends GuiScreen {
     /** 禁用文字。 */
     static final int COLOR_TEXT_DISABLED = 0x707070;
     /** 按钮常态底。 */
-    static final int COLOR_BTN_BG = 0xAA222222;
+    static final int COLOR_BTN_BG = 0x222222AA;
     /** 按钮禁用底。 */
-    static final int COLOR_BTN_DISABLED = 0xAA111111;
+    static final int COLOR_BTN_DISABLED = 0x111111AA;
     /** 滑动条轨道底。 */
-    static final int COLOR_SLIDER_TRACK = 0xAA1A1A1A;
+    static final int COLOR_SLIDER_TRACK = 0x1A1A1AAA;
     /** 滑动条滑块。 */
-    static final int COLOR_SLIDER_THUMB = 0xFFE8E8E8;
+    static final int COLOR_SLIDER_THUMB = 0xE8E8E8FF;
     /** 滑动条数值文字。 */
     static final int COLOR_SLIDER_TEXT = 0xF0F0F0;
     /** 滚动条轨道。 */
-    static final int COLOR_SCROLL_TRACK = 0x33000000;
+    static final int COLOR_SCROLL_TRACK = 0x00000033;
     /** 滚动条滑块。 */
-    static final int COLOR_SCROLL_THUMB = 0xFFCCCCCC;
+    static final int COLOR_SCROLL_THUMB = 0xCCCCCCFF;
+
+    /** RGBA(0xRRGGBBAA) → ARGB(0xAARRGGBB)，供 Minecraft 填充/文字颜色使用。 */
+    private static int argb(int rgba) {
+        return ((rgba & 0xFF) << 24) | ((rgba >> 8) & 0xFFFFFF);
+    }
 
     private static final int BTN_TP = 0;
     private static final int BTN_DELETE = 1;
@@ -286,9 +293,9 @@ public class GuiAreas extends GuiScreen {
             boolean sel = i == dimIdx;
             boolean hov = !sel && mouseX >= dimX1 && mouseX < dimX2 && mouseY >= y && mouseY < y + ROW_H;
             if (sel) {
-                drawRect(dimX1 + 1, y, dimX2 - 1, y + ROW_H, COLOR_SELECTED);
+                drawRect(dimX1 + 1, y, dimX2 - 1, y + ROW_H, argb(COLOR_SELECTED));
             } else if (hov) {
-                drawRect(dimX1 + 1, y, dimX2 - 1, y + ROW_H, COLOR_HOVER_ROW);
+                drawRect(dimX1 + 1, y, dimX2 - 1, y + ROW_H, argb(COLOR_HOVER_ROW));
             }
             String label = "DIM " + dims.get(i);
             drawCenteredString(fontRendererObj, label, (dimX1 + dimX2) / 2, y + 5, sel ? COLOR_TEXT_HEAD : COLOR_TEXT_BODY);
@@ -304,9 +311,9 @@ public class GuiAreas extends GuiScreen {
             boolean sel = selected != null && area.id == selected.id;
             boolean hov = !sel && mouseX >= areaX1 && mouseX < areaX2 && mouseY >= y && mouseY < y + ROW_H;
             if (sel) {
-                drawRect(areaX1 + 1, y, areaX2 - 1, y + ROW_H, COLOR_SELECTED);
+                drawRect(areaX1 + 1, y, areaX2 - 1, y + ROW_H, argb(COLOR_SELECTED));
             } else if (hov) {
-                drawRect(areaX1 + 1, y, areaX2 - 1, y + ROW_H, COLOR_HOVER_ROW);
+                drawRect(areaX1 + 1, y, areaX2 - 1, y + ROW_H, argb(COLOR_HOVER_ROW));
             }
             fontRendererObj.drawStringWithShadow("#" + area.id, areaX1 + 6, y + 5, sel ? COLOR_TEXT_HEAD : COLOR_TEXT_BODY);
             // 备注：ID 后显示，超出可用宽度截断为省略号（右侧与滚动条留隙）
@@ -323,7 +330,7 @@ public class GuiAreas extends GuiScreen {
                 }
                 fontRendererObj.drawStringWithShadow(shown, areaX1 + 6 + idW + 4, y + 5, COLOR_ACCENT);
             }
-            fontRendererObj.drawStringWithShadow(right, areaX2 - fontRendererObj.getStringWidth(right) - rightPad, y + 5, COLOR_ACCENT);
+            fontRendererObj.drawStringWithShadow(right, areaX2 - fontRendererObj.getStringWidth(right) - rightPad, y + 5, COLOR_TEXT_BODY);
         }
 
         // 右栏：详情
@@ -361,10 +368,10 @@ public class GuiAreas extends GuiScreen {
 
     /** 栏面板：框内透明，仅深灰框线。 */
     private void drawPanel(int x1, int x2) {
-        drawRect(x1, top, x2, top + 1, COLOR_BORDER);
-        drawRect(x1, bottom - 1, x2, bottom, COLOR_BORDER);
-        drawRect(x1, top, x1 + 1, bottom, COLOR_BORDER);
-        drawRect(x2 - 1, top, x2, bottom, COLOR_BORDER);
+        drawRect(x1, top, x2, top + 1, argb(COLOR_BORDER));
+        drawRect(x1, bottom - 1, x2, bottom, argb(COLOR_BORDER));
+        drawRect(x1, top, x1 + 1, bottom, argb(COLOR_BORDER));
+        drawRect(x2 - 1, top, x2, bottom, argb(COLOR_BORDER));
     }
 
     /** 列表可视高度（滚动计算基准）。 */
@@ -407,8 +414,8 @@ public class GuiAreas extends GuiScreen {
             return;
         }
         // 轨道 + 滑块
-        drawRect(x, top + 4, x + SCROLL_W, bottom - 4, COLOR_SCROLL_TRACK);
-        drawRect(g[0], g[1], g[2], g[3], COLOR_SCROLL_THUMB);
+        drawRect(x, top + 4, x + SCROLL_W, bottom - 4, argb(COLOR_SCROLL_TRACK));
+        drawRect(g[0], g[1], g[2], g[3], argb(COLOR_SCROLL_THUMB));
     }
 
     @Override
@@ -640,11 +647,11 @@ public class GuiAreas extends GuiScreen {
             boolean hover = enabled && mouseX >= xPosition && mouseX <= xPosition + width
                     && mouseY >= yPosition && mouseY <= yPosition + height;
             int bg = !enabled ? COLOR_BTN_DISABLED : hover ? COLOR_BTN_HOVER : COLOR_BTN_BG;
-            drawRect(xPosition, yPosition, xPosition + width, yPosition + height, bg);
-            drawRect(xPosition, yPosition, xPosition + width, yPosition + 1, COLOR_BORDER);
-            drawRect(xPosition, yPosition + height - 1, xPosition + width, yPosition + height, COLOR_BORDER);
-            drawRect(xPosition, yPosition, xPosition + 1, yPosition + height, COLOR_BORDER);
-            drawRect(xPosition + width - 1, yPosition, xPosition + width, yPosition + height, COLOR_BORDER);
+            drawRect(xPosition, yPosition, xPosition + width, yPosition + height, argb(bg));
+            drawRect(xPosition, yPosition, xPosition + width, yPosition + 1, argb(COLOR_BORDER));
+            drawRect(xPosition, yPosition + height - 1, xPosition + width, yPosition + height, argb(COLOR_BORDER));
+            drawRect(xPosition, yPosition, xPosition + 1, yPosition + height, argb(COLOR_BORDER));
+            drawRect(xPosition + width - 1, yPosition, xPosition + width, yPosition + height, argb(COLOR_BORDER));
             int color = enabled ? COLOR_TEXT_BODY : COLOR_TEXT_DISABLED;
             drawCenteredString(mc.fontRenderer, displayString,
                     xPosition + width / 2, yPosition + (height - 8) / 2, color);
@@ -737,20 +744,20 @@ public class GuiAreas extends GuiScreen {
             // 1.7.10 拖动由绘制驱动（GuiButton.drawButton 每帧调 mouseDragged），这里必须自己触发
             this.mouseDragged(mc, mouseX, mouseY);
             // 轨道
-            drawRect(xPosition, yPosition, xPosition + width, yPosition + height, COLOR_SLIDER_TRACK);
-            drawRect(xPosition, yPosition, xPosition + width, yPosition + 1, COLOR_BORDER);
-            drawRect(xPosition, yPosition + height - 1, xPosition + width, yPosition + height, COLOR_BORDER);
-            drawRect(xPosition, yPosition, xPosition + 1, yPosition + height, COLOR_BORDER);
-            drawRect(xPosition + width - 1, yPosition, xPosition + width, yPosition + height, COLOR_BORDER);
+            drawRect(xPosition, yPosition, xPosition + width, yPosition + height, argb(COLOR_SLIDER_TRACK));
+            drawRect(xPosition, yPosition, xPosition + width, yPosition + 1, argb(COLOR_BORDER));
+            drawRect(xPosition, yPosition + height - 1, xPosition + width, yPosition + height, argb(COLOR_BORDER));
+            drawRect(xPosition, yPosition, xPosition + 1, yPosition + height, argb(COLOR_BORDER));
+            drawRect(xPosition + width - 1, yPosition, xPosition + width, yPosition + height, argb(COLOR_BORDER));
             // 填充与滑块（8px 宽，便于拖动）
             float frac = (value - min) / (max - min);
             int thumbW = 8;
             int track = width - 8 - thumbW;
             int tx = xPosition + 4 + (int) (track * frac);
             if (tx > xPosition + 4) {
-                drawRect(xPosition + 3, yPosition + 3, tx + thumbW / 2, yPosition + height - 3, COLOR_SLIDER_FILL);
+                drawRect(xPosition + 3, yPosition + 3, tx + thumbW / 2, yPosition + height - 3, argb(COLOR_SLIDER_FILL));
             }
-            drawRect(tx, yPosition + 2, tx + thumbW, yPosition + height - 2, COLOR_SLIDER_THUMB);
+            drawRect(tx, yPosition + 2, tx + thumbW, yPosition + height - 2, argb(COLOR_SLIDER_THUMB));
             drawCenteredString(mc.fontRenderer, displayString,
                     xPosition + width / 2, yPosition + (height - 8) / 2, COLOR_SLIDER_TEXT);
         }

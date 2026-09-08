@@ -63,7 +63,10 @@ public class SelectionRenderHandler {
             proxy.clearShapeOverlay();
             return;
         }
-        if (alpha <= 0.01F) {
+        // 淡出尾巴上图标(细线)与带阴影的文字在人眼感知透明度不同步，细线图标先于文字“看不见”，
+        // 若降到 0.01 才清除，会在末尾残留一段“只有文字没有图标”的残影。
+        // 因此把截断点抬到 0.15：图标仍隐约可见时与文字一起整体消失，避免文字单独闪一下。
+        if (alpha <= 0.15F) {
             proxy.clearShapeOverlay();
             return;
         }
