@@ -28,7 +28,12 @@ public class Area {
     /** 区域备注，供玩家标注用途；可为空串。 */
     private String remark = "";
 
-    private final List<AreaEffect> effects = new ArrayList<>();
+    /**
+     * 挂载的效果列表（copy-on-write）：单机下集成服在服务器线程整组替换，
+     * 渲染线程每帧遍历同一对象，原地 clear/addAll 会触发并发修改异常，
+     * 故所有变更都替换为新的不可变快照，读取方拿到的永远是完整旧列表。
+     */
+    private volatile List<AreaEffect> effects = new ArrayList<>();
 
     public Area(AreaShape shape, float lightness, float duration) {
         this.shape = shape;
@@ -116,15 +121,16 @@ public class Area {
         }
         Area area = new Area(shape, 100.0F, 1.0F);
         area.setRemark(EffectTypes.readString(buf));
-        area.effects.clear();
         // 效果数量收窄到合理上限，防恶意包一次性申请海量对象（与 MessageSetProps 一致）
         int size = Math.min(Math.max(buf.readInt(), 0), 16);
+        List<AreaEffect> effects = new ArrayList<>(size);
         for (int i = 0; i < size; i++) {
             AreaEffect effect = EffectTypes.fromBuf(buf);
             if (effect != null) {
-                area.effects.add(effect);
+                effects.add(effect);
             }
         }
+        area.effects = effects;
         return area;
     }
 

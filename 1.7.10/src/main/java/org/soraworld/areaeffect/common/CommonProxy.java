@@ -515,6 +515,8 @@ public class CommonProxy {
         if (stack != null) {
             tool = stack.getItem();
             save();
+            // 专用服客户端持有独立的 tool 副本，变更后须实时推送（单机共享字段，推送也无害）
+            sendToolSync(player);
             sendChatTranslation2(player, "chat.tool.set", tool.getUnlocalizedName(stack) + ".name");
         } else {
             sendChatTranslation2(player, "chat.tool.get", tool.getUnlocalizedName() + ".name");
