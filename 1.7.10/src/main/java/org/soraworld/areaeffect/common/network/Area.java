@@ -14,6 +14,7 @@ import org.soraworld.areaeffect.common.util.Vec3i;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 public class Area {
@@ -37,7 +38,7 @@ public class Area {
 
     public Area(AreaShape shape, float lightness, float duration) {
         this.shape = shape;
-        this.effects.add(new LightnessEffect(lightness, duration));
+        this.effects = Collections.singletonList(new LightnessEffect(lightness, duration));
     }
 
     /** 旧存档兼容工厂：以六坐标构造长方体区域。 */
@@ -71,10 +72,9 @@ public class Area {
     }
 
     public void setEffects(List<AreaEffect> list) {
-        effects.clear();
-        if (list != null) {
-            effects.addAll(list);
-        }
+        // copy-on-write：整组替换为新的不可变快照，渲染线程遍历中的旧列表不受影响
+        this.effects = list == null ? Collections.<AreaEffect>emptyList()
+                : Collections.unmodifiableList(new ArrayList<>(list));
     }
 
     /**
@@ -130,7 +130,7 @@ public class Area {
                 effects.add(effect);
             }
         }
-        area.effects = effects;
+        area.setEffects(effects);
         return area;
     }
 

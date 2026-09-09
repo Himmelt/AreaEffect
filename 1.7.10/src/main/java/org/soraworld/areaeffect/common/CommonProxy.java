@@ -333,12 +333,18 @@ public class CommonProxy {
             sendChatTranslation(player, "chat.area.notfound");
             return;
         }
-        // 以客户端回写的整组效果替换，并对每条做参数边界处理；备注一并写回
+        // 以客户端回写的整组效果替换：逐条参数边界处理，并按类型去重
+        // （与 getEffects "每种效果类型至多一个实例" 的约定一致，重复取首个）
         List<AreaEffect> incoming = packet.effects;
+        List<AreaEffect> deduped = new ArrayList<>(incoming.size());
+        Set<String> seenTypes = new HashSet<>();
         for (AreaEffect effect : incoming) {
             effect.sanitize();
+            if (seenTypes.add(effect.typeId())) {
+                deduped.add(effect);
+            }
         }
-        area.setEffects(incoming);
+        area.setEffects(deduped);
         area.setRemark(packet.remark);
         save();
         sendUpdateToAll(packet.dim, area.id, area);
@@ -492,8 +498,13 @@ public class CommonProxy {
     }
 
     public void clearSelect(EntityPlayer player) {
+        clearSelect(player, true);
+    }
+
+    /** 清除玩家选区；syncClient=false 时不回发同步包（登出时连接已断，发包无谓）。 */
+    public void clearSelect(EntityPlayer player, boolean syncClient) {
         selections.remove(player.getUniqueID());
-        if (player instanceof EntityPlayerMP) {
+        if (syncClient && player instanceof EntityPlayerMP) {
             updateSelection((EntityPlayerMP) player);
         }
     }

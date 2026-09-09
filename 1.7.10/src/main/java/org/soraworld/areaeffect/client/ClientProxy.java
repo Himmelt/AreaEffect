@@ -68,9 +68,10 @@ public class ClientProxy extends CommonProxy {
     private final Map<Integer, Map<Integer, String>> previewRemarks = new ConcurrentHashMap<>();
 
     /** 区域查找缓存：玩家连续帧停在同区域时 O(1) 命中；跨维度/离开导致 contains 失败即重定位。
-     *  区域增删无需显式失效——缓存下次 contains 判 false 会自动回退到全遍历。 */
-    private int cachedDim = Integer.MIN_VALUE;
-    private Area cachedArea = null;
+     *  区域被更新/删除时由 {@link #invalidateAreaCache} 显式失效（缓存对象 shape 不可变，
+     *  contains 恒真不会自动失效）。失效由 netty 线程触发、渲染线程读取，故须 volatile。 */
+    private volatile int cachedDim = Integer.MIN_VALUE;
+    private volatile Area cachedArea = null;
 
     /** 选区形状轮切 overlay 状态：当前提示的形状与最近一次轮切时间（毫秒）。 */
     private String overlayShape = null;
@@ -151,6 +152,8 @@ public class ClientProxy extends CommonProxy {
             return; // 反序列化失败（如未知形状），丢弃避免注入 null
         }
         lightAreas.computeIfAbsent(packet.dim, dim -> new ConcurrentHashMap<Integer, Area>()).put(packet.id, packet.data);
+        // 更新会替换 Area 对象（shape/effects 均可能变化），缓存持有旧引用须失效
+        invalidateAreaCache(packet.dim, packet.id);
     }
 
     public void handleDelete(MessageAreaDelete packet) {
@@ -158,12 +161,22 @@ public class ClientProxy extends CommonProxy {
         if (areas != null && !areas.isEmpty()) {
             areas.remove(packet.id);
         }
+        // 缓存持有已删对象的强引用且 shape 不可变，contains 恒真不会自动失效，须显式清除
+        invalidateAreaCache(packet.dim, packet.id);
         // 广播统一刷新：回主线程更新已打开的管理界面
         runOnClientThread(() -> {
             if (mc.currentScreen instanceof GuiAreas) {
                 ((GuiAreas) mc.currentScreen).refreshFromProxy();
             }
         });
+    }
+
+    /** 区域被更新/删除时失效查找缓存（下一帧全遍历重建，单帧开销可忽略）。 */
+    private void invalidateAreaCache(int dim, int id) {
+        if (cachedArea != null && cachedArea.id == id && cachedDim == dim) {
+            cachedArea = null;
+            cachedDim = Integer.MIN_VALUE;
+        }
     }
 
     public void handleSelection(MessageSelection packet) {

@@ -60,7 +60,8 @@ public class AreaServerHandler {
 
     @SubscribeEvent
     public void onPlayerLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
-        proxy.clearSelect(event.player);
+        // 连接已断，不回发选区同步包，仅清除服务端状态
+        proxy.clearSelect(event.player, false);
     }
 
     @SubscribeEvent
