@@ -1,5 +1,3 @@
-chat.set.pos1=已选择位置1 : %s
-chat.set.pos2=已选择位置2 : %s
 chat.create.done=已创建新的区域
 chat.create.conflict=选区和已有区域冲突，请重新选择
 chat.create.noselect=请先创建一个选区

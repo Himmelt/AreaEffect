@@ -1,54 +1,22 @@
 package org.soraworld.areaeffect.common.util;
 
 /**
- * Perceptual gamma mapping and a duration based transition engine.
+ * sRGB / CIE L* 感知亮度换算与缓动函数，供光照贴图 LUT 与效果过渡使用。
  *
- * <p>Minecraft builds its lightmap in {@code EntityRenderer#updateLightmap};
- * after the gamma blend the output is
- * <pre>
- *     out(g) = clamp( (raw * (1 - g) + (1 - (1 - raw)^4) * g) * 0.96 + 0.03, 0, 1 )
- * </pre>
- * where {@code raw} is the scene's base light level (0..1) and {@code g} is
- * {@code GameSettings.gamma}. The eye however does not see {@code out}: it sees
- * {@code out} pushed through the monitor's sRGB electro-optical transfer
- * function and then compressed into CIE L* (perceived lightness, 0 = black,
- * 100 = white). That composite mapping is neither linear nor scene
- * independent, so this class provides:
- * <ul>
- *   <li>the forward chain {@code (raw, gamma) -> lightness} ({@link #perceive}),</li>
- *   <li>the exact inverse {@code (raw, lightness) -> gamma}
- *       ({@link #gammaFromLightness}), which is what lets an area target a
- *       <b>perceived lightness</b> instead of a raw gamma value, and</li>
- *   <li>the perceptual glide used by the duration based transition
- *       ({@link #glide}/{@link #ease}).</li>
- * </ul>
- *
- * <p>All functions take the <b>live</b> scene base light {@code raw}; callers
- * should sample it every tick (e.g. {@code world.getLightBrightness(pos)}), so
- * the perceived rate stays correct at noon and in a pitch black cave alike.
+ * <p>本模组的亮度效果接管 vanilla lightmap 的接收端（见客户端
+ * {@code LightmapHook}）：把贴图像素按通道经「码值 → 线性亮度 → CIE L*
+ * → 目标亮度插值 → 码值」的链路重映射，其中正向
+ * {@link #lightnessFromCode} 与逆向 {@link #toLuminance}/{@link #toCode}
+ * 均由本类提供；过渡动画使用 {@link #ease}（smoothstep）。
  */
 public final class GammaCurve {
-
-    /**
-     * Perceptual difference (CIE L*) below which two gammas look identical.
-     */
-    private static final double JND = 0.05;
 
     private GammaCurve() {
     }
 
     // ------------------------------------------------------------------
-    // forward chain: (raw, gamma) -> perceived lightness
+    // forward chain: sRGB code value -> perceived lightness
     // ------------------------------------------------------------------
-
-    /**
-     * Minecraft lightmap output (0..1) for the given base light and gamma.
-     */
-    public static double lightmap(double raw, double gamma) {
-        double bright = 1.0 - Math.pow(1.0 - raw, 4.0);
-        double value = raw * (1.0 - gamma) + bright * gamma;
-        return clamp(value * 0.96 + 0.03, 0.0, 1.0);
-    }
 
     /**
      * sRGB code value -> linear luminance (sRGB EOTF).
@@ -66,13 +34,6 @@ public final class GammaCurve {
     }
 
     /**
-     * Gamma -> perceived lightness (CIE L*, 0..100) in a scene with base light {@code raw}.
-     */
-    public static double perceive(double gamma, double raw) {
-        return lightness(toLinear(lightmap(raw, gamma)));
-    }
-
-    /**
      * sRGB code value (0..1) -> CIE L* (0..100).
      */
     public static double lightnessFromCode(double code) {
@@ -80,7 +41,7 @@ public final class GammaCurve {
     }
 
     // ------------------------------------------------------------------
-    // inverse chain: perceived lightness -> (raw, gamma)
+    // inverse chain: perceived lightness -> sRGB code value
     // ------------------------------------------------------------------
 
     /**
@@ -99,46 +60,8 @@ public final class GammaCurve {
         return luminance <= 0.0031308 ? luminance * 12.92 : 1.055 * Math.pow(luminance, 1.0 / 2.4) - 0.055;
     }
 
-    /**
-     * {@code 1 - (1 - raw)^4 - raw}: how much a unit of gamma shifts the blend.
-     */
-    public static double delta(double raw) {
-        return 1.0 - Math.pow(1.0 - raw, 4.0) - raw;
-    }
-
-    /**
-     * Lowest gamma with a visible effect in a scene with base light {@code raw}.
-     */
-    public static double liveMinGamma(double raw) {
-        double d = delta(raw);
-        return d <= 1.0e-9 ? 0.0 : ((-0.03) / 0.96 - raw) / d;
-    }
-
-    /**
-     * Highest gamma with a visible effect in a scene with base light {@code raw}.
-     */
-    public static double liveMaxGamma(double raw) {
-        double d = delta(raw);
-        return d <= 1.0e-9 ? 0.0 : ((1.0 - 0.03) / 0.96 - raw) / d;
-    }
-
-    /**
-     * Gamma that makes a scene with base light {@code raw} appear at the given
-     * perceived lightness (CIE L*, 0..100). Lightness values beyond what gamma
-     * can reach for this scene clamp onto the live range boundary, so the
-     * picture simply saturates instead of producing dead values.
-     */
-    public static double gammaFromLightness(double lightness, double raw) {
-        double d = delta(raw);
-        if (!(d > 1.0e-9)) {
-            return 0.0; // degenerate scene (raw 0 or 1), gamma has no effect
-        }
-        double code = clamp(toCode(toLuminance(lightness)), 0.0, 1.0);
-        return clamp(((code - 0.03) / 0.96 - raw) / d, liveMinGamma(raw), liveMaxGamma(raw));
-    }
-
     // ------------------------------------------------------------------
-    // duration based transition
+    // transition easing
     // ------------------------------------------------------------------
 
     /**
@@ -147,20 +70,6 @@ public final class GammaCurve {
     public static double ease(double progress) {
         double t = clamp(progress, 0.0, 1.0);
         return t * t * (3.0 - 2.0 * t);
-    }
-
-    /**
-     * Perceived lightness on the glide from {@code fromLightness} to
-     * {@code toLightness} after {@code elapsedTicks} of a {@code durationTicks}
-     * tick transition. Snaps to the target once the remaining difference is
-     * below the just noticeable difference.
-     */
-    public static double glide(double fromLightness, double toLightness, double elapsedTicks, double durationTicks) {
-        if (!(Math.abs(toLightness - fromLightness) > JND)) {
-            return toLightness;
-        }
-        double t = ease(elapsedTicks / durationTicks);
-        return fromLightness + (toLightness - fromLightness) * t;
     }
 
     private static double clamp(double value, double min, double max) {

@@ -69,18 +69,6 @@ public abstract class AreaShape {
     /** 详情页展示文本。 */
     public abstract String describe();
 
-    public List<Vec3i> anchors() {
-        return anchors;
-    }
-
-    public boolean closed() {
-        return closed;
-    }
-
-    public Bounds bounds() {
-        return bounds;
-    }
-
     /**
      * v2 冲突检测：先 AABB 包围盒相交粗筛（保守快速），通过后再做方块级精确判定。
      * 精确语义：两区域冲突 ⇔ 存在整数方块同时位于两区域内

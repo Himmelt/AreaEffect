@@ -49,26 +49,6 @@ public class PrismShape extends AreaShape {
                 : 0;
     }
 
-    public Section section() {
-        return section;
-    }
-
-    public Height height() {
-        return height;
-    }
-
-    public int radius() {
-        return radius;
-    }
-
-    public int centerX() {
-        return cx;
-    }
-
-    public int centerZ() {
-        return cz;
-    }
-
     /** 多边形顶点（全部锚点即顶点，XZ 取方块最小角；有界高度 = 顶点 Y 区间）。 */
     public List<Vec3i> polygonVertices() {
         return new ArrayList<>(anchors);

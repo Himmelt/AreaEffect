@@ -34,10 +34,6 @@ public final class ShapeTypes {
         return TYPE_POLYGON.equals(type) || TYPE_POLYGON_PILLAR.equals(type);
     }
 
-    public static boolean isFullHeight(String type) {
-        return TYPE_SQUARE_PILLAR.equals(type) || TYPE_ROUND_PILLAR.equals(type) || TYPE_POLYGON_PILLAR.equals(type);
-    }
-
     /** 各形状锚点完备性检查。 */
     public static boolean canBuild(Selection sel) {
         if (sel == null) {

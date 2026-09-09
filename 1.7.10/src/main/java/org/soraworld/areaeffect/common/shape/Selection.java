@@ -34,10 +34,6 @@ public class Selection {
         return ShapeTypes.isPolygon(shapeType);
     }
 
-    public boolean isFullHeight() {
-        return ShapeTypes.isFullHeight(shapeType);
-    }
-
     /** 左键点击处理（服务端分派）。 */
     public void onClickLeft(Vec3i pos) {
         if (ShapeTypes.isPolygon(shapeType)) {

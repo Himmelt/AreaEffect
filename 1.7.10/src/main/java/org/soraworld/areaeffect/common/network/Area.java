@@ -72,13 +72,6 @@ public class Area {
         }
     }
 
-    public void addEffect(AreaEffect effect) {
-        if (effect != null) {
-            effects.removeIf(e -> e.typeId().equals(effect.typeId()));
-            effects.add(effect);
-        }
-    }
-
     /**
      * 亮度效果的当前目标亮度（CIE L*），无亮度效果时返回默认 100。
      */
@@ -95,14 +88,6 @@ public class Area {
         return effect == null ? 1.0F : effect.getDuration();
     }
 
-    public void setLightness(float lightness) {
-        ensureLightnessEffect().setLightness(lightness);
-    }
-
-    public void setDuration(float duration) {
-        ensureLightnessEffect().setDuration(duration);
-    }
-
     private LightnessEffect lightnessEffect() {
         for (AreaEffect effect : effects) {
             if (effect instanceof LightnessEffect) {
@@ -110,15 +95,6 @@ public class Area {
             }
         }
         return null;
-    }
-
-    private LightnessEffect ensureLightnessEffect() {
-        LightnessEffect effect = lightnessEffect();
-        if (effect == null) {
-            effect = new LightnessEffect();
-            effects.add(effect);
-        }
-        return effect;
     }
 
     /** 流式写入目标缓冲：type + 锚点 + closed + 备注 + 效果列表（与 fromByteBuf 对应）。 */
@@ -162,30 +138,6 @@ public class Area {
 
     public boolean conflict(Area area) {
         return shape.conflict(area.shape());
-    }
-
-    @Override
-    public String toString() {
-        return shape.describe() + "," + getLightness() + "," + getDuration();
-    }
-
-    /** 详情页展示文本（旧接口保留，委托形状描述）。 */
-    public String pos1() {
-        return shape.describe();
-    }
-
-    public String pos2() {
-        return "";
-    }
-
-    public Vec3i vec1() {
-        AreaShape.Bounds b = shape.bounds();
-        return new Vec3i(b.minX, b.minY, b.minZ);
-    }
-
-    public Vec3i vec2() {
-        AreaShape.Bounds b = shape.bounds();
-        return new Vec3i(b.maxX, b.maxY, b.maxZ);
     }
 
     public void center(EntityPlayer player) {

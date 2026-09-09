@@ -1,5 +1,3 @@
-chat.set.pos1=Selected pos1 : %s
-chat.set.pos2=Selected pos2 : %s
 chat.create.done=Area is created
 chat.create.conflict=Selected area conflicts with existed areas
 chat.create.noselect=Please select start pos and end pos first

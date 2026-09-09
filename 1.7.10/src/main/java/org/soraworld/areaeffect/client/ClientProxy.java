@@ -205,14 +205,6 @@ public class ClientProxy extends CommonProxy {
         }
     }
 
-    public Vec3i getSelPos1() {
-        return selSelection != null && selSelection.anchors.size() > 0 ? selSelection.anchors.get(0) : null;
-    }
-
-    public Vec3i getSelPos2() {
-        return selSelection != null && selSelection.anchors.size() > 1 ? selSelection.anchors.get(1) : null;
-    }
-
     /** 当前本地选区镜像（netty 线程写，渲染线程读，与旧 selPos1/2 模式一致）。 */
     public Selection getLocalSelection() {
         return selSelection;
@@ -377,12 +369,6 @@ public class ClientProxy extends CommonProxy {
         List<Integer> dims = new ArrayList<>(lightAreas.keySet());
         Collections.sort(dims);
         return dims;
-    }
-
-    /** 按 id 跨维度查找区域副本。 */
-    public Area findAreaLocal(int dim, int id) {
-        Map<Integer, Area> areas = lightAreas.get(dim);
-        return areas == null ? null : areas.get(id);
     }
 
     /** 指示玩家是否正站在某区域内并返回该区域（带缓存）。
