@@ -72,9 +72,9 @@ public final class ShapeTypes {
             case TYPE_SQUARE_PILLAR:
                 return new PrismShape(PrismShape.Section.RECT, PrismShape.Height.FULL, anchors, false);
             case TYPE_CYLINDER:
-                return new PrismShape(PrismShape.Section.CIRCLE, PrismShape.Height.BOUNDED, anchors, false);
+                return anchors.size() >= 2 ? new PrismShape(PrismShape.Section.CIRCLE, PrismShape.Height.BOUNDED, anchors, false) : null;
             case TYPE_ROUND_PILLAR:
-                return new PrismShape(PrismShape.Section.CIRCLE, PrismShape.Height.FULL, anchors, false);
+                return anchors.size() >= 2 ? new PrismShape(PrismShape.Section.CIRCLE, PrismShape.Height.FULL, anchors, false) : null;
             case TYPE_SPHERE:
                 return new SphereShape(anchors.get(0), anchors.get(1));
             case TYPE_POLYGON:
@@ -97,9 +97,9 @@ public final class ShapeTypes {
             case TYPE_SQUARE_PILLAR:
                 return new PrismShape(PrismShape.Section.RECT, PrismShape.Height.FULL, anchors, false);
             case TYPE_CYLINDER:
-                return new PrismShape(PrismShape.Section.CIRCLE, PrismShape.Height.BOUNDED, anchors, false);
+                return anchors.size() >= 2 ? new PrismShape(PrismShape.Section.CIRCLE, PrismShape.Height.BOUNDED, anchors, false) : null;
             case TYPE_ROUND_PILLAR:
-                return new PrismShape(PrismShape.Section.CIRCLE, PrismShape.Height.FULL, anchors, false);
+                return anchors.size() >= 2 ? new PrismShape(PrismShape.Section.CIRCLE, PrismShape.Height.FULL, anchors, false) : null;
             case TYPE_SPHERE:
                 return anchors.size() >= 2 ? new SphereShape(anchors.get(0), anchors.get(1)) : null;
             case TYPE_POLYGON:
@@ -128,9 +128,9 @@ public final class ShapeTypes {
             case TYPE_SQUARE_PILLAR:
                 return new PrismShape(PrismShape.Section.RECT, PrismShape.Height.FULL, anchors, false);
             case TYPE_CYLINDER:
-                return new PrismShape(PrismShape.Section.CIRCLE, PrismShape.Height.BOUNDED, anchors, false);
+                return anchors.size() >= 2 ? new PrismShape(PrismShape.Section.CIRCLE, PrismShape.Height.BOUNDED, anchors, false) : null;
             case TYPE_ROUND_PILLAR:
-                return new PrismShape(PrismShape.Section.CIRCLE, PrismShape.Height.FULL, anchors, false);
+                return anchors.size() >= 2 ? new PrismShape(PrismShape.Section.CIRCLE, PrismShape.Height.FULL, anchors, false) : null;
             case TYPE_SPHERE:
                 return anchors.size() >= 2 ? new SphereShape(anchors.get(0), anchors.get(1)) : null;
             case TYPE_POLYGON:

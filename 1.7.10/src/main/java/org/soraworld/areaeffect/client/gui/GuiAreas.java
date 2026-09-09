@@ -104,10 +104,6 @@ public class GuiAreas extends GuiScreen {
     private GuiTextField remarkField;
     private float previewL;
     private float previewD;
-    private float originalL;
-    private float originalD;
-    private String originalRemark = "";
-    private boolean saved = false;
 
     // 三栏几何
     private int dimX1, dimX2, areaX1, areaX2, detX1, detX2;
@@ -190,9 +186,11 @@ public class GuiAreas extends GuiScreen {
         }
     }
 
-    /** 清空选中并还原未保存的预览，同时隐藏详情控件。 */
+    /** 清空选中并清除该区域的预览覆盖（预览不入共享，剔除覆盖即还原原值），隐藏详情控件。 */
     private void clearSelection() {
-        restoreIfUnsaved();
+        if (selected != null && dimIdx >= 0 && dimIdx < dims.size()) {
+            proxy.clearPreview(dims.get(dimIdx), selected.id);
+        }
         selected = null;
         syncDetailWidgets();
     }
@@ -256,15 +254,12 @@ public class GuiAreas extends GuiScreen {
         durationSlider.visible = has;
         remarkField.setVisible(has);
         if (has) {
+            // 起始基线读共享原始值（预览不污染共享，此处恒为存档值）
             lightSlider.setValueRaw(selected.getLightness());
             durationSlider.setValueRaw(selected.getDuration());
             remarkField.setText(selected.getRemark());
             previewL = lightSlider.getValue();
             previewD = durationSlider.getValue();
-            originalL = selected.getLightness();
-            originalD = selected.getDuration();
-            originalRemark = selected.getRemark();
-            saved = false;
             for (Object b : buttonList) {
                 GuiButton btn = (GuiButton) b;
                 if (btn.id == BTN_SEL) {
@@ -322,7 +317,8 @@ public class GuiAreas extends GuiScreen {
             int rightW = fontRendererObj.getStringWidth(right) + rightPad;
             int idW = fontRendererObj.getStringWidth("#" + area.id);
             int avail = (areaX2 - areaX1) - idW - rightW - 12;
-            String remark = area.getRemark();
+            // 列表备注显示预览覆盖后的有效值（预览不入共享 Area）
+            String remark = proxy.getEffectiveRemark(dims.get(dimIdx), area);
             if (!remark.isEmpty() && avail > 8) {
                 String shown = fontRendererObj.trimStringToWidth(remark, avail);
                 if (!shown.equals(remark)) {
@@ -346,9 +342,9 @@ public class GuiAreas extends GuiScreen {
                 previewD = d;
             }
             remarkField.drawTextBox();
-            // 备注实时本地写回（列表行即时更新）
+            // 备注实时写覆盖表（列表行即时更新；预览不入共享 Area）
             String text = remarkField.getText();
-            if (!text.equals(selected.getRemark())) {
+            if (!text.equals(proxy.getEffectiveRemark(dims.get(dimIdx), selected))) {
                 proxy.previewAreaRemark(dims.get(dimIdx), selected.id, text);
             }
             // 坐标详情：最后一行（滑动条之后），按形状显示
@@ -589,12 +585,9 @@ public class GuiAreas extends GuiScreen {
             float d = durationSlider.getValue();
             String remark = remarkField.getText().trim();
             proxy.sendSetProps(dim, selected.id, remark, Collections.singletonList(new LightnessEffect(l, d)));
+            // 保留预览覆盖避免渲染跳变，服务端广播返回后共享即为新值；切换/关闭时统一清除
             proxy.previewAreaProps(dim, selected.id, l, d);
             proxy.previewAreaRemark(dim, selected.id, remark);
-            originalL = l;
-            originalD = d;
-            originalRemark = remark;
-            saved = true;
         } else if (button.id == BTN_TP) {
             proxy.sendTpRequest(selected.id);
         } else if (button.id == BTN_DELETE) {
@@ -607,14 +600,7 @@ public class GuiAreas extends GuiScreen {
         }
     }
 
-    /** 未保存时把本地副本还原为选中时的参数。 */
-    private void restoreIfUnsaved() {
-        if (selected != null && !saved && dimIdx >= 0 && dimIdx < dims.size()) {
-            proxy.previewAreaProps(dims.get(dimIdx), selected.id, originalL, originalD);
-            proxy.previewAreaRemark(dims.get(dimIdx), selected.id, originalRemark);
-        }
-    }
-
+    /** 区域线框按钮的当前文案（开/关状态）。 */
     private String selectionText() {
         String state = translate(proxy.isAreaVisible(dims.get(dimIdx), selected.id)
                 ? "gui.areaeffect.selection.on"

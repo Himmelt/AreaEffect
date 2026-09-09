@@ -143,7 +143,8 @@ public class Area {
         Area area = new Area(shape, 100.0F, 1.0F);
         area.setRemark(EffectTypes.readString(buf));
         area.effects.clear();
-        int size = buf.readInt();
+        // 效果数量收窄到合理上限，防恶意包一次性申请海量对象（与 MessageSetProps 一致）
+        int size = Math.min(Math.max(buf.readInt(), 0), 16);
         for (int i = 0; i < size; i++) {
             AreaEffect effect = EffectTypes.fromBuf(buf);
             if (effect != null) {

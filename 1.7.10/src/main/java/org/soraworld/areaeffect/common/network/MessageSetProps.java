@@ -44,7 +44,8 @@ public class MessageSetProps implements IPacket {
         dim = buf.readInt();
         id = buf.readInt();
         remark = EffectTypes.readString(buf);
-        int size = buf.readInt();
+        // 效果数量收窄到合理上限，防恶意包一次性申请海量对象
+        int size = Math.min(Math.max(buf.readInt(), 0), 16);
         effects = new ArrayList<>(size);
         for (int i = 0; i < size; i++) {
             AreaEffect effect = EffectTypes.fromBuf(buf);

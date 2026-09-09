@@ -13,12 +13,12 @@ import org.soraworld.areaeffect.common.CommonProxy;
 import java.io.File;
 
 @Mod(
-        modid = AreaEffect.MOD_ID,
-        name = AreaEffect.MOD_NAME,
-        version = AreaEffect.MOD_VERSION,
+        modid = AreaEffectMod.MOD_ID,
+        name = AreaEffectMod.MOD_NAME,
+        version = AreaEffectMod.MOD_VERSION,
         acceptedMinecraftVersions = "[1.7.10]"
 )
-public class AreaEffect {
+public class AreaEffectMod {
 
     public static final String MOD_ID = "areaeffect";
     public static final String MOD_NAME = "AreaEffect";

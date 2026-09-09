@@ -1,6 +1,7 @@
 package org.soraworld.areaeffect.common.util;
 
 import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.util.MathHelper;
 
 public class Vec3i {
     public final int x, y, z;
@@ -12,7 +13,8 @@ public class Vec3i {
     }
 
     public Vec3i(EntityPlayer player) {
-        this((int) player.posX, (int) player.posY, (int) player.posZ);
+        // 必须向下取整而非 (int) 强转截断：负坐标时截断会选错方块（如 -0.5 截断为 0，实际应为 -1）
+        this(MathHelper.floor_double(player.posX), MathHelper.floor_double(player.posY), MathHelper.floor_double(player.posZ));
     }
 
     @Override

@@ -16,8 +16,6 @@ import java.util.List;
 public class Selection {
 
     public static final int PHASE_VERTICES = 0;
-    public static final int PHASE_NEED_Y1 = 1;
-    public static final int PHASE_NEED_Y2 = 2;
     public static final int PHASE_COMPLETE = 3;
 
     /** 锚点数量上限（防恶意包 / 包体膨胀）。 */

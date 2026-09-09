@@ -16,6 +16,8 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.ChatComponentTranslation;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.common.config.Configuration;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.soraworld.areaeffect.common.effect.AreaEffect;
 import org.soraworld.areaeffect.common.effect.EffectTypes;
 import org.soraworld.areaeffect.common.handler.AreaServerHandler;
@@ -45,13 +47,14 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class CommonProxy {
 
+    private static final Logger LOGGER = LogManager.getLogger("AreaEffect");
+
     protected final Map<UUID, Selection> selections = new HashMap<>();
     protected final Map<Integer, Map<Integer, Area>> lightAreas = new ConcurrentHashMap<>();
     protected final AreaServerHandler serverHandler = new AreaServerHandler(this);
     public Configuration config;
     protected File storeFile = null;
     protected Item tool = Items.wooden_axe;
-    protected float duration = 1.0F;
     protected int AREA_ID = 0;
 
     /** 网络消息是否已注册（每进程恰一次，见 registerAllMessagePackets）。 */
@@ -185,7 +188,8 @@ public class CommonProxy {
                     AREA_ID = area.id;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable t) {
+            LOGGER.warn("读取区域存档失败: {}", file, t);
         }
     }
 
@@ -237,7 +241,8 @@ public class CommonProxy {
                 java.nio.file.Files.copy(tmp.toPath(), file.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
                 tmp.delete();
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable t) {
+            LOGGER.warn("写入区域存档失败: {}", file, t);
         }
     }
 
@@ -482,7 +487,6 @@ public class CommonProxy {
         for (Map.Entry<Integer, Area> entry : lightAreas.getOrDefault(player.dimension, new HashMap<>()).entrySet()) {
             Area area = entry.getValue();
             if (area.contains(new Vec3d(player))) {
-                area.id = entry.getKey();
                 return area;
             }
         }

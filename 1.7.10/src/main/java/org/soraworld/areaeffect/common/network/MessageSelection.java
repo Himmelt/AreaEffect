@@ -33,15 +33,9 @@ public class MessageSelection implements IPacket {
         EffectTypes.writeString(buf, shapeType);
         buf.writeInt(anchors.length);
         for (Vec3i anchor : anchors) {
-            if (anchor != null) {
-                buf.writeInt(anchor.x);
-                buf.writeInt(anchor.y);
-                buf.writeInt(anchor.z);
-            } else {
-                buf.writeInt(0);
-                buf.writeInt(0);
-                buf.writeInt(0);
-            }
+            buf.writeInt(anchor.x);
+            buf.writeInt(anchor.y);
+            buf.writeInt(anchor.z);
         }
         buf.writeBoolean(closed);
         buf.writeByte(heightPhase);

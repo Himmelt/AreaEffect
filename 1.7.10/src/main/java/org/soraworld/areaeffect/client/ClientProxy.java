@@ -37,6 +37,7 @@ import org.soraworld.areaeffect.common.network.MessageToolSync;
 import org.soraworld.areaeffect.common.network.PacketChannel;
 import org.soraworld.areaeffect.common.shape.Selection;
 import org.soraworld.areaeffect.common.util.Vec3i;
+import org.soraworld.areaeffect.common.util.Vec3d;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -59,6 +60,17 @@ public class ClientProxy extends CommonProxy {
     private boolean showSelection = true;
     /** 各维度中已开启线框显示的区域 id 集合（客户端本地设置）。 */
     private final Map<Integer, Set<Integer>> visibleAreas = new ConcurrentHashMap<>();
+
+    /** 编辑预览亮度/时长覆盖：dim → id → {lightness, duration}。
+     *  独立于共享 Area，预览值不进入 lightAreas，避免被 save() 落盘。 */
+    private final Map<Integer, Map<Integer, float[]>> previewLd = new ConcurrentHashMap<>();
+    /** 编辑预览备注覆盖：dim → id → String（同样不入共享对象）。 */
+    private final Map<Integer, Map<Integer, String>> previewRemarks = new ConcurrentHashMap<>();
+
+    /** 区域查找缓存：玩家连续帧停在同区域时 O(1) 命中；跨维度/离开导致 contains 失败即重定位。
+     *  区域增删无需显式失效——缓存下次 contains 判 false 会自动回退到全遍历。 */
+    private int cachedDim = Integer.MIN_VALUE;
+    private Area cachedArea = null;
 
     /** 选区形状轮切 overlay 状态：当前提示的形状与最近一次轮切时间（毫秒）。 */
     private String overlayShape = null;
@@ -133,6 +145,9 @@ public class ClientProxy extends CommonProxy {
     }
 
     public void handleUpdate(MessageAreaUpdate packet) {
+        if (packet.data == null) {
+            return; // 反序列化失败（如未知形状），丢弃避免注入 null
+        }
         lightAreas.computeIfAbsent(packet.dim, dim -> new ConcurrentHashMap<Integer, Area>()).put(packet.id, packet.data);
     }
 
@@ -150,13 +165,16 @@ public class ClientProxy extends CommonProxy {
     }
 
     public void handleSelection(MessageSelection packet) {
-        selSelection = new Selection();
-        selSelection.shapeType = packet.shapeType;
-        for (Vec3i anchor : packet.anchors) {
-            selSelection.anchors.add(anchor);
-        }
-        selSelection.closed = packet.closed;
-        selSelection.heightPhase = packet.heightPhase;
+        // 选区镜像 netty 线程写、渲染线程读，需回客户端主线程统一更新，避免数据竞争
+        runOnClientThread(() -> {
+            selSelection = new Selection();
+            selSelection.shapeType = packet.shapeType;
+            for (Vec3i anchor : packet.anchors) {
+                selSelection.anchors.add(anchor);
+            }
+            selSelection.closed = packet.closed;
+            selSelection.heightPhase = packet.heightPhase;
+        });
     }
 
     public void handleListReply(MessageListReply packet) {
@@ -285,28 +303,66 @@ public class ClientProxy extends CommonProxy {
     }
 
     /**
-     * 编辑界面实时预览：只修改客户端本地区域副本的亮度/时长，渲染器下一帧即生效。
-     * 未保存退出时可用原值再次调用以还原。
+     * 编辑界面实时预览：把亮度/时长写入独立覆盖表（不修改共享 Area）。
+     * 渲染器通过 {@link #effectiveArea} 读取覆盖，下一帧即生效；
+     * 未保存退出/切换时用 {@link #clearPreview} 移除覆盖即可还原原值。
      */
     public void previewAreaProps(int dim, int id, float lightness, float duration) {
-        Map<Integer, Area> areas = lightAreas.get(dim);
-        if (areas != null) {
-            Area target = areas.get(id);
-            if (target != null) {
-                target.setLightness(lightness);
-                target.setDuration(duration);
-            }
-        }
+        previewLd.computeIfAbsent(dim, d -> new ConcurrentHashMap<>()).put(id, new float[]{lightness, duration});
     }
 
-    /** 本地立即写回备注（列表即时显示；服务端广播到达后幂等）。 */
+    /** 本地立即写回备注到覆盖表（列表即时显示；服务端广播到达后共享数据保持一致）。 */
     public void previewAreaRemark(int dim, int id, String remark) {
-        Map<Integer, Area> areas = lightAreas.get(dim);
-        if (areas != null) {
-            Area target = areas.get(id);
-            if (target != null) {
-                target.setRemark(remark);
+        previewRemarks.computeIfAbsent(dim, d -> new ConcurrentHashMap<>()).put(id, remark);
+    }
+
+    /** 返回该区域当前应呈现的实例：有预览覆盖则新建临时对象（复用原 shape），否则原对象。
+     *  共享 Area 始终保持存档原值，预览仅存在于渲染视图中。 */
+    private Area effectiveArea(int dim, Area area) {
+        if (area == null) {
+            return null;
+        }
+        Map<Integer, float[]> m = previewLd.get(dim);
+        if (m == null) {
+            return area;
+        }
+        float[] ld = m.get(area.id);
+        if (ld == null) {
+            return area;
+        }
+        // 覆盖值与共享一致时直接复用共享对象，避免每帧构造临时对象
+        if (ld[0] == area.getLightness() && ld[1] == area.getDuration()) {
+            return area;
+        }
+        Area tmp = new Area(area.shape(), ld[0], ld[1]);
+        tmp.id = area.id;
+        return tmp;
+    }
+
+    /** 返回该区域当前应呈现的备注：预览覆盖优先，否则区域原值。 */
+    public String getEffectiveRemark(int dim, Area area) {
+        if (area == null) {
+            return "";
+        }
+        Map<Integer, String> r = previewRemarks.get(dim);
+        if (r != null) {
+            String override = r.get(area.id);
+            if (override != null) {
+                return override;
             }
+        }
+        return area.getRemark();
+    }
+
+    /** 清除指定区域的预览覆盖（未保存退出/切换/保存成功后调用），恢复以共享原值为准。 */
+    public void clearPreview(int dim, int id) {
+        Map<Integer, float[]> m = previewLd.get(dim);
+        if (m != null) {
+            m.remove(id);
+        }
+        Map<Integer, String> r = previewRemarks.get(dim);
+        if (r != null) {
+            r.remove(id);
         }
     }
 
@@ -334,6 +390,17 @@ public class ClientProxy extends CommonProxy {
         return areas == null ? null : areas.get(id);
     }
 
+    /** 指示玩家是否正站在某区域内并返回该区域（带缓存）。
+     *  命中连续帧所在区域时单次 contains，否则回退父类 findAreaAt 全遍历并重建缓存。 */
+    private Area findAreaCached(EntityPlayer player) {
+        if (cachedArea != null && cachedDim == player.dimension && cachedArea.contains(new Vec3d(player))) {
+            return cachedArea;
+        }
+        cachedDim = player.dimension;
+        cachedArea = findAreaAt(player);
+        return cachedArea;
+    }
+
     /**
      * 每帧客户端更新：判定当前所在区域，再把该区域挂载的各效果分发给对应的
      * 客户端运行时驱动过渡（渲染器内部按真实时间插值）。区域外则让所有运行时回退到 0。
@@ -341,16 +408,18 @@ public class ClientProxy extends CommonProxy {
     public void updateClientLight(EntityPlayer player) {
         LightmapHook.tryInstall(mc);
         drainClientTasks();
-        Area area = findAreaAt(player);
+        Area area = findAreaCached(player);
         if (area != null) {
             boolean areaChanged = !inArea || area.id != lastAreaId;
             inArea = true;
             lastAreaId = area.id;
             lastDuration = area.getDuration();
-            for (AreaEffect effect : area.getEffects()) {
+            // 读取预览覆盖（若有），共享 Area 不被预览污染
+            Area renderArea = effectiveArea(player.dimension, area);
+            for (AreaEffect effect : renderArea.getEffects()) {
                 EffectRenderer renderer = renderers.get(effect.typeId());
                 if (renderer != null) {
-                    renderer.onFrame(areaChanged, effect, duration);
+                    renderer.onFrame(areaChanged, effect, lastDuration);
                 }
             }
         } else {
@@ -365,7 +434,6 @@ public class ClientProxy extends CommonProxy {
 
     public void clientReset() {
         tool = Items.wooden_axe;
-        duration = 1.0F;
         inArea = false;
         lastAreaId = -1;
         lastDuration = 1.0F;
@@ -376,6 +444,10 @@ public class ClientProxy extends CommonProxy {
         overlayShape = null;
         overlayLastAction = 0L;
         visibleAreas.clear();
+        previewLd.clear();
+        previewRemarks.clear();
+        cachedDim = Integer.MIN_VALUE;
+        cachedArea = null;
         renderers = new EffectRenderers();
         clientTasks.clear();
         LightmapHook.setOffset(0.0D, 0.0D);

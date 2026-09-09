@@ -40,9 +40,11 @@ public class PrismShape extends AreaShape {
         super(anchors, closed, computeBounds(section, height, anchors, closed));
         this.section = section;
         this.height = height;
-        this.cx = section == Section.CIRCLE ? this.anchors.get(0).x : 0;
-        this.cz = section == Section.CIRCLE ? this.anchors.get(0).z : 0;
-        this.radius = section == Section.CIRCLE
+        // 防御：CIRCLE 依赖 anchors[0] 圆心与 anchors[1] 半径点，锚点不足时退化为无效零圆，
+        // 避免畸形存档/网络包在反序列化时直接越界抛错
+        this.cx = section == Section.CIRCLE && this.anchors.size() > 0 ? this.anchors.get(0).x : 0;
+        this.cz = section == Section.CIRCLE && this.anchors.size() > 0 ? this.anchors.get(0).z : 0;
+        this.radius = section == Section.CIRCLE && this.anchors.size() > 1
                 ? circleRadius(this.anchors.get(0), this.anchors.get(1))
                 : 0;
     }

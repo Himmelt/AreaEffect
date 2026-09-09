@@ -9,10 +9,11 @@ import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.server.MinecraftServer;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.soraworld.areaeffect.AreaEffect;
+import org.soraworld.areaeffect.AreaEffectMod;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
@@ -26,7 +27,10 @@ import java.util.function.Consumer;
  */
 public final class PacketChannel {
 
-    private static final Logger LOGGER = LogManager.getLogger(AreaEffect.MOD_NAME);
+    private static final Logger LOGGER = LogManager.getLogger(AreaEffectMod.MOD_NAME);
+
+    /** netty 线程投递、需在服务端主线程执行的逻辑（由 ServerTickEvent 每 tick 排空）。 */
+    private static final ConcurrentLinkedQueue<Runnable> SERVER_TASKS = new ConcurrentLinkedQueue<>();
 
     /** opcode → 消息类：接收解码查表。 */
     private static final Map<Byte, Class<? extends IPacket>> BY_ID = new ConcurrentHashMap<>();
@@ -37,7 +41,7 @@ public final class PacketChannel {
     /** 服务端方向处理逻辑：仅服务端侧绑定（CommonProxy），第二参为发包玩家。 */
     private static final Map<Byte, BiConsumer<IPacket, EntityPlayerMP>> SERVER = new ConcurrentHashMap<>();
 
-    private static final FMLEventChannel CHANNEL = NetworkRegistry.INSTANCE.newEventDrivenChannel(AreaEffect.MOD_ID);
+    private static final FMLEventChannel CHANNEL = NetworkRegistry.INSTANCE.newEventDrivenChannel(AreaEffectMod.MOD_ID);
 
     static {
         CHANNEL.register(new InboundRouter());
@@ -53,7 +57,7 @@ public final class PacketChannel {
     public static <T extends IPacket> void register(int id, Class<T> type) {
         Byte key = (byte) id;
         if (BY_ID.put(key, type) != null) {
-            throw new IllegalArgumentException("duplicate packet id " + id + " on channel " + AreaEffect.MOD_ID);
+            throw new IllegalArgumentException("duplicate packet id " + id + " on channel " + AreaEffectMod.MOD_ID);
         }
         BY_TYPE.put(type, key);
     }
@@ -71,7 +75,7 @@ public final class PacketChannel {
     private static Byte requireRegistered(Class<? extends IPacket> type) {
         Byte id = BY_TYPE.get(type);
         if (id == null) {
-            throw new IllegalArgumentException("packet not registered on channel " + AreaEffect.MOD_ID + ": " + type.getName());
+            throw new IllegalArgumentException("packet not registered on channel " + AreaEffectMod.MOD_ID + ": " + type.getName());
         }
         return id;
     }
@@ -104,35 +108,58 @@ public final class PacketChannel {
         ByteBuf buf = Unpooled.buffer();
         buf.writeByte(id);
         packet.toBytes(buf);
-        return new FMLProxyPacket(buf, AreaEffect.MOD_ID);
+        return new FMLProxyPacket(buf, AreaEffectMod.MOD_ID);
+    }
+
+    /** 在服务端主线程（ServerTick 驱动）排空待执行任务。 */
+    public static void drainServerTasks() {
+        Runnable task;
+        while ((task = SERVER_TASKS.poll()) != null) {
+            try {
+                task.run();
+            } catch (Throwable t) {
+                LOGGER.error("Error handling packet on channel " + AreaEffectMod.MOD_ID + " (server thread)", t);
+            }
+        }
     }
 
     /**
      * 入站路由。解码失败/未知 opcode 只丢弃并记日志，不向外抛。
+     *
+     * <p>线程模型：两侧回调均发生在 netty 线程。客户端方向的处理逻辑自行管理线程
+     * （GUI 等经 ClientProxy 的任务队列回主线程）；服务端方向统一投递到服务端主线程
+     * 执行——业务数据（选区 HashMap、区域效果列表、save() 落盘）都在主线程读写，
+     * netty 线程直接操作会与其并发读写（1.7.10 的 MinecraftServer 没有
+     * addScheduledTask，故由 ServerTickEvent 每 tick 排空本队列）。
      */
     static void route(ByteBuf buf, boolean serverSide, EntityPlayerMP player) {
         Map<Byte, BiConsumer<IPacket, EntityPlayerMP>> handlers = serverSide ? SERVER : CLIENT;
         try {
             if (buf.readableBytes() < 1) {
-                LOGGER.warn("Dropped empty packet on channel " + AreaEffect.MOD_ID);
+                LOGGER.warn("Dropped empty packet on channel " + AreaEffectMod.MOD_ID);
                 return;
             }
             byte id = buf.readByte();
             Class<? extends IPacket> type = BY_ID.get(id);
             if (type == null) {
-                LOGGER.warn("Dropped packet with unknown id " + id + " on channel " + AreaEffect.MOD_ID);
+                LOGGER.warn("Dropped packet with unknown id " + id + " on channel " + AreaEffectMod.MOD_ID);
                 return;
             }
             BiConsumer<IPacket, EntityPlayerMP> handler = handlers.get(id);
             if (handler == null) {
-                LOGGER.error("No handler bound for id " + id + " on channel " + AreaEffect.MOD_ID);
+                LOGGER.error("No handler bound for id " + id + " on channel " + AreaEffectMod.MOD_ID);
                 return;
             }
             IPacket packet = type.newInstance();
             packet.fromBytes(buf);
-            handler.accept(packet, player);
+            if (serverSide) {
+                // 服务端方向：投递到服务端主线程，与主线程业务串行化
+                SERVER_TASKS.add(() -> handler.accept(packet, player));
+            } else {
+                handler.accept(packet, player);
+            }
         } catch (Throwable t) {
-            LOGGER.error("Error handling packet on channel " + AreaEffect.MOD_ID, t);
+            LOGGER.error("Error handling packet on channel " + AreaEffectMod.MOD_ID, t);
         }
     }
 }
