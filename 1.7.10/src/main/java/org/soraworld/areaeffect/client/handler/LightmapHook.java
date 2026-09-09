@@ -167,6 +167,8 @@ public final class LightmapHook {
 
         HookedTexture(DynamicTexture origin) {
             super(16, 16);
+            // 构造仅为继承 DynamicTexture 类型，分配出的纹理本类永不使用，立即释放避免 GL id 泄漏
+            deleteGlTexture();
             this.origin = origin;
         }
 

@@ -12,11 +12,11 @@ import org.soraworld.areaeffect.common.shape.ShapeTypes;
  * 客户端选区交互：
  * <ul>
  *   <li>Shift+右键空气（持工具）→ 沿 {@link ShapeTypes#ALL} 轮切选区形状，overlay 图标+文字提示（无 GUI）</li>
- *   <li>Shift+左键（空气/方块，多边形顶点 ≥3）→ 闭合多边形（取消本次左键并发送闭合请求）</li>
  *   <li>非 Shift 右键空气（多边形）→ 以自定义消息 {@link org.soraworld.areaeffect.common.network.MessageClickAir}
  *       发送到服务端，与右键方块同入口处理，作为撤回上一顶点的触发事件</li>
  * </ul>
  * 注意：普通（非 Shift）左键/右键方块不得取消，否则 C02/C08 不发、服务端收不到锚点。
+ * 多边形无手动闭合动作：顶点 ≥3 即自动闭合可创建。
  */
 public class ClientSelectionHandler {
 

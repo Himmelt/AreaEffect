@@ -15,26 +15,19 @@ import java.util.List;
  */
 public class Selection {
 
-    public static final int PHASE_VERTICES = 0;
-    public static final int PHASE_COMPLETE = 3;
-
     /** 锚点数量上限（防恶意包 / 包体膨胀）。 */
     public static final int MAX_ANCHORS = 64;
 
     public String shapeType = ShapeTypes.TYPE_BOX;
     public final List<Vec3i> anchors = new ArrayList<>();
-    public boolean closed = false;
-    public int heightPhase = PHASE_VERTICES;
 
     public Selection() {
     }
 
-    /** 换形状：清空锚点 / 闭合标志 / 高度阶段。 */
+    /** 换形状：清空锚点。 */
     public void reset(String type) {
         this.shapeType = type == null || type.isEmpty() ? ShapeTypes.TYPE_BOX : type;
         this.anchors.clear();
-        this.closed = false;
-        this.heightPhase = PHASE_VERTICES;
     }
 
     public boolean isPolygon() {
@@ -73,16 +66,6 @@ public class Selection {
         if (!anchors.isEmpty()) {
             anchors.remove(anchors.size() - 1);
         }
-    }
-
-    /** 多边形闭合（Shift+左键 → 客户端发包 → 服务端处理）：顶点 ≥3 即完成，无定高步骤。 */
-    public boolean closePolygon() {
-        if (ShapeTypes.isPolygon(shapeType) && !closed && anchors.size() >= 3) {
-            closed = true;
-            heightPhase = PHASE_COMPLETE;
-            return true;
-        }
-        return false;
     }
 
     private void setAnchor(int index, Vec3i pos) {

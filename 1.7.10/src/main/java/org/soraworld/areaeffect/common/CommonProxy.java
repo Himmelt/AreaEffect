@@ -49,7 +49,7 @@ public class CommonProxy {
 
     private static final Logger LOGGER = LogManager.getLogger("AreaEffect");
 
-    protected final Map<UUID, Selection> selections = new HashMap<>();
+    protected final Map<UUID, Selection> selections = new ConcurrentHashMap<>();
     protected final Map<Integer, Map<Integer, Area>> lightAreas = new ConcurrentHashMap<>();
     protected final AreaServerHandler serverHandler = new AreaServerHandler(this);
     public Configuration config;
@@ -280,17 +280,10 @@ public class CommonProxy {
         updateSelection(player);
     }
 
-    /** 切换选区形状（重置锚点/闭合/高度阶段）。 */
+    /** 切换选区形状（重置锚点）。 */
     public void selectShape(EntityPlayerMP player, String type) {
         selectionOf(player).reset(type);
         updateSelection(player);
-    }
-
-    /** 闭合当前多边形选区；返回是否成功。 */
-    public boolean closePolygon(EntityPlayerMP player) {
-        boolean ok = selectionOf(player).closePolygon();
-        updateSelection(player);
-        return ok;
     }
 
     public Selection selectionOf(EntityPlayerMP player) {
@@ -381,7 +374,7 @@ public class CommonProxy {
     }
 
     /**
-     * 服务端响应选区形状设置 / 多边形闭合：校验 OP 权限与工具。
+     * 服务端响应选区形状设置：校验 OP 权限与工具。
      */
     public void handleSelectShape(EntityPlayerMP player, MessageSelectShape packet) {
         if (!hasPerm(player)) {
@@ -390,8 +383,6 @@ public class CommonProxy {
         }
         if (packet.type != null && !packet.type.isEmpty()) {
             selectShape(player, packet.type);
-        } else if (packet.close) {
-            closePolygon(player);
         }
     }
 
@@ -450,8 +441,6 @@ public class CommonProxy {
                 }
                 // 创建成功后重置选区（保留形状类型，锚点清空），可直接开始下一个选区
                 sel.anchors.clear();
-                sel.closed = false;
-                sel.heightPhase = Selection.PHASE_VERTICES;
                 updateSelection(player);
                 save();
             }
@@ -460,10 +449,10 @@ public class CommonProxy {
         }
     }
 
-    /** 找出与给定形状 AABB 冲突的全部已存区域 id。 */
+    /** 找出与给定形状冲突（方块级精确判定）的全部已存区域 id。 */
     public List<Integer> findConflictIds(int dim, AreaShape intent) {
         List<Integer> conflicts = new ArrayList<>();
-        for (Map.Entry<Integer, Area> entry : lightAreas.getOrDefault(dim, new HashMap<>()).entrySet()) {
+        for (Map.Entry<Integer, Area> entry : lightAreas.getOrDefault(dim, Collections.emptyMap()).entrySet()) {
             if (intent.conflict(entry.getValue().shape())) {
                 conflicts.add(entry.getKey());
             }
@@ -484,7 +473,7 @@ public class CommonProxy {
     }
 
     public Area findAreaAt(EntityPlayer player) {
-        for (Map.Entry<Integer, Area> entry : lightAreas.getOrDefault(player.dimension, new HashMap<>()).entrySet()) {
+        for (Map.Entry<Integer, Area> entry : lightAreas.getOrDefault(player.dimension, Collections.emptyMap()).entrySet()) {
             Area area = entry.getValue();
             if (area.contains(new Vec3d(player))) {
                 return area;
@@ -494,7 +483,7 @@ public class CommonProxy {
     }
 
     public boolean checkConflict(int dim, Area intent) {
-        for (Area area : lightAreas.getOrDefault(dim, new HashMap<>()).values()) {
+        for (Area area : lightAreas.getOrDefault(dim, Collections.emptyMap()).values()) {
             if (intent.conflict(area)) {
                 return true;
             }

@@ -27,7 +27,7 @@ public class MessageListReply implements IPacket {
         buf.writeInt(areas.size());
         for (Area area : areas) {
             buf.writeInt(area.id);
-            buf.writeBytes(Area.toByteBuf(area));
+            Area.writeBuf(buf, area);
         }
     }
 

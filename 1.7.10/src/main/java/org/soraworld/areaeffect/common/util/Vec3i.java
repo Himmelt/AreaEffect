@@ -21,4 +21,21 @@ public class Vec3i {
     public String toString() {
         return "(" + x + "," + y + "," + z + ')';
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof Vec3i)) {
+            return false;
+        }
+        Vec3i v = (Vec3i) o;
+        return x == v.x && y == v.y && z == v.z;
+    }
+
+    @Override
+    public int hashCode() {
+        return 31 * (31 * x + y) + z;
+    }
 }

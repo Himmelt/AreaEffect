@@ -1,7 +1,6 @@
 package org.soraworld.areaeffect.common.network;
 
 import io.netty.buffer.ByteBuf;
-import io.netty.buffer.Unpooled;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import org.soraworld.areaeffect.common.effect.AreaEffect;
@@ -122,8 +121,8 @@ public class Area {
         return effect;
     }
 
-    public static ByteBuf toByteBuf(Area area) {
-        ByteBuf buf = Unpooled.buffer();
+    /** 流式写入目标缓冲：type + 锚点 + closed + 备注 + 效果列表（与 fromByteBuf 对应）。 */
+    public static void writeBuf(ByteBuf buf, Area area) {
         ShapeTypes.writeBuf(area.shape(), buf);
         EffectTypes.writeString(buf, area.getRemark());
         List<AreaEffect> effects = area.effects;
@@ -132,7 +131,6 @@ public class Area {
             EffectTypes.writeString(buf, effect.typeId());
             effect.writeToBuf(buf);
         }
-        return buf;
     }
 
     public static Area fromByteBuf(ByteBuf buf) {

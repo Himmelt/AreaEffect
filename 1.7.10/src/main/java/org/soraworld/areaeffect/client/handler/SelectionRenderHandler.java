@@ -226,8 +226,8 @@ public class SelectionRenderHandler {
 
         Tessellator tessellator = Tessellator.instance;
         if (drawSelection) {
-            // 多边形选区：未闭合时按通天柱围栏方式逐边显示，闭合后按完整形状
-            if (sel.isPolygon() && !sel.closed) {
+            // 多边形选区：选点过程中按通天柱围栏方式逐边显示，创建时自动闭合
+            if (sel.isPolygon()) {
                 drawPolygonPartial(tessellator, sel.anchors);
             } else {
                 AreaShape preview = ShapeTypes.build(sel);
@@ -290,7 +290,7 @@ public class SelectionRenderHandler {
         GL11.glLineWidth(2.0F);
         GL11.glColor4f(0.0F, 1.0F, 0.0F, 1.0F);
         tessellator.startDrawing(GL11.GL_LINES);
-        int levels = 256;
+        int levels = AreaShape.FULL_MAX_Y;
         int n = anchors.size();
         // 相邻边
         for (int i = 0; i < n - 1; i++) {

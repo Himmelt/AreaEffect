@@ -531,6 +531,9 @@ public class GuiAreas extends GuiScreen {
         }
         int visible = listVisible();
         int content = list.size() * ROW_H;
+        if (content <= 0) {
+            return; // 拖拽中列表被清空（如服务端广播删除）：无内容可滚，避免除零
+        }
         int maxScroll = Math.max(0, content - visible);
         int barH = Math.max(14, visible * visible / content);
         // 滑块可用行程 = 可视高 - 滑块高；映射到滚动量

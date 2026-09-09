@@ -24,7 +24,7 @@ public class MessageAreaUpdate implements IPacket {
     public void toBytes(ByteBuf buf) {
         buf.writeInt(dim);
         buf.writeInt(id);
-        buf.writeBytes(Area.toByteBuf(data));
+        Area.writeBuf(buf, data);
     }
 
     @Override

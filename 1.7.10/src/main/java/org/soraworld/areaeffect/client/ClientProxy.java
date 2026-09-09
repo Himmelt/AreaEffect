@@ -114,18 +114,20 @@ public class ClientProxy extends CommonProxy {
         });
     }
 
-    /** 同步服务端设置的选区工具（MP 客户端不读 config）。 */
+    /** 同步服务端设置的选区工具（MP 客户端不读 config）。netty 线程回调，写 tool 须回主线程。 */
     public void handleToolSync(MessageToolSync packet) {
-        try {
-            Object object = Item.itemRegistry.getObject(packet.toolName);
-            if (object instanceof Item) {
-                tool = (Item) object;
-            } else {
+        runOnClientThread(() -> {
+            try {
+                Object object = Item.itemRegistry.getObject(packet.toolName);
+                if (object instanceof Item) {
+                    tool = (Item) object;
+                } else {
+                    tool = Items.wooden_axe;
+                }
+            } catch (Throwable ignored) {
                 tool = Items.wooden_axe;
             }
-        } catch (Throwable ignored) {
-            tool = Items.wooden_axe;
-        }
+        });
     }
 
     public void sendListRequest() {
@@ -172,8 +174,6 @@ public class ClientProxy extends CommonProxy {
             for (Vec3i anchor : packet.anchors) {
                 selSelection.anchors.add(anchor);
             }
-            selSelection.closed = packet.closed;
-            selSelection.heightPhase = packet.heightPhase;
         });
     }
 
@@ -220,12 +220,7 @@ public class ClientProxy extends CommonProxy {
 
     /** 客户端发送切换选区形状请求。 */
     public void sendSelectShape(String type) {
-        PacketChannel.sendToServer(new MessageSelectShape(type, false));
-    }
-
-    /** 客户端发送闭合多边形请求。 */
-    public void sendClosePolygon() {
-        PacketChannel.sendToServer(new MessageSelectShape("", true));
+        PacketChannel.sendToServer(new MessageSelectShape(type));
     }
 
     /** 客户端发送撤回/右键空气事件（服务端与右键方块同入口处理，作为多边形撤回）。 */

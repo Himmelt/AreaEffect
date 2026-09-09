@@ -13,8 +13,6 @@ public class MessageSelection implements IPacket {
 
     public String shapeType = ShapeTypes.TYPE_BOX;
     public Vec3i[] anchors = new Vec3i[0];
-    public boolean closed = false;
-    public int heightPhase = Selection.PHASE_VERTICES;
 
     public MessageSelection() {
     }
@@ -23,8 +21,6 @@ public class MessageSelection implements IPacket {
         if (sel != null) {
             this.shapeType = sel.shapeType;
             this.anchors = sel.anchors.toArray(new Vec3i[0]);
-            this.closed = sel.closed;
-            this.heightPhase = sel.heightPhase;
         }
     }
 
@@ -37,8 +33,6 @@ public class MessageSelection implements IPacket {
             buf.writeInt(anchor.y);
             buf.writeInt(anchor.z);
         }
-        buf.writeBoolean(closed);
-        buf.writeByte(heightPhase);
     }
 
     @Override
@@ -49,7 +43,5 @@ public class MessageSelection implements IPacket {
         for (int i = 0; i < size; i++) {
             anchors[i] = new Vec3i(buf.readInt(), buf.readInt(), buf.readInt());
         }
-        closed = buf.readBoolean();
-        heightPhase = buf.readByte();
     }
 }
