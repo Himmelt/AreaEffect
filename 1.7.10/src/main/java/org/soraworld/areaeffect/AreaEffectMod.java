@@ -7,7 +7,6 @@ import cpw.mods.fml.common.event.FMLPreInitializationEvent;
 import cpw.mods.fml.common.event.FMLServerStartingEvent;
 import cpw.mods.fml.common.event.FMLServerStoppingEvent;
 import net.minecraft.world.WorldServer;
-import net.minecraftforge.common.config.Configuration;
 import org.soraworld.areaeffect.common.command.AreaCommand;
 import org.soraworld.areaeffect.common.CommonProxy;
 
@@ -33,7 +32,7 @@ public class AreaEffectMod {
 
     @Mod.EventHandler
     public void onPreInit(FMLPreInitializationEvent event) {
-        proxy.config = new Configuration(event.getSuggestedConfigurationFile());
+        proxy.initConfig(event.getSuggestedConfigurationFile());
         proxy.onPreInit(event);
     }
 

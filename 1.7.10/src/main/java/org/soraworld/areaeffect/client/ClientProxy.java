@@ -40,7 +40,6 @@ import org.soraworld.areaeffect.common.util.Vec3i;
 import org.soraworld.areaeffect.common.util.Vec3d;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -62,7 +61,7 @@ public class ClientProxy extends CommonProxy {
     private final Map<Integer, Set<Integer>> visibleAreas = new ConcurrentHashMap<>();
 
     /** 编辑预览亮度/时长覆盖：dim → id → {lightness, duration}。
-     *  独立于共享 Area，预览值不进入 lightAreas，避免被 save() 落盘。 */
+     *  独立于共享 Area，预览值不进入 areas，避免被落盘。 */
     private final Map<Integer, Map<Integer, float[]>> previewLd = new ConcurrentHashMap<>();
     /** 编辑预览备注覆盖：dim → id → String（同样不入共享对象）。 */
     private final Map<Integer, Map<Integer, String>> previewRemarks = new ConcurrentHashMap<>();
@@ -151,16 +150,13 @@ public class ClientProxy extends CommonProxy {
         if (packet.data == null) {
             return; // 反序列化失败（如未知形状），丢弃避免注入 null
         }
-        lightAreas.computeIfAbsent(packet.dim, dim -> new ConcurrentHashMap<Integer, Area>()).put(packet.id, packet.data);
+        areas.put(packet.dim, packet.id, packet.data);
         // 更新会替换 Area 对象（shape/effects 均可能变化），缓存持有旧引用须失效
         invalidateAreaCache(packet.dim, packet.id);
     }
 
     public void handleDelete(MessageAreaDelete packet) {
-        Map<Integer, Area> areas = lightAreas.get(packet.dim);
-        if (areas != null && !areas.isEmpty()) {
-            areas.remove(packet.id);
-        }
+        areas.remove(packet.dim, packet.id);
         // 缓存持有已删对象的强引用且 shape 不可变，contains 恒真不会自动失效，须显式清除
         invalidateAreaCache(packet.dim, packet.id);
         // 广播统一刷新：回主线程更新已打开的管理界面
@@ -300,13 +296,11 @@ public class ClientProxy extends CommonProxy {
         List<Area> result = new ArrayList<>();
         Set<Integer> ids = visibleAreas.get(dim);
         if (ids != null) {
-            Map<Integer, Area> areas = lightAreas.get(dim);
-            if (areas != null) {
-                for (Integer id : ids) {
-                    Area area = areas.get(id);
-                    if (area != null) {
-                        result.add(area);
-                    }
+            Map<Integer, Area> dimAreas = areas.inDim(dim);
+            for (Integer id : ids) {
+                Area area = dimAreas.get(id);
+                if (area != null) {
+                    result.add(area);
                 }
             }
         }
@@ -379,20 +373,12 @@ public class ClientProxy extends CommonProxy {
 
     /** 客户端本地区域列表快照（按 id 升序，用于返回列表界面，无需再走服务端请求）。 */
     public List<Area> getAreasLocal(int dim) {
-        Map<Integer, Area> areas = lightAreas.get(dim);
-        if (areas == null || areas.isEmpty()) {
-            return new ArrayList<>();
-        }
-        List<Area> list = new ArrayList<>(areas.values());
-        Collections.sort(list, (a, b) -> Integer.compare(a.id, b.id));
-        return list;
+        return areas.sortedIn(dim);
     }
 
     /** 所有存在区域的维度列表（升序）。 */
     public List<Integer> getDimsLocal() {
-        List<Integer> dims = new ArrayList<>(lightAreas.keySet());
-        Collections.sort(dims);
-        return dims;
+        return areas.dims();
     }
 
     /** 指示玩家是否正站在某区域内并返回该区域（带缓存）。
@@ -442,9 +428,8 @@ public class ClientProxy extends CommonProxy {
         inArea = false;
         lastAreaId = -1;
         lastDuration = 1.0F;
-        AREA_ID = 0;
-        lightAreas.clear();
-        selections.clear();
+        areas.clear();
+        selections.clearAll();
         selSelection = null;
         overlayShape = null;
         overlayLastAction = 0L;
