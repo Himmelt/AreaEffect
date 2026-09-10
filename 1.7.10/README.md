@@ -2,23 +2,29 @@
 
 ### 简介
 
-该Mod可以在服务端创建特殊亮度 (黑暗)的区域，当玩家进入该区域时，其客户端会切换对应亮度（Gamma值），
+该Mod可以在服务端创建指定感知亮度的区域。玩家进入区域时，客户端会把光照贴图平滑混合到该区域的
+目标亮度（CIE L*，0-100）；离开区域时再平滑恢复原画面。
 
-玩家离开区域时恢复原亮度。 通过提高Gamma值，可以不用添加发光方块而达到提高建筑内部亮度的效果，同时能完美地消除建筑内部不美观的阴影。
-如果将Gamma值设置得较低（小于1）还可以实现将指定区域的夜色变得更黑暗的效果。
-**注意，Gamma值带来的亮度只是画面效果，并不会改变实际亮度，也不会改变阳光传感器检测到的值，不会影响刷怪。**
+由于实现于光照贴图的接收端，玩家自身的 Gamma 设置照常生效且不会被读写。提高目标亮度可以不用添加
+发光方块就提升建筑内部亮度，并消除不美观的阴影；设置得低于环境亮度时还能让指定区域更暗。
+**注意，亮度只是画面效果，并不会改变实际亮度，也不会改变阳光传感器检测到的值，不会影响刷怪。**
 
 ### 特性
 
-1. 手持选区工具 (默认木斧)左键选择起点，右键选择终点。
+1. 手持选区工具 (默认木斧) 左键选点、右键选点。支持 7 种选区形状：长方体、全高方柱、圆柱、
+   全高圆柱、球体、多边形柱、全高多边形柱；手持工具时 Shift+右键空气可轮切形状，屏幕中央显示当前形状。
 
-2. 每个区域设置独立的亮度和过渡速度。
+2. 每个区域独立设置目标亮度（CIE L*，0-100）与过渡时长（0.1-60 秒），进出区域时画面平滑过渡。
 
-3. 在安装有WE-CUI的客户端，可以像WE一样显示选区边界。
+3. 选区与区域线框由本模组自绘，无需安装 WE-CUI 等外部模组。
 
-4. 单文件支持 1.7.10-1.12.2 版本，1.13+ 使用其他文件。
+4. 客户端按 J 打开区域管理面板（区域列表 / 传送 / 删除 / 修改亮度与时长 / 备注 / 线框开关），
+   按 K 开关选区线框显示。
 
-5. 配置文件已转移到主世界存档目录下，单机时每个存档都使用各自的配置文件，服务器则使用主世界存档目录下的配置文件。
+5. 区域数据随存档保存（`<存档目录>/areaeffect.dat`，一个世界一个文件）；模组配置文件仍在
+   `config/areaeffect.cfg`。
+
+6. 本分支（1.7.10）只支持 1.7.10，其它 MC 版本由对应分支/文件提供。
 
 ### 指令
 
@@ -26,31 +32,36 @@
 
 ```
 
-/areaeffect pos1                    设置玩家当前位置为选区起点
+/areaeffect pos1                            设置玩家当前位置为选区起点
 
-/areaeffect pos2                    设置玩家当前位置为选区终点
+/areaeffect pos2                            设置玩家当前位置为选区终点
 
-/areaeffect create [lightness] [duration]  根据选区创建区域，可选参数[light:小数]为目标亮度 (CIE L*, 0-100),[speed:小数]为过渡时长(秒)
+/areaeffect create [lightness] [duration]   根据当前选区创建区域；lightness 为目标亮度
+                                            (CIE L*, 0-100，默认 100)，duration 为过渡时长(秒，默认 1)
 
-/areaeffect delete                  删除玩家当前所在的区域
-
-/areaeffect info                    显示玩家当前所在区域的信息，如果客户端安装有WE-CUI，则会显示范围
-
-/areaeffect list [dim|all]          列出(某世界的)所有区域，没有参数时为玩家所在世界，参数为all时为全部世界，参数为整数时，为对应维度的世界
-
-/areaeffect tp <id>                 传送到指定<id:整数>的区域的中心位置(无视方块阻碍)
-
-/areaeffect lightness [value]           查看/设置当前区域的亮度 [value:小数]
-
-/areaeffect duration [value]           查看/设置当前区域的过渡时长(秒) [value:小数]（变化值/tick）
-
-/areaeffect tool                    手持为空，查看选区工具；手持非空，设置选区工具为当前手持物
+/areaeffect tool                            手持为空时查看选区工具；手持非空时把选区工具设为当前手持物
 
 ```
+
+**区域管理（列表 / 传送 / 删除 / 修改亮度与时长 / 备注 / 线框开关）已迁移到客户端面板，
+按 J 打开，不再提供对应指令。** 详见上文「特性」。
 
 ### 更新日志
 
 ```yaml
+
+1.4.0:
+
+  - 选区形状扩展为 7 种（长方体 / 全高方柱 / 圆柱 / 全高圆柱 / 球体 / 多边形柱 / 全高多边形柱），
+    手持工具时 Shift+右键空气轮切，屏幕中央显示当前形状
+
+  - 新增区域管理面板（默认 J 键）：区域列表 / 传送 / 删除 / 亮度与时长（拖动实时预览） / 备注 / 线框开关
+
+  - 新增区域备注（最长 60 字符）；创建时若与已有区域冲突，会自动显示冲突区域的线框
+
+  - 区域数据随存档保存（存档目录下的 areaeffect.dat，一个世界一个文件，临时文件+替换的原子写入）
+
+  - 亮度语义统一为 CIE L* (0-100)，过渡时长以秒计；区域管理相关指令不再提供，改由面板操作
 
 1.3.0:
 
@@ -112,54 +123,54 @@
 
 ### Description
 
-This mod can create areas with specific light.
+This mod creates areas with a specific perceived lightness.
 
-When players move into these areas, their clients will change the light (gamma) to the specific light.
+When players enter such an area, their client smoothly blends the rendered lightmap to the area's
+target brightness (CIE L*, 0-100); when they leave, the client blends back to the vanilla screen.
 
-When they move out the area, the client will restore the original light. By increase the gamma value, we can light the
-buildings' inside without luminous block
-
-and erase all the dark corners of the buildings. If we set the gamma lower than 1.0, we can make the area darker.
-**Notice, The light of gamma is just video effect, the real light (value of Daylight Sensor) is not changed.**
+Because it works on the receiving end of the lightmap, the player's own gamma setting keeps working
+and is never modified. Raising the target lightness brightens a building's interior without adding
+luminous blocks and removes unsightly dark corners; setting it below the ambient level makes the
+area darker.
+**Notice: the lightness is a screen effect only. The real light level (including what a Daylight Sensor reads) is not changed, and mob spawning is not affected.**
 
 ### Features
 
-1. Hold the select tool (default WoodenAxe), left click to set the start point,
+1. Hold the select tool (default WoodenAxe): left click to set one point, right click to set another.
+   7 shape types are supported: box, full square pillar, cylinder, full round pillar, sphere,
+   polygon prism and full polygon pillar. While holding the tool, Shift + right click in air cycles
+   the shape, and an overlay shows the current one.
 
-right click to set the end point.
+2. Each area has its own target lightness (CIE L*, 0-100) and transition duration (0.1-60 s);
+   the screen fades smoothly when entering or leaving an area.
 
-2. The client with WE-CUI mod can show the selected area's border.
+3. Selection and area wireframes are drawn by this mod itself — no WE-CUI or other mod required.
 
-3. Single file supports 1.7.10 version and higher.
+4. Press J to open the area manager (area list / teleport / delete / edit lightness and duration /
+   remark / wireframe toggle); press K to toggle the selection wireframe.
 
-4. Config file has been moved to world's save location, each save has a config file. On server side, config is loaded
-   from overworld's save location.
+5. Area data is stored per world at `<save dir>/areaeffect.dat`; the mod config file stays at
+   `config/areaeffect.cfg`.
+
+6. This branch supports 1.7.10 only; other MC versions are provided by their own branches/files.
 
 ### Commands
 
-```
-
-/areaeffect pos1             set player's pos as area start point
-
-/areaeffect pos2             set player's pos as area end point
-
-/areaeffect create [lightness]   create area by current selected area, the optional arg is light (range: -15.0 - 15.0)
-
-/areaeffect delete           delete the area at player's pos
-
-/areaeffect info             show the info of the area at player's pos
-
-/areaeffect list [dim|all]   list the world's areas, empty args using player's world, arg "all" will list all world's areas, 
-
-int arg using the world with the dimension
-
-/areaeffect tp <id>          teleport to area's center of the id
-
-/areaeffect level [lightness]    get/set the current area's light
-
-/areaeffect speed [duration]    get/set the current area's light change speed (float/tick)
-
-/areaeffect tool             hand empty, show select tool; hand item,set select tool to the item in hand
+Only players with OP permission level 2+ can use these.
 
 ```
+
+/areaeffect pos1                             set player's pos as the selection start point
+
+/areaeffect pos2                             set player's pos as the selection end point
+
+/areaeffect create [lightness] [duration]    create an area from the current selection; lightness is
+                                             CIE L* (0-100, default 100), duration in seconds (default 1)
+
+/areaeffect tool                             hand empty: show the select tool; holding an item: set it as the select tool
+
+```
+
+**Area management (list / teleport / delete / edit lightness and duration / remark / wireframe)
+has moved to the client-side panel — press J. No commands are provided for it any more.**
 

@@ -190,7 +190,12 @@ public class SphereShape extends AreaShape {
     }
 
     @Override
-    public String describe() {
-        return "球心(" + cx + "," + cy + "," + cz + ") R=" + radius;
+    public String describeKey() {
+        return "gui.areaeffect.desc." + typeId();
+    }
+
+    @Override
+    public Object[] describeArgs() {
+        return new Object[]{cx, cy, cz, radius};
     }
 }

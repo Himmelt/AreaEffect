@@ -66,6 +66,11 @@ public class AreaCommand extends CommandBase {
             }
         } else if ("tool".equals(sub)) {
             proxy.commandTool(player);
+        } else {
+            // 未识别或缺失子命令：必须给出用法，不能静默返回。
+            // 区域管理（列表/传送/删除/改亮度时长）已迁移到客户端面板（默认 J 键）不再提供指令，
+            // 缺少提示会让玩家误判为指令失效。
+            proxy.sendChatTranslation(player, "chat.command.usage");
         }
     }
 

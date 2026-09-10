@@ -10,6 +10,7 @@ import org.lwjgl.input.Mouse;
 import org.soraworld.areaeffect.client.ClientProxy;
 import org.soraworld.areaeffect.common.effect.LightnessEffect;
 import org.soraworld.areaeffect.common.network.Area;
+import org.soraworld.areaeffect.common.shape.AreaShape;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -139,6 +140,17 @@ public class GuiAreas extends GuiScreen {
         return false;
     }
 
+    /**
+     * 界面关闭的统一清理点。预览覆盖只存在于客户端覆盖表（不入共享 Area），
+     * 必须在<b>任何</b>关闭路径上移除：否则"拖过滑条但没点保存"的值会继续参与渲染，
+     * 与存档值不一致。Esc 只是其中一条路径（死亡换屏、被其它界面抢占同样会触发这里）。
+     */
+    @Override
+    public void onGuiClosed() {
+        super.onGuiClosed();
+        clearSelection();
+    }
+
     /** 供外部（列表请求回复）触发刷新：保留当前选中维度。 */
     public void refreshFromProxy() {
         int prefer = dimIdx >= 0 && dimIdx < dims.size() ? dims.get(dimIdx) : -1;
@@ -227,8 +239,10 @@ public class GuiAreas extends GuiScreen {
         int sw = detX2 - detX1 - 20;
         lightSlider = new Slider(detX1 + 10, top + 44, sw, 18,
                 translate("gui.areaeffect.edit.lightness"), 0.0F, 100.0F, 90.0F, 1.0F);
+        // 下限取 0.1（与渲染端 Math.max(0.05, …) 的实际生效下限一致）：
+        // LightnessEffect 对 <=0 会静默回落为 1 秒，滑条不应允许拖出这种无效值
         durationSlider = new Slider(detX1 + 10, top + 70, sw, 18,
-                translate("gui.areaeffect.edit.duration"), 0.0F, 60.0F, 1.0F, 0.1F);
+                translate("gui.areaeffect.edit.duration"), 0.1F, 60.0F, 1.0F, 0.1F);
         remarkField = new GuiTextField(fontRendererObj, detX1 + 34, top + 6, sw - 24, 16);
         remarkField.setMaxStringLength(Area.REMARK_MAX);
         buttonList.add(lightSlider);
@@ -292,7 +306,7 @@ public class GuiAreas extends GuiScreen {
             } else if (hov) {
                 drawRect(dimX1 + 1, y, dimX2 - 1, y + ROW_H, argb(COLOR_HOVER_ROW));
             }
-            String label = "DIM " + dims.get(i);
+            String label = StatCollector.translateToLocalFormatted("gui.areaeffect.list.dim", dims.get(i));
             drawCenteredString(fontRendererObj, label, (dimX1 + dimX2) / 2, y + 5, sel ? COLOR_TEXT_HEAD : COLOR_TEXT_BODY);
         }
 
@@ -347,8 +361,11 @@ public class GuiAreas extends GuiScreen {
             if (!text.equals(proxy.getEffectiveRemark(dims.get(dimIdx), selected))) {
                 proxy.previewAreaRemark(dims.get(dimIdx), selected.id, text);
             }
-            // 坐标详情：最后一行（滑动条之后），按形状显示
-            drawCenteredString(fontRendererObj, selected.shape().describe(),
+            // 坐标详情：最后一行（滑动条之后），按形状显示。
+            // 文案本地化：形状层只提供键与参数（StatCollector 负责组装）
+            AreaShape shape = selected.shape();
+            drawCenteredString(fontRendererObj,
+                    StatCollector.translateToLocalFormatted(shape.describeKey(), shape.describeArgs()),
                     (detX1 + detX2) / 2, top + 96, COLOR_TEXT_BODY);
         } else {
             String hint = translate("gui.areaeffect.list.noselect");
@@ -425,7 +442,7 @@ public class GuiAreas extends GuiScreen {
     @Override
     protected void keyTyped(char typedChar, int keyCode) {
         if (keyCode == Keyboard.KEY_ESCAPE) {
-            clearSelection();
+            // 预览清理统一由 onGuiClosed 负责（displayGuiScreen(null) 会回调它）
             mc.displayGuiScreen(null);
             return;
         }
@@ -648,7 +665,7 @@ public class GuiAreas extends GuiScreen {
     }
 
     /**
-     * 扁平滑动条：拖动步进取整（1.7.10 拖动由 drawButton 每帧驱动 mouseDragged），
+     * 扁平滑动条：拖动步进取整（拖动由本类的 drawButton 每帧自驱，见其内部说明），
      * 天蓝填充 + 白色滑块，显示"标签 数值"。
      */
     private static class Slider extends GuiButton {
@@ -730,7 +747,10 @@ public class GuiAreas extends GuiScreen {
             if (!visible) {
                 return;
             }
-            // 1.7.10 拖动由绘制驱动（GuiButton.drawButton 每帧调 mouseDragged），这里必须自己触发
+            // 【不可删除】1.7.10 没有任何框架回调会调用 mouseDragged：GuiScreen.mouseClickMove
+            // 是空实现（GuiScreen.java 中方法体为空），GuiButton.mouseDragged 也没有调用方，
+            // mouseClicked 只处理按下、不转发拖动。拖动之所以生效完全依赖这里每帧自驱一次，
+            // 删掉这一行即两个滑条全部无法拖动。
             this.mouseDragged(mc, mouseX, mouseY);
             // 轨道
             drawRect(xPosition, yPosition, xPosition + width, yPosition + height, argb(COLOR_SLIDER_TRACK));

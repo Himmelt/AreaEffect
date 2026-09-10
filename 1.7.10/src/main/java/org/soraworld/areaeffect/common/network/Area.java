@@ -114,13 +114,14 @@ public class Area {
         }
     }
 
+    /**
+     * 从缓冲读回区域。无论形状能否识别，remark 与 effects 都会被完整读走再返回：
+     * 调用方（如 {@code MessageListReply}）是在循环里连续读多个区域的，
+     * 中途提前 return 会让后续所有元素从错误偏移开始解析（表现为列表缺项/乱码/整包丢弃）。
+     */
     public static Area fromByteBuf(ByteBuf buf) {
         AreaShape shape = ShapeTypes.fromBuf(buf);
-        if (shape == null) {
-            return null;
-        }
-        Area area = new Area(shape, 100.0F, 1.0F);
-        area.setRemark(EffectTypes.readString(buf));
+        String remark = EffectTypes.readString(buf);
         // 效果数量收窄到合理上限，防恶意包一次性申请海量对象（与 MessageSetProps 一致）
         int size = Math.min(Math.max(buf.readInt(), 0), 16);
         List<AreaEffect> effects = new ArrayList<>(size);
@@ -130,6 +131,11 @@ public class Area {
                 effects.add(effect);
             }
         }
+        if (shape == null) {
+            return null; // 形状不可识别：字节已消费到元素边界，调用方可安全继续读下一个
+        }
+        Area area = new Area(shape, 100.0F, 1.0F);
+        area.setRemark(remark);
         area.setEffects(effects);
         return area;
     }

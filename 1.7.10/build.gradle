@@ -3,7 +3,17 @@ plugins {
     id 'com.gtnewhorizons.retrofuturagradle' version '2.0.3'
 }
 
-version = '1.4.0'
+// 版本号的唯一来源是 AreaEffectMod.MOD_VERSION：@Mod(version) 与 mcmod.info 必须一致，
+// 这里直接解析源码常量，避免两处分别手改后漂移。
+def modVersion = '1.4.0'
+def modSource = file('src/main/java/org/soraworld/areaeffect/AreaEffectMod.java')
+if (modSource.exists()) {
+    def matcher = modSource.text =~ /MOD_VERSION\s*=\s*"([^"]+)"/
+    if (matcher.find()) {
+        modVersion = matcher.group(1)
+    }
+}
+version = modVersion
 group = 'org.soraworld.areaeffect'
 
 base { archivesName = 'AreaEffect-1.7.10' }
@@ -19,6 +29,11 @@ minecraft {
     username = 'Himmelt'
 }
 
+// 依赖解析【有意】只走私有阿里云镜像，URL 与凭据均取自 ALIYUN_MVN_* 三个环境变量。
+// 这里刻意不添加 mavenCentral() / mavenLocal() 兜底：公共仓库镜像可能出现版本不一致
+// 的构件，静默回退反而会掩盖"环境变量未配置"这一问题。因此在本机/CI 上必须预先设好
+// ALIYUN_MVN_URL、ALIYUN_MVN_USERNAME、ALIYUN_MVN_PASSWORD，否则构建会在配置期直接失败
+// —— 这是预期行为，不是缺陷，请勿据"无兜底仓库"判为异常。
 repositories {
     maven {
         credentials {

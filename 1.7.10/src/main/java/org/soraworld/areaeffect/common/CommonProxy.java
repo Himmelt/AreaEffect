@@ -5,7 +5,6 @@ import cpw.mods.fml.common.event.FMLPreInitializationEvent;
 import net.minecraft.command.ICommandSender;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
-import net.minecraft.event.ClickEvent;
 import net.minecraft.init.Items;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
@@ -57,6 +56,12 @@ public class CommonProxy {
     protected Item tool = Items.wooden_axe;
     protected int AREA_ID = 0;
 
+    /**
+     * 存档是否有未落盘的改动。NBT 落盘合并到 {@link #flushStore()}（每服务端 tick 一次），
+     * 避免在 GUI 里连续调参时每次改动都全量重写整个存档文件。
+     */
+    private volatile boolean storeDirty = false;
+
     /** 网络消息是否已注册（每进程恰一次，见 registerAllMessagePackets）。 */
     private static boolean networkRegistered = false;
 
@@ -77,6 +82,8 @@ public class CommonProxy {
         networkRegistered = true;
         PacketChannel.register(1, MessageAreaUpdate.class);
         PacketChannel.register(2, MessageAreaDelete.class);
+        // 3、4 为历史遗留空缺（旧版消息已移除）。保留编号不回收：
+        // 一旦复用，与旧客户端/旧服务端混连时会误解析成已删除的消息类型。
         PacketChannel.register(5, MessageSelection.class);
         PacketChannel.register(6, MessageListRequest.class);
         PacketChannel.register(7, MessageListReply.class);
@@ -141,13 +148,31 @@ public class CommonProxy {
         setSelectTool(config.getString("tool", "general", "wooden_axe", "Select Tool"));
         lightAreas.clear();
         AREA_ID = 0;
+        storeDirty = false;
         if (storeFile != null && storeFile.exists()) {
             readAreasNbt(storeFile);
         }
     }
 
+    /**
+     * 标记存档为脏（含把当前工具名写回内存配置）。真正的落盘由 {@link #flushStore()} 合并执行，
+     * 因此本方法可以在一次 GUI 操作里被反复调用而不产生重复 IO。
+     */
     public void save() {
         config.get("general", "tool", "wooden_axe", "Select Tool").set(getToolName());
+        storeDirty = true;
+    }
+
+    /**
+     * 把脏存档落盘（配置文件 + 区域 NBT）。由 {@code AreaServerHandler} 每服务端 tick 调用，
+     * 服务端停止时也会调用一次（{@code AreaEffectMod#onServerStopping}），
+     * 因此改动最多延迟一个 tick 写入，正常关服不会丢失数据。
+     */
+    public void flushStore() {
+        if (!storeDirty) {
+            return;
+        }
+        storeDirty = false;
         config.save();
         if (storeFile != null) {
             writeAreasNbt(storeFile);
@@ -303,7 +328,9 @@ public class CommonProxy {
      */
     public void handleListRequest(EntityPlayerMP player) {
         if (!hasPerm(player)) {
-            return; // 无权限，静默忽略，客户端不会收到回复也就不会打开 GUI
+            // 与其它入口保持一致：必须给出反馈。静默返回会让玩家以为按键失效/面板坏了
+            sendChatTranslation(player, "chat.perm.denied");
+            return;
         }
         Map<Integer, Area> areas = lightAreas.get(player.dimension);
         List<Area> list;
@@ -380,15 +407,19 @@ public class CommonProxy {
     }
 
     /**
-     * 服务端响应选区形状设置：校验 OP 权限与工具。
+     * 服务端响应选区形状设置：校验 OP 权限，并按 {@link ShapeTypes#ALL} 白名单校验类型。
+     * 形状类型来自客户端，不校验就会让任意字符串进入选区状态并随 {@code MessageSelection}
+     * 回显到所有客户端。
      */
     public void handleSelectShape(EntityPlayerMP player, MessageSelectShape packet) {
         if (!hasPerm(player)) {
             sendChatTranslation(player, "chat.perm.denied");
             return;
         }
-        if (packet.type != null && !packet.type.isEmpty()) {
+        if (ShapeTypes.isValid(packet.type)) {
             selectShape(player, packet.type);
+        } else {
+            LOGGER.warn("Rejected unknown select shape '{}' from {}", packet.type, player.getCommandSenderName());
         }
     }
 
@@ -409,7 +440,7 @@ public class CommonProxy {
     }
 
     public void sendAllAreasTo(EntityPlayerMP player) {
-        if (isDedicated(player)) {
+        if (isDedicated()) {
             lightAreas.forEach((dim, areas) -> areas.forEach((id, area) -> sendUpdateTo(player, dim, id, area)));
         }
     }
@@ -442,7 +473,7 @@ public class CommonProxy {
                 sendChatTranslation(player, "chat.create.conflict");
             } else {
                 sendChatTranslation(player, "chat.create.done");
-                if (isDedicated(player)) {
+                if (isDedicated()) {
                     sendUpdateToAll(player.dimension, area.id, area);
                 }
                 // 创建成功后重置选区（保留形状类型，锚点清空），可直接开始下一个选区
@@ -557,12 +588,12 @@ public class CommonProxy {
         return stack != null && stack.getItem().equals(tool);
     }
 
-    public static boolean isDedicated(EntityPlayerMP player) {
-        MinecraftServer server = getServer(player);
+    /**
+     * 当前是否专用服务端。单机下客户端与服务端加载的是同一 proxy 实例、数据本就同源，
+     * 调用点据此跳过对本地玩家的回发同步（推送也无害，只是无谓）。
+     */
+    public static boolean isDedicated() {
+        MinecraftServer server = MinecraftServer.getServer();
         return server != null && server.isDedicatedServer();
-    }
-
-    public static MinecraftServer getServer(EntityPlayerMP player) {
-        return MinecraftServer.getServer();
     }
 }

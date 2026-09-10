@@ -5,6 +5,7 @@ import cpw.mods.fml.common.SidedProxy;
 import cpw.mods.fml.common.event.FMLInitializationEvent;
 import cpw.mods.fml.common.event.FMLPreInitializationEvent;
 import cpw.mods.fml.common.event.FMLServerStartingEvent;
+import cpw.mods.fml.common.event.FMLServerStoppingEvent;
 import net.minecraft.world.WorldServer;
 import net.minecraftforge.common.config.Configuration;
 import org.soraworld.areaeffect.common.command.AreaCommand;
@@ -50,5 +51,15 @@ public class AreaEffectMod {
             proxy.setStoreFile(store);
             proxy.load();
         }
+    }
+
+    /**
+     * 关服前兜底落盘。区域改动平时由 {@code ServerTick} 合并写入（见
+     * {@code CommonProxy#flushStore}），这里保证最后一次改动（最多晚一个 tick）
+     * 不会随正常关服丢失。
+     */
+    @Mod.EventHandler
+    public void onServerStopping(FMLServerStoppingEvent event) {
+        proxy.flushStore();
     }
 }

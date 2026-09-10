@@ -12,6 +12,7 @@ import org.apache.logging.log4j.Logger;
 import org.soraworld.areaeffect.AreaEffectMod;
 
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.BiConsumer;
@@ -36,6 +37,8 @@ public final class PacketChannel {
     private static final Map<Byte, Class<? extends IPacket>> BY_ID = new ConcurrentHashMap<>();
     /** 消息类 → opcode：发送编码查表。 */
     private static final Map<Class<? extends IPacket>, Byte> BY_TYPE = new ConcurrentHashMap<>();
+    /** 已告警过的 opcode：畸形包反复到达时只记一次，避免客户端刷屏拖垮日志。 */
+    private static final Set<Byte> REPORTED_IDS = ConcurrentHashMap.newKeySet();
     /** 客户端方向处理逻辑：仅物理客户端绑定（ClientProxy），玩家参数恒为 null。 */
     private static final Map<Byte, BiConsumer<IPacket, EntityPlayerMP>> CLIENT = new ConcurrentHashMap<>();
     /** 服务端方向处理逻辑：仅服务端侧绑定（CommonProxy），第二参为发包玩家。 */
@@ -124,6 +127,25 @@ public final class PacketChannel {
     }
 
     /**
+     * 同一 opcode 只告警一次。未知 opcode / 未绑定处理逻辑属于持续状态（版本不一致或
+     * 构造错误）而非瞬时事件，逐包记录会被畸形包以极低成本刷爆日志。
+     *
+     * @param error {@code true} 记 ERROR（本侧缺处理逻辑，属代码缺陷）；
+     *              {@code false} 记 WARN（对端与本侧不匹配）
+     */
+    private static void reportOnce(byte id, String message, boolean error) {
+        if (!REPORTED_IDS.add(id)) {
+            return;
+        }
+        String full = message + " on channel " + AreaEffectMod.MOD_ID + " (further occurrences on this id are suppressed)";
+        if (error) {
+            LOGGER.error(full);
+        } else {
+            LOGGER.warn(full);
+        }
+    }
+
+    /**
      * 入站路由。解码失败/未知 opcode 只丢弃并记日志，不向外抛。
      *
      * <p>线程模型：两侧回调均发生在 netty 线程。客户端方向的处理逻辑自行管理线程
@@ -142,12 +164,12 @@ public final class PacketChannel {
             byte id = buf.readByte();
             Class<? extends IPacket> type = BY_ID.get(id);
             if (type == null) {
-                LOGGER.warn("Dropped packet with unknown id " + id + " on channel " + AreaEffectMod.MOD_ID);
+                reportOnce(id, "Dropped packet with unknown id " + id, false);
                 return;
             }
             BiConsumer<IPacket, EntityPlayerMP> handler = handlers.get(id);
             if (handler == null) {
-                LOGGER.error("No handler bound for id " + id + " on channel " + AreaEffectMod.MOD_ID);
+                reportOnce(id, "No handler bound for id " + id, true);
                 return;
             }
             IPacket packet = type.newInstance();

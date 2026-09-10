@@ -31,3 +31,12 @@ gui.areaeffect.shape.round_pillar=全高圆柱
 gui.areaeffect.shape.sphere=球体
 gui.areaeffect.shape.polygon=多边形柱
 gui.areaeffect.shape.polygon_pillar=全高多边形柱
+chat.command.usage=用法: /areaeffect pos1|pos2|create [亮度] [时长]|tool（区域管理请按 J 键）
+gui.areaeffect.list.dim=维度 %s
+gui.areaeffect.desc.box=(%s,%s,%s) ~ (%s,%s,%s)
+gui.areaeffect.desc.square_pillar=(%s,%s) ~ (%s,%s) 全高
+gui.areaeffect.desc.cylinder=圆心(%s,%s) R=%s 高=%s
+gui.areaeffect.desc.round_pillar=圆心(%s,%s) R=%s 全高
+gui.areaeffect.desc.polygon=多边形 顶点=%s 高=%s
+gui.areaeffect.desc.polygon_pillar=多边形 顶点=%s 全高
+gui.areaeffect.desc.sphere=球心(%s,%s,%s) R=%s

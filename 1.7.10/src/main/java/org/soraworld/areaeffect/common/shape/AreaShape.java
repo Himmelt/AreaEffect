@@ -66,8 +66,14 @@ public abstract class AreaShape {
 
     public abstract List<Edge> edges();
 
-    /** 详情页展示文本。 */
-    public abstract String describe();
+    /**
+     * 详情页展示文案的本地化键（形如 {@code gui.areaeffect.desc.<typeId>}）。
+     * 具体文案由客户端经 StatCollector 组装，形状层不硬编码界面语言。
+     */
+    public abstract String describeKey();
+
+    /** {@link #describeKey()} 对应的参数，顺序与语言文件中的占位符一致。 */
+    public abstract Object[] describeArgs();
 
     /**
      * v2 冲突检测：先 AABB 包围盒相交粗筛（保守快速），通过后再做方块级精确判定。
@@ -161,10 +167,12 @@ public abstract class AreaShape {
     }
 
     /**
-     * 从网络缓冲读回锚点列表（type 键由调用方 {@link ShapeTypes} 分派）。锚点数量上限 64 防恶意包。
+     * 从网络缓冲读回锚点列表（type 键由调用方 {@link ShapeTypes} 分派）。
+     * 锚点数量上限与选区一致（{@link Selection#MAX_ANCHORS}），防恶意包撑爆包体与内存。
+     * 注意：无论能否构成有效形状，本方法都会读完声明的锚点，保持元素边界对齐。
      */
     protected static List<Vec3i> readAnchorsBuf(ByteBuf buf) {
-        int size = Math.min(Math.max(buf.readInt(), 0), 64);
+        int size = Math.min(Math.max(buf.readInt(), 0), Selection.MAX_ANCHORS);
         List<Vec3i> anchors = new ArrayList<>();
         for (int i = 0; i < size; i++) {
             anchors.add(new Vec3i(buf.readInt(), buf.readInt(), buf.readInt()));

@@ -223,9 +223,20 @@ public class ClientProxy extends CommonProxy {
         return selSelection;
     }
 
-    /** 客户端发送切换选区形状请求。 */
+    /**
+     * 客户端发送切换选区形状请求，并<b>本地乐观更新</b>选区镜像。
+     * <p>轮切需要读"当前形状"（见 {@code ClientSelectionHandler#currentShape}），若只等服务端回发的
+     * {@link MessageSelection}，高延迟下连按两次会读到同一旧值、算出同一个"下一个形状"，
+     * 表现为按键无反应。这里按 {@code Selection.reset} 的语义先行更新（换形状即清空锚点），
+     * 服务端回声到达后会以权威值整体覆盖，故不会积累偏差。
+     */
     public void sendSelectShape(String type) {
         PacketChannel.sendToServer(new MessageSelectShape(type));
+        Selection sel = selSelection;
+        if (sel == null) {
+            selSelection = sel = new Selection();
+        }
+        sel.reset(type);
     }
 
     /** 客户端发送撤回/右键空气事件（服务端与右键方块同入口处理，作为多边形撤回）。 */

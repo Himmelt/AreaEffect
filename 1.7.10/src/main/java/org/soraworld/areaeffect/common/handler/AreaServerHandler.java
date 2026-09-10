@@ -12,9 +12,14 @@ import org.soraworld.areaeffect.common.network.PacketChannel;
 import org.soraworld.areaeffect.common.util.Vec3i;
 
 /**
- * 服务端业务事件处理：方块选点、玩家登录/登出/换维同步、服务端网络任务排空。
- * 同一实例注册到 Forge 总线与 FML 总线的玩家事件；"light"通道数据包统一由
- * {@link org.soraworld.areaeffect.common.network.PacketChannel} 路由。
+ * 服务端业务事件处理：方块选点、玩家登录/登出/换维同步、服务端网络任务排空与延迟落盘。
+ *
+ * <p>注册关系：同一实例在两个总线上各注册一次，事件类型互不重叠故不会重复触发——
+ * FML 总线（{@code CommonProxy#onPreInit}）承接 {@link TickEvent.ServerTickEvent} 与
+ * {@link PlayerEvent} 系列；Forge 总线（{@code CommonProxy#onInit}）承接
+ * {@link PlayerInteractEvent}。这与 1.7.10 的事件派发归属一致。
+ *
+ * <p>"light" 通道数据包统一由 {@link PacketChannel} 路由。
  */
 public class AreaServerHandler {
 
@@ -32,6 +37,8 @@ public class AreaServerHandler {
     public void onServerTick(TickEvent.ServerTickEvent event) {
         if (event.phase == TickEvent.Phase.END) {
             PacketChannel.drainServerTasks();
+            // 延迟落盘：把上一 tick 累积的改动（可能来自多个包）合并写一次文件
+            proxy.flushStore();
         }
     }
 

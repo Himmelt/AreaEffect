@@ -413,24 +413,27 @@ public class PrismShape extends AreaShape {
     }
 
     @Override
-    public String describe() {
+    public String describeKey() {
+        // 键与 typeId 一一对应：每个（截面 × 高度）组合各有一条 desc 文案
+        return "gui.areaeffect.desc." + typeId();
+    }
+
+    @Override
+    public Object[] describeArgs() {
         switch (section) {
             case RECT:
-                if (height == Height.FULL) {
-                    return "(" + bounds.minX + "," + bounds.minZ + ") ~ (" + bounds.maxX + "," + bounds.maxZ + ") 全高";
-                }
-                return "(" + bounds.minX + "," + bounds.minY + "," + bounds.minZ + ") ~ ("
-                        + bounds.maxX + "," + bounds.maxY + "," + bounds.maxZ + ")";
+                return height == Height.FULL
+                        ? new Object[]{bounds.minX, bounds.minZ, bounds.maxX, bounds.maxZ}
+                        : new Object[]{bounds.minX, bounds.minY, bounds.minZ, bounds.maxX, bounds.maxY, bounds.maxZ};
             case CIRCLE:
-                if (height == Height.FULL) {
-                    return "圆心(" + cx + "," + cz + ") R=" + radius + " 全高";
-                }
-                return "圆心(" + cx + "," + cz + ") R=" + radius + " 高=" + (bounds.maxY - bounds.minY + 1);
+                return height == Height.FULL
+                        ? new Object[]{cx, cz, radius}
+                        : new Object[]{cx, cz, radius, bounds.maxY - bounds.minY + 1};
             default:
-                if (height == Height.FULL) {
-                    return "多边形 顶点=" + polygonVertices().size() + " 全高";
-                }
-                return "多边形 顶点=" + polygonVertices().size() + " 高=" + (bounds.maxY - bounds.minY + 1);
+                // 多边形顶点数即 anchor 数；有界时附带层高
+                return height == Height.FULL
+                        ? new Object[]{anchors.size()}
+                        : new Object[]{anchors.size(), bounds.maxY - bounds.minY + 1};
         }
     }
 }

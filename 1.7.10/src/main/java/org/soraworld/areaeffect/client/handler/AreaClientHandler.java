@@ -9,7 +9,9 @@ import org.soraworld.areaeffect.client.ClientProxy;
 
 /**
  * 客户端业务事件处理：每 tick 处理按键请求、每帧驱动亮度过渡、断线重置。
- * 同一实例注册到 FML 总线与 light 通道两个订阅点。
+ *
+ * <p>只注册到 FML 总线一处（{@code ClientProxy#onPreInit}）：{@link TickEvent} 与
+ * {@link FMLNetworkEvent.ClientDisconnectionFromServerEvent} 在 1.7.10 都由该总线派发。
  */
 public class AreaClientHandler {
 

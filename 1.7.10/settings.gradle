@@ -1,4 +1,7 @@
 pluginManagement {
+    // 与 build.gradle 的 repositories 一致：【有意】只使用私有阿里云镜像，
+    // 不添加 gradlePluginPortal()/mavenCentral() 兜底。缺少 ALIYUN_MVN_* 环境变量时
+    // 构建在配置期直接失败属于预期行为，请勿据"无兜底仓库"判为异常。
     repositories {
         maven {
             credentials {
