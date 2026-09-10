@@ -5,6 +5,8 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.soraworld.areaeffect.common.area.AreaTable;
 import org.soraworld.areaeffect.common.effect.AreaEffect;
+import org.soraworld.areaeffect.common.effect.EffectTypes;
+import org.soraworld.areaeffect.common.effect.LightnessEffect;
 import org.soraworld.areaeffect.common.net.AreaSync;
 import org.soraworld.areaeffect.common.network.Area;
 import org.soraworld.areaeffect.common.network.MessageConflictAreas;
@@ -37,6 +39,13 @@ import java.util.Set;
  *
  * <p>安全前提：客户端"已经鉴权"的说法一律不可信，每个入口都独立再判一次 OP 权限。
  * 客户端提交的数据（形状类型、效果参数、备注）也都在这里做边界处理。
+ *
+ * <p>权限反馈规则（各入口保持一致，避免"有的刷屏、有的毫无反应"）：
+ * <ul>
+ *   <li><b>显式请求</b>——面板开启、指令型操作：回一条 {@code chat.perm.denied}，让玩家知道是权限问题；</li>
+ *   <li><b>工具驱动的动作</b>——选点、撤回顶点、轮切形状：一律静默忽略，因为非 OP 手里的木斧是
+ *       普通工具，这类点击高度频繁且多半是误触，逐次回拒绝只会刷屏。</li>
+ * </ul>
  */
 public class AreaRequests {
 
@@ -61,7 +70,8 @@ public class AreaRequests {
             Players.chat(player, "chat.perm.denied");
             return;
         }
-        PacketChannel.sendTo(new MessageListReply(player.dimension, table.sortedIn(player.dimension)), player);
+        // 只回一个「授权 / 刷新」信号，不带数据：面板读的是客户端本地镜像（见 MessageListReply 说明）
+        PacketChannel.sendTo(new MessageListReply(), player);
     }
 
     /**
@@ -90,6 +100,12 @@ public class AreaRequests {
             if (seenTypes.add(effect.typeId())) {
                 deduped.add(effect);
             }
+        }
+        // 不变式：每个区域恒定带一条亮度效果。客户端可以提交空列表（或只带其它类型的效果），
+        // 而渲染端只在"区域内有亮度效果"时才驱动过渡 —— 缺了它，玩家站进该区域时画面会
+        // 沿用上一个区域的亮度（见 ClientProxy#updateClientLight）。这里补一条保留当前值的兜底。
+        if (!seenTypes.contains(EffectTypes.TYPE_LIGHTNESS)) {
+            deduped.add(new LightnessEffect(area.getLightness(), area.getDuration()));
         }
         area.setEffects(deduped);
         area.setRemark(packet.remark);
@@ -130,7 +146,7 @@ public class AreaRequests {
      */
     public void onSelectShape(EntityPlayerMP player, MessageSelectShape packet) {
         if (!Players.canManage(player)) {
-            Players.chat(player, "chat.perm.denied");
+            // 工具驱动的动作统一静默，见类注释的权限反馈规则（与 onClickAir 一致）
             return;
         }
         if (ShapeTypes.isValid(packet.type)) {

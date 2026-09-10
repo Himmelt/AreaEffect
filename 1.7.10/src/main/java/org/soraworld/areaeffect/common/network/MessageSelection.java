@@ -27,8 +27,12 @@ public class MessageSelection implements IPacket {
     @Override
     public void toBytes(ByteBuf buf) {
         EffectTypes.writeString(buf, shapeType);
-        buf.writeInt(anchors.length);
-        for (Vec3i anchor : anchors) {
+        // 与读侧同源的上限（Selection.MAX_ANCHORS）：写出条数不得多于读回条数，
+        // 否则同一元素在两端长度不一致，会让包内后续元素错位
+        int count = Math.min(anchors.length, Selection.MAX_ANCHORS);
+        buf.writeInt(count);
+        for (int i = 0; i < count; i++) {
+            Vec3i anchor = anchors[i];
             buf.writeInt(anchor.x);
             buf.writeInt(anchor.y);
             buf.writeInt(anchor.z);

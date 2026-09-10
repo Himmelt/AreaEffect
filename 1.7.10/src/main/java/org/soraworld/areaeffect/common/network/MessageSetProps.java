@@ -32,8 +32,11 @@ public class MessageSetProps implements IPacket {
         buf.writeInt(dim);
         buf.writeInt(id);
         EffectTypes.writeString(buf, remark);
-        buf.writeInt(effects.size());
-        for (AreaEffect effect : effects) {
+        // 与读侧同源的上限（见 Area.EFFECT_MAX）：写出条数不得多于读回条数
+        int count = Math.min(effects.size(), Area.EFFECT_MAX);
+        buf.writeInt(count);
+        for (int i = 0; i < count; i++) {
+            AreaEffect effect = effects.get(i);
             EffectTypes.writeString(buf, effect.typeId());
             effect.writeToBuf(buf);
         }
@@ -44,8 +47,8 @@ public class MessageSetProps implements IPacket {
         dim = buf.readInt();
         id = buf.readInt();
         remark = EffectTypes.readString(buf);
-        // 效果数量收窄到合理上限，防恶意包一次性申请海量对象
-        int size = Math.min(Math.max(buf.readInt(), 0), 16);
+        // 效果数量收窄到合理上限，防恶意包一次性申请海量对象（与写入侧共用 Area.EFFECT_MAX）
+        int size = Math.min(Math.max(buf.readInt(), 0), Area.EFFECT_MAX);
         effects = new ArrayList<>(size);
         for (int i = 0; i < size; i++) {
             AreaEffect effect = EffectTypes.fromBuf(buf);

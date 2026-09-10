@@ -130,7 +130,7 @@ public class SphereShape extends AreaShape {
     }
 
     @Override
-    public List<Edge> edges() {
+    protected List<Edge> computeEdges() {
         List<Edge> result = new ArrayList<>();
         double xc = cx + 0.5D;
         double yc = cy + 0.5D;

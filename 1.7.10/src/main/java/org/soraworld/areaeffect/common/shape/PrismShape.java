@@ -196,7 +196,7 @@ public class PrismShape extends AreaShape {
     }
 
     @Override
-    public List<Edge> edges() {
+    protected List<Edge> computeEdges() {
         List<Edge> result = new ArrayList<>();
         if (height == Height.FULL) {
             // 通天柱：每 64 格渲染一个横向围栏 + 贯穿竖棱

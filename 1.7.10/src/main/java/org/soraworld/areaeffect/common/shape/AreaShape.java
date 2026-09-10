@@ -9,6 +9,7 @@ import org.soraworld.areaeffect.common.util.Vec3d;
 import org.soraworld.areaeffect.common.util.Vec3i;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -54,6 +55,12 @@ public abstract class AreaShape {
     protected final boolean closed;
     protected final Bounds bounds;
 
+    /**
+     * {@link #edges()} 的惰性缓存。形状实例一经构造即不可变，故线段只算一次；
+     * 线框在渲染线程按帧读取，缓存字段用 volatile 保证发布可见性（重算幂等，无需加锁）。
+     */
+    private volatile List<Edge> cachedEdges = null;
+
     protected AreaShape(List<Vec3i> anchors, boolean closed, Bounds bounds) {
         this.anchors = anchors == null ? new ArrayList<>() : new ArrayList<>(anchors);
         this.closed = closed;
@@ -64,7 +71,24 @@ public abstract class AreaShape {
 
     public abstract boolean contains(double x, double y, double z);
 
-    public abstract List<Edge> edges();
+    /**
+     * 渲染线段（世界绝对坐标，线框外沿已 +1）。
+     *
+     * <p>形状不可变，因此结果只计算一次并缓存：线框是<b>每帧</b>绘制的，而一次
+     * {@link #computeEdges()} 会新建几百个 {@link Edge}（球体约 269 条、64 顶点多边形柱
+     * 250+ 条），逐帧重建纯属给 GC 添负担。调用方拿到的列表不可修改。
+     */
+    public final List<Edge> edges() {
+        List<Edge> cached = cachedEdges;
+        if (cached == null) {
+            cached = Collections.unmodifiableList(new ArrayList<>(computeEdges()));
+            cachedEdges = cached;
+        }
+        return cached;
+    }
+
+    /** 各形状实际的线段构造；由 {@link #edges()} 缓存，不要直接调用。 */
+    protected abstract List<Edge> computeEdges();
 
     /**
      * 详情页展示文案的本地化键（形如 {@code gui.areaeffect.desc.<typeId>}）。
@@ -142,10 +166,16 @@ public abstract class AreaShape {
 
     /**
      * 序列化到网络缓冲：写锚点数 + 各锚点坐标 + closed（type 键由 {@link ShapeTypes} 写入）。
+     *
+     * <p>写出的条数<b>必须</b>与 {@link #readAnchorsBuf} 能读回的条数同源（同样受
+     * {@link Selection#MAX_ANCHORS} 约束）：否则同一元素在收发两端的字节长度不一致，
+     * 包内后续元素会整体错位 —— 那正是上一轮 P0-3 修掉的失败模式。
      */
     public void writeToBuf(ByteBuf buf) {
-        buf.writeInt(anchors.size());
-        for (Vec3i anchor : anchors) {
+        int size = Math.min(anchors.size(), Selection.MAX_ANCHORS);
+        buf.writeInt(size);
+        for (int i = 0; i < size; i++) {
+            Vec3i anchor = anchors.get(i);
             buf.writeInt(anchor.x);
             buf.writeInt(anchor.y);
             buf.writeInt(anchor.z);
@@ -155,11 +185,18 @@ public abstract class AreaShape {
 
     /**
      * 从 NBT 读回锚点列表（type 键由调用方 {@link ShapeTypes} 分派）。
+     * 与 buf 路径同源地收窄到 {@link Selection#MAX_ANCHORS}：正常选区不可能超过该值，
+     * 超限只可能来自被手工编辑或异版本的存档，截断并告警好过让它在网络上被静默截断。
      */
     protected static List<Vec3i> readAnchorsNbt(NBTTagCompound tag) {
         List<Vec3i> anchors = new ArrayList<>();
         NBTTagList list = tag.getTagList("anchors", 10);
-        for (int i = 0; i < list.tagCount(); i++) {
+        int count = Math.min(list.tagCount(), Selection.MAX_ANCHORS);
+        if (list.tagCount() > Selection.MAX_ANCHORS) {
+            LOGGER.warn("Shape has {} anchors in save, truncated to {} (Selection.MAX_ANCHORS)",
+                    list.tagCount(), Selection.MAX_ANCHORS);
+        }
+        for (int i = 0; i < count; i++) {
             NBTTagCompound anchorTag = list.getCompoundTagAt(i);
             anchors.add(new Vec3i(anchorTag.getInteger("x"), anchorTag.getInteger("y"), anchorTag.getInteger("z")));
         }

@@ -21,6 +21,7 @@ import org.soraworld.areaeffect.client.handler.LightmapHook;
 import org.soraworld.areaeffect.client.handler.SelectionRenderHandler;
 import org.soraworld.areaeffect.common.CommonProxy;
 import org.soraworld.areaeffect.common.effect.AreaEffect;
+import org.soraworld.areaeffect.common.effect.LightnessEffect;
 import org.soraworld.areaeffect.common.network.Area;
 import org.soraworld.areaeffect.common.network.MessageAreaDelete;
 import org.soraworld.areaeffect.common.network.MessageAreaUpdate;
@@ -146,21 +147,47 @@ public class ClientProxy extends CommonProxy {
         PacketChannel.sendToServer(new MessageTpRequest(id));
     }
 
+    /**
+     * 连接建立时的会话初始化：连外部服务器时，本地区域表只是镜像，先清掉上一个会话的残留 ——
+     * 否则等登录全量同步按 id 覆盖之后，只存在于旧会话的 id 会以幽灵区域的形式留下来。
+     *
+     * <p>{@code local} 为真表示连的是本机集成服（单机）：此时 {@link #areas} 与集成服务端是
+     * <b>同一个实例</b>（见 {@code CommonProxy#areas}），归服务端所有，绝不能在这里清。
+     * 单机退出世界后该表保持不动，下次加载世界由 {@code AreaStore#load} 负责 clear + 重读。
+     */
+    public void onServerConnected(boolean local) {
+        if (!local) {
+            areas.clear();
+            cachedArea = null;
+            cachedDim = Integer.MIN_VALUE;
+        }
+    }
+
     public void handleUpdate(MessageAreaUpdate packet) {
         if (packet.data == null) {
             return; // 反序列化失败（如未知形状），丢弃避免注入 null
         }
-        areas.put(packet.dim, packet.id, packet.data);
-        // 更新会替换 Area 对象（shape/effects 均可能变化），缓存持有旧引用须失效
-        invalidateAreaCache(packet.dim, packet.id);
+        // 与 handleSelection 一致：改镜像与失效查找缓存都回客户端主线程执行，
+        // 免得在 netty 线程与渲染线程争抢 cachedDim / cachedArea 这对非原子字段
+        runOnClientThread(() -> {
+            areas.put(packet.dim, packet.id, packet.data);
+            // 更新会替换 Area 对象（shape/effects 均可能变化），缓存持有旧引用须失效
+            invalidateAreaCache(packet.dim, packet.id);
+        });
     }
 
     public void handleDelete(MessageAreaDelete packet) {
-        areas.remove(packet.dim, packet.id);
-        // 缓存持有已删对象的强引用且 shape 不可变，contains 恒真不会自动失效，须显式清除
-        invalidateAreaCache(packet.dim, packet.id);
-        // 广播统一刷新：回主线程更新已打开的管理界面
+        // 同上：镜像写入、缓存失效、界面刷新一并回客户端主线程执行
         runOnClientThread(() -> {
+            areas.remove(packet.dim, packet.id);
+            // 缓存持有已删对象的强引用且 shape 不可变，contains 恒真不会自动失效，须显式清除
+            invalidateAreaCache(packet.dim, packet.id);
+            // 已开启线框的区域没了就不再画，顺势摘掉本地显示集合，免得每帧空转
+            Set<Integer> ids = visibleAreas.get(packet.dim);
+            if (ids != null) {
+                ids.remove(packet.id);
+            }
+            // 广播统一刷新：更新已打开的管理界面
             if (mc.currentScreen instanceof GuiAreas) {
                 ((GuiAreas) mc.currentScreen).refreshFromProxy();
             }
@@ -186,6 +213,12 @@ public class ClientProxy extends CommonProxy {
         });
     }
 
+    /**
+     * 收到面板授权：打开或刷新区域管理界面。
+     *
+     * <p>消息本身<b>不带数据</b>（见 {@link MessageListReply}）：界面直接读本地镜像，
+     * 而且是跨维度的全量（左栏列所有存在区域的维度），所以这里不需要、也不该使用任何 payload。
+     */
     public void handleListReply(MessageListReply packet) {
         // netty 线程回调：GUI 操作必须回客户端主线程
         runOnClientThread(() -> {
@@ -341,6 +374,18 @@ public class ClientProxy extends CommonProxy {
         }
         Area tmp = new Area(area.shape(), ld[0], ld[1]);
         tmp.id = area.id;
+        // 预览只覆盖亮度/时长：其它类型的效果原样带过来，别被 new Area(...) 里那条单例
+        // 亮度效果挤掉（效果列表的设计是"一个区域可挂多种效果"）
+        List<AreaEffect> keep = new ArrayList<>();
+        for (AreaEffect effect : area.getEffects()) {
+            if (!(effect instanceof LightnessEffect)) {
+                keep.add(effect);
+            }
+        }
+        if (!keep.isEmpty()) {
+            keep.add(new LightnessEffect(ld[0], ld[1]));
+            tmp.setEffects(keep);
+        }
         return tmp;
     }
 
@@ -392,6 +437,16 @@ public class ClientProxy extends CommonProxy {
         return cachedArea;
     }
 
+    /** 区域内指定类型的效果实例；该类型效果不在该区域时返回 null。 */
+    private static AreaEffect effectOf(Area area, String typeId) {
+        for (AreaEffect effect : area.getEffects()) {
+            if (typeId.equals(effect.typeId())) {
+                return effect;
+            }
+        }
+        return null;
+    }
+
     /**
      * 每帧客户端更新：判定当前所在区域，再把该区域挂载的各效果分发给对应的
      * 客户端运行时驱动过渡（渲染器内部按真实时间插值）。区域外则让所有运行时回退到 0。
@@ -407,10 +462,14 @@ public class ClientProxy extends CommonProxy {
             lastDuration = area.getDuration();
             // 读取预览覆盖（若有），共享 Area 不被预览污染
             Area renderArea = effectiveArea(player.dimension, area);
-            for (AreaEffect effect : renderArea.getEffects()) {
-                EffectRenderer renderer = renderers.get(effect.typeId());
+            // 每帧驱动全部已注册渲染器，区域内没有该类效果时传 null（等同"该效果不在生效中"）。
+            // 【不要】改成只遍历"区域内存在的效果"：那样一个没有亮度效果的区域（异常存档或被
+            // 写坏的数据）会让所有渲染器都不被调用，LightmapHook 保持上一次的偏移，
+            // 玩家站进去后画面会停在上一区域的亮度上不动。
+            for (String typeId : renderers.typeIds()) {
+                EffectRenderer renderer = renderers.get(typeId);
                 if (renderer != null) {
-                    renderer.onFrame(areaChanged, effect, lastDuration);
+                    renderer.onFrame(areaChanged, effectOf(renderArea, typeId), lastDuration);
                 }
             }
         } else {
@@ -428,7 +487,10 @@ public class ClientProxy extends CommonProxy {
         inArea = false;
         lastAreaId = -1;
         lastDuration = 1.0F;
-        areas.clear();
+        // 【不要在这里清 areas】：单机下它与集成服务端是同一实例（见 CommonProxy#areas 的说明），
+        // 而 Minecraft.loadWorld 会先断连接（触发本方法）、后停集成服并走 onServerStopping 的兜底
+        // flushStore —— 若此刻存档恰好是脏的，就会把空表写回存档、清空全部区域。
+        // 镜像的清理改在「连上外部服务器」时做（onServerConnected），单机则交给下一次 AreaStore#load。
         selections.clearAll();
         selSelection = null;
         overlayShape = null;

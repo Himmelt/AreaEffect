@@ -64,7 +64,11 @@ public class CommonProxy {
     /** 入站请求处理；由 {@link #initConfig(File)} 与 store 一同建立。 */
     protected AreaRequests requests;
 
-    protected Item tool = Items.wooden_axe;
+    /**
+     * 当前选区工具。单机下服务端线程会在指令里改写它，而客户端线程（渲染/交互）与 netty 线程
+     * 都要读，故声明为 volatile 保证可见性 —— 引用赋值本身是原子的，不需要加锁。
+     */
+    protected volatile Item tool = Items.wooden_axe;
 
     /** 网络消息是否已注册（每进程恰一次，见 registerAllMessagePackets）。 */
     private static boolean networkRegistered = false;

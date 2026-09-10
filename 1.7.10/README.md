@@ -14,6 +14,9 @@
 1. 手持选区工具 (默认木斧) 左键选点、右键选点。支持 7 种选区形状：长方体、全高方柱、圆柱、
    全高圆柱、球体、多边形柱、全高多边形柱；手持工具时 Shift+右键空气可轮切形状，屏幕中央显示当前形状。
 
+   多边形形状（多边形柱 / 全高多边形柱）的选点方式不同：左键逐个追加顶点，右键空气撤回上一个顶点；
+   顶点达到 3 个即自动闭合、可以创建，不需要手动闭合操作。单个选区最多 64 个顶点。
+
 2. 每个区域独立设置目标亮度（CIE L*，0-100）与过渡时长（0.1-60 秒），进出区域时画面平滑过渡。
 
 3. 选区与区域线框由本模组自绘，无需安装 WE-CUI 等外部模组。
@@ -28,7 +31,8 @@
 
 ### 指令
 
-**所有指令只能由OP权限等级2+的玩家执行**
+**所有指令只能由OP权限等级2+的玩家执行；在服务端创建/修改区域同样要求该权限——
+非OP玩家手持选区工具也无法选点。**
 
 ```
 
@@ -141,6 +145,11 @@ area darker.
    polygon prism and full polygon pillar. While holding the tool, Shift + right click in air cycles
    the shape, and an overlay shows the current one.
 
+   The polygon shapes (polygon prism / full polygon pillar) are picked differently: left click
+   appends a vertex, right click in air undoes the last one; once 3 vertices are reached the polygon
+   closes automatically and can be created — there is no manual closing step. A single selection
+   holds at most 64 vertices.
+
 2. Each area has its own target lightness (CIE L*, 0-100) and transition duration (0.1-60 s);
    the screen fades smoothly when entering or leaving an area.
 
@@ -156,7 +165,8 @@ area darker.
 
 ### Commands
 
-Only players with OP permission level 2+ can use these.
+Only players with OP permission level 2+ can use these; the same permission is required to create
+or modify areas on the server — without it even holding the select tool lets you pick nothing.
 
 ```
 

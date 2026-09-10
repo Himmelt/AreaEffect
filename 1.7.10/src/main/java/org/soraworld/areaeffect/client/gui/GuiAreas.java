@@ -8,12 +8,12 @@ import net.minecraft.util.StatCollector;
 import org.lwjgl.input.Keyboard;
 import org.lwjgl.input.Mouse;
 import org.soraworld.areaeffect.client.ClientProxy;
+import org.soraworld.areaeffect.common.effect.AreaEffect;
 import org.soraworld.areaeffect.common.effect.LightnessEffect;
 import org.soraworld.areaeffect.common.network.Area;
 import org.soraworld.areaeffect.common.shape.AreaShape;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 import static org.soraworld.areaeffect.client.gui.GuiTheme.COLOR_ACCENT;
@@ -482,7 +482,17 @@ public class GuiAreas extends GuiScreen {
             float l = lightSlider.getValue();
             float d = durationSlider.getValue();
             String remark = remarkField.getText().trim();
-            proxy.sendSetProps(dim, selected.id, remark, Collections.singletonList(new LightnessEffect(l, d)));
+            // 效果列表是"可挂多种"的，而本界面只编辑亮度/时长，因此只替换亮度那一条，
+            // 其余效果原样带回去 —— 直接 singletonList 全量覆盖会把别类型的效
+            // 果静默丢掉（当前只有亮度一种，但契约上不该这么写）。
+            List<AreaEffect> effects = new ArrayList<>();
+            for (AreaEffect effect : selected.getEffects()) {
+                if (!(effect instanceof LightnessEffect)) {
+                    effects.add(effect);
+                }
+            }
+            effects.add(new LightnessEffect(l, d));
+            proxy.sendSetProps(dim, selected.id, remark, effects);
             // 保留预览覆盖避免渲染跳变，服务端广播返回后共享即为新值；切换/关闭时统一清除
             proxy.previewAreaProps(dim, selected.id, l, d);
             proxy.previewAreaRemark(dim, selected.id, remark);

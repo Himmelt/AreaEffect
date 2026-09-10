@@ -5,6 +5,7 @@ import org.soraworld.areaeffect.common.effect.EffectTypes;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 客户端效果运行时注册表：typeId -> renderer。
@@ -20,6 +21,15 @@ public final class EffectRenderers {
 
     public EffectRenderer get(String typeId) {
         return renderers.get(typeId);
+    }
+
+    /**
+     * 已注册的效果类型 id。用于每帧驱动<b>全部</b>渲染器 —— 区域内没有对应效果时按 null 传入，
+     * 渲染器便会按"离开该效果"处理（见 {@code ClientProxy#updateClientLight}）。
+     * 返回的是内部视图：注册表只在构造期写入，调用方不应修改。
+     */
+    public Set<String> typeIds() {
+        return renderers.keySet();
     }
 
     public Collection<EffectRenderer> all() {

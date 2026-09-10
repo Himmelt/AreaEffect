@@ -22,6 +22,14 @@ public class Area {
     /** 备注最大长度（字符数）。 */
     public static final int REMARK_MAX = 60;
 
+    /**
+     * 单个区域的效果条数上限。收发<b>两端必须共用此值</b>：写出的条数一旦大于读回的条数，
+     * 同一元素在包内的字节长度就不一致，后续元素会整体错位（见 {@code MessageListReply}、
+     * {@code MessageSetProps}）。与锚点上限（{@link org.soraworld.areaeffect.common.shape.Selection#MAX_ANCHORS}）
+     * 同一原则：上限只在一处定义，读写都引用它。
+     */
+    public static final int EFFECT_MAX = 16;
+
     public int id;
 
     private final AreaShape shape;
@@ -107,8 +115,11 @@ public class Area {
         ShapeTypes.writeBuf(area.shape(), buf);
         EffectTypes.writeString(buf, area.getRemark());
         List<AreaEffect> effects = area.effects;
-        buf.writeInt(effects.size());
-        for (AreaEffect effect : effects) {
+        // 与读侧同源的上限：见 EFFECT_MAX 的说明
+        int count = Math.min(effects.size(), EFFECT_MAX);
+        buf.writeInt(count);
+        for (int i = 0; i < count; i++) {
+            AreaEffect effect = effects.get(i);
             EffectTypes.writeString(buf, effect.typeId());
             effect.writeToBuf(buf);
         }
@@ -116,14 +127,15 @@ public class Area {
 
     /**
      * 从缓冲读回区域。无论形状能否识别，remark 与 effects 都会被完整读走再返回：
-     * 调用方（如 {@code MessageListReply}）是在循环里连续读多个区域的，
-     * 中途提前 return 会让后续所有元素从错误偏移开始解析（表现为列表缺项/乱码/整包丢弃）。
+     * 这样返回 null 时也停在元素边界上，调用方（{@code MessageAreaUpdate} 等按元素连续读取的
+     * 消息）不会因一次解析失败就让后续元素从错误偏移开始解析（表现为缺项 / 乱码 / 整包丢弃）。
+     * 写侧的条数上限见 {@link #EFFECT_MAX}，与读侧同源。
      */
     public static Area fromByteBuf(ByteBuf buf) {
         AreaShape shape = ShapeTypes.fromBuf(buf);
         String remark = EffectTypes.readString(buf);
-        // 效果数量收窄到合理上限，防恶意包一次性申请海量对象（与 MessageSetProps 一致）
-        int size = Math.min(Math.max(buf.readInt(), 0), 16);
+        // 效果数量收窄到合理上限，防恶意包一次性申请海量对象（与写入侧共用 EFFECT_MAX）
+        int size = Math.min(Math.max(buf.readInt(), 0), EFFECT_MAX);
         List<AreaEffect> effects = new ArrayList<>(size);
         for (int i = 0; i < size; i++) {
             AreaEffect effect = EffectTypes.fromBuf(buf);
