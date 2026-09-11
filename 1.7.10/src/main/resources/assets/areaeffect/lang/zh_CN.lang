@@ -20,6 +20,7 @@ gui.areaeffect.selection.off=关
 gui.areaeffect.edit.selection=区域线框
 gui.areaeffect.edit.lightness=目标亮度 (CIE L*):
 gui.areaeffect.edit.duration=过渡时长 (秒):
+gui.areaeffect.edit.weight=权重 (越大越优先):
 gui.areaeffect.edit.save=保存
 gui.areaeffect.edit.tp=传送
 gui.areaeffect.edit.del=删除

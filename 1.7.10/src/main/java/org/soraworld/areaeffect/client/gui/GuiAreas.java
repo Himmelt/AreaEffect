@@ -68,6 +68,7 @@ public class GuiAreas extends GuiScreen {
     /** 详情：编辑对象与预览状态。 */
     private FlatSlider lightSlider;
     private FlatSlider durationSlider;
+    private FlatSlider weightSlider;
     private GuiTextField remarkField;
     private float previewL;
     private float previewD;
@@ -212,10 +213,14 @@ public class GuiAreas extends GuiScreen {
         durationSlider = new FlatSlider(detX1 + 10, top + 70, sw, 18,
                 translate("gui.areaeffect.edit.duration"),
                 LightnessEffect.MIN_DURATION, LightnessEffect.MAX_DURATION, 1.0F, 0.1F);
+        // 权重滑条：0..100，越大越优先显示。默认 0 —— 与旧行为一致（默认权重相同时重叠即被拒绝）
+        weightSlider = new FlatSlider(detX1 + 10, top + 96, sw, 18,
+                translate("gui.areaeffect.edit.weight"), 0.0F, 100.0F, 0.0F, 1.0F);
         remarkField = new GuiTextField(fontRendererObj, detX1 + 34, top + 6, sw - 24, 16);
         remarkField.setMaxStringLength(Area.REMARK_MAX);
         buttonList.add(lightSlider);
         buttonList.add(durationSlider);
+        buttonList.add(weightSlider);
         syncDetailWidgets();
     }
 
@@ -229,17 +234,19 @@ public class GuiAreas extends GuiScreen {
             }
         }
         // 防御：initGui 若中途异常被吞，控件可能为 null；此时清空选中走空界面分支，避免 NPE 连锁
-        if (lightSlider == null || durationSlider == null || remarkField == null) {
+        if (lightSlider == null || durationSlider == null || weightSlider == null || remarkField == null) {
             selected = null;
             return;
         }
         lightSlider.visible = has;
         durationSlider.visible = has;
+        weightSlider.visible = has;
         remarkField.setVisible(has);
         if (has) {
             // 起始基线读共享原始值（预览不污染共享，此处恒为存档值）
             lightSlider.setValueRaw(selected.getLightness());
             durationSlider.setValueRaw(selected.getDuration());
+            weightSlider.setValueRaw(selected.getWeight());
             remarkField.setText(selected.getRemark());
             previewL = lightSlider.getValue();
             previewD = durationSlider.getValue();
@@ -482,6 +489,7 @@ public class GuiAreas extends GuiScreen {
         if (button.id == BTN_SAVE) {
             float l = lightSlider.getValue();
             float d = durationSlider.getValue();
+            float w = weightSlider.getValue();
             String remark = remarkField.getText().trim();
             // 效果列表是"可挂多种"的，而本界面只编辑亮度/时长，因此只替换亮度那一条，
             // 其余效果原样带回去 —— 直接 singletonList 全量覆盖会把别类型的效
@@ -492,7 +500,9 @@ public class GuiAreas extends GuiScreen {
                     effects.add(effect);
                 }
             }
-            effects.add(new LightnessEffect(l, d));
+            LightnessEffect lightness = new LightnessEffect(l, d);
+            lightness.setWeight(w);
+            effects.add(lightness);
             proxy.sendSetProps(dim, selected.id, remark, effects);
             // 保留预览覆盖避免渲染跳变，服务端广播返回后共享即为新值；切换/关闭时统一清除
             proxy.previewAreaProps(dim, selected.id, l, d);

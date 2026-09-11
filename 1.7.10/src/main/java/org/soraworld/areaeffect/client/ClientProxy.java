@@ -41,6 +41,7 @@ import org.soraworld.areaeffect.common.util.Vec3i;
 import org.soraworld.areaeffect.common.util.Vec3d;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -52,8 +53,6 @@ public class ClientProxy extends CommonProxy {
     public static final KeyBinding KEY_LIST = new KeyBinding("key.areaeffect.list", Keyboard.KEY_J, "key.categories.areaeffect");
     public static final KeyBinding KEY_SEL_RENDER = new KeyBinding("key.areaeffect.selrender", Keyboard.KEY_K, "key.categories.areaeffect");
 
-    private boolean inArea = false;
-    private int lastAreaId = -1;
     private float lastDuration = 1.0F;
 
     private Selection selSelection = null;
@@ -67,11 +66,9 @@ public class ClientProxy extends CommonProxy {
     /** 编辑预览备注覆盖：dim → id → String（同样不入共享对象）。 */
     private final Map<Integer, Map<Integer, String>> previewRemarks = new ConcurrentHashMap<>();
 
-    /** 区域查找缓存：玩家连续帧停在同区域时 O(1) 命中；跨维度/离开导致 contains 失败即重定位。
-     *  区域被更新/删除时由 {@link #invalidateAreaCache} 显式失效（缓存对象 shape 不可变，
-     *  contains 恒真不会自动失效）。失效由 netty 线程触发、渲染线程读取，故须 volatile。 */
-    private volatile int cachedDim = Integer.MIN_VALUE;
-    private volatile Area cachedArea = null;
+    /** 上一帧各效果类型的获胜区域 id（-1 表示该类型当帧无获胜区域）。
+     *  类型级"进入/切换/离开"的过渡触发由它与当前帧对比判定（替代旧的单区域查找缓存）。 */
+    private final Map<String, Integer> lastWinAreaByType = new HashMap<>();
 
     /** 选区形状轮切 overlay 状态：当前提示的形状与最近一次轮切时间（毫秒）。 */
     private String overlayShape = null;
@@ -158,8 +155,6 @@ public class ClientProxy extends CommonProxy {
     public void onServerConnected(boolean local) {
         if (!local) {
             areas.clear();
-            cachedArea = null;
-            cachedDim = Integer.MIN_VALUE;
         }
     }
 
@@ -167,21 +162,15 @@ public class ClientProxy extends CommonProxy {
         if (packet.data == null) {
             return; // 反序列化失败（如未知形状），丢弃避免注入 null
         }
-        // 与 handleSelection 一致：改镜像与失效查找缓存都回客户端主线程执行，
-        // 免得在 netty 线程与渲染线程争抢 cachedDim / cachedArea 这对非原子字段
         runOnClientThread(() -> {
             areas.put(packet.dim, packet.id, packet.data);
-            // 更新会替换 Area 对象（shape/effects 均可能变化），缓存持有旧引用须失效
-            invalidateAreaCache(packet.dim, packet.id);
         });
     }
 
     public void handleDelete(MessageAreaDelete packet) {
-        // 同上：镜像写入、缓存失效、界面刷新一并回客户端主线程执行
+        // 同上：镜像写入与界面刷新一并回客户端主线程执行
         runOnClientThread(() -> {
             areas.remove(packet.dim, packet.id);
-            // 缓存持有已删对象的强引用且 shape 不可变，contains 恒真不会自动失效，须显式清除
-            invalidateAreaCache(packet.dim, packet.id);
             // 已开启线框的区域没了就不再画，顺势摘掉本地显示集合，免得每帧空转
             Set<Integer> ids = visibleAreas.get(packet.dim);
             if (ids != null) {
@@ -192,14 +181,6 @@ public class ClientProxy extends CommonProxy {
                 ((GuiAreas) mc.currentScreen).refreshFromProxy();
             }
         });
-    }
-
-    /** 区域被更新/删除时失效查找缓存（下一帧全遍历重建，单帧开销可忽略）。 */
-    private void invalidateAreaCache(int dim, int id) {
-        if (cachedArea != null && cachedArea.id == id && cachedDim == dim) {
-            cachedArea = null;
-            cachedDim = Integer.MIN_VALUE;
-        }
     }
 
     public void handleSelection(MessageSelection packet) {
@@ -426,17 +407,6 @@ public class ClientProxy extends CommonProxy {
         return areas.dims();
     }
 
-    /** 指示玩家是否正站在某区域内并返回该区域（带缓存）。
-     *  命中连续帧所在区域时单次 contains，否则回退父类 findAreaAt 全遍历并重建缓存。 */
-    private Area findAreaCached(EntityPlayer player) {
-        if (cachedArea != null && cachedDim == player.dimension && cachedArea.contains(new Vec3d(player))) {
-            return cachedArea;
-        }
-        cachedDim = player.dimension;
-        cachedArea = findAreaAt(player);
-        return cachedArea;
-    }
-
     /** 区域内指定类型的效果实例；该类型效果不在该区域时返回 null。 */
     private static AreaEffect effectOf(Area area, String typeId) {
         for (AreaEffect effect : area.getEffects()) {
@@ -448,44 +418,53 @@ public class ClientProxy extends CommonProxy {
     }
 
     /**
-     * 每帧客户端更新：判定当前所在区域，再把该区域挂载的各效果分发给对应的
-     * 客户端运行时驱动过渡（渲染器内部按真实时间插值）。区域外则让所有运行时回退到 0。
+     * 每帧客户端更新：一次性取回所有包含玩家的区域（区域允许重叠），再<b>按效果类型</b>
+     * 各自解析获胜者（权重最高者），分发给对应运行时驱动过渡。区域外则让所有运行时回退到 0。
+     *
+     * <p>每种效果类型的"进入/切换/离开"由该类型获胜区域 id 与上一帧对比判定，因此不同类型可独立过渡；
+     * 同种效果在重叠集合内权重唯一（见 Area#weightConflict 的平局规则），获胜者确定、同帧不抖动。
      */
     public void updateClientLight(EntityPlayer player) {
         LightmapHook.tryInstall(mc);
         drainClientTasks();
-        Area area = findAreaCached(player);
-        if (area != null) {
-            boolean areaChanged = !inArea || area.id != lastAreaId;
-            inArea = true;
-            lastAreaId = area.id;
-            lastDuration = area.getDuration();
-            // 读取预览覆盖（若有），共享 Area 不被预览污染
-            Area renderArea = effectiveArea(player.dimension, area);
-            // 每帧驱动全部已注册渲染器，区域内没有该类效果时传 null（等同"该效果不在生效中"）。
-            // 【不要】改成只遍历"区域内存在的效果"：那样一个没有亮度效果的区域（异常存档或被
-            // 写坏的数据）会让所有渲染器都不被调用，LightmapHook 保持上一次的偏移，
-            // 玩家站进去后画面会停在上一区域的亮度上不动。
-            for (String typeId : renderers.typeIds()) {
-                EffectRenderer renderer = renderers.get(typeId);
-                if (renderer != null) {
-                    renderer.onFrame(areaChanged, effectOf(renderArea, typeId), lastDuration);
+        int dim = player.dimension;
+        Vec3d pos = new Vec3d(player);
+        List<Area> containing = areas.findAt(dim, pos);
+
+        for (String typeId : renderers.typeIds()) {
+            EffectRenderer renderer = renderers.get(typeId);
+            if (renderer == null) {
+                continue;
+            }
+            // 解析该类型获胜者：重叠区域内权重最高者（不存在的类型结果为 null）
+            AreaEffect winner = null;
+            Area winnerArea = null;
+            for (Area area : containing) {
+                AreaEffect eff = effectOf(area, typeId);
+                if (eff != null && (winner == null || eff.getWeight() > winner.getWeight())) {
+                    winner = eff;
+                    winnerArea = area;
                 }
             }
-        } else {
-            boolean areaChanged = inArea;
-            inArea = false;
-            lastAreaId = -1;
-            for (EffectRenderer renderer : renderers.all()) {
-                renderer.onFrame(areaChanged, null, lastDuration);
+            int curId = winnerArea == null ? -1 : winnerArea.id;
+            int prevId = lastWinAreaByType.getOrDefault(typeId, -1);
+            boolean areaChanged = prevId != curId;
+            lastWinAreaByType.put(typeId, curId);
+            // 预览覆盖若存在则用覆盖值驱动（共享 Area 不被预览污染），渲染只用参数、不用权重本身
+            AreaEffect renderEffect = null;
+            if (winnerArea != null) {
+                renderEffect = effectOf(effectiveArea(dim, winnerArea), typeId);
+                // 保留最近一次亮度效果的时长，作为"离开所有区域"淡出的速度
+                if (winner instanceof LightnessEffect) {
+                    lastDuration = winner.getDuration();
+                }
             }
+            renderer.onFrame(areaChanged, renderEffect, lastDuration);
         }
     }
 
     public void clientReset() {
         tool = Items.wooden_axe;
-        inArea = false;
-        lastAreaId = -1;
         lastDuration = 1.0F;
         // 【不要在这里清 areas】：单机下它与集成服务端是同一实例（见 CommonProxy#areas 的说明），
         // 而 Minecraft.loadWorld 会先断连接（触发本方法）、后停集成服并走 onServerStopping 的兜底
@@ -498,8 +477,7 @@ public class ClientProxy extends CommonProxy {
         visibleAreas.clear();
         previewLd.clear();
         previewRemarks.clear();
-        cachedDim = Integer.MIN_VALUE;
-        cachedArea = null;
+        lastWinAreaByType.clear();
         renderers = new EffectRenderers();
         clientTasks.clear();
         LightmapHook.setOffset(0.0D, 0.0D);

@@ -64,14 +64,17 @@ public final class EffectTypes {
 
     private static LightnessEffect readLightnessNbt(NBTTagCompound tag) {
         LightnessEffect effect = new LightnessEffect();
+        effect.readNbtFields(tag);
         effect.setLightness(tag.getFloat("lightness"));
         effect.setDuration(tag.getFloat("duration"));
         return effect;
     }
 
     private static LightnessEffect readLightnessBuf(ByteBuf buf) {
-        float lightness = buf.readFloat();
-        float duration = buf.readFloat();
-        return new LightnessEffect(lightness, duration);
+        LightnessEffect effect = new LightnessEffect();
+        effect.readBufFields(buf);
+        effect.setLightness(buf.readFloat());
+        effect.setDuration(buf.readFloat());
+        return effect;
     }
 }

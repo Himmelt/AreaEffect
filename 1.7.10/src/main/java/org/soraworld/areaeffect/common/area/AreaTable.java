@@ -121,21 +121,35 @@ public class AreaTable {
         return null;
     }
 
-    /** 找出与给定形状冲突（方块级精确判定）的全部已存区域 id。 */
-    public List<Integer> conflictsIn(int dim, AreaShape intent) {
+    /** 指定维度内所有包含给定坐标的区域（区域允许重叠，渲染端需拿到全部候选再按权重决出）。 */
+    public List<Area> findAt(int dim, Vec3d pos) {
+        List<Area> result = new ArrayList<>();
+        for (Area area : inDim(dim).values()) {
+            if (area.contains(pos)) {
+                result.add(area);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * 找出与给定形状冲突（平局规则，方块级精确判定）的全部已存区域 id。
+     * 见 {@link Area#weightConflict}：仅当"重叠且同种效果权重相等"时才视作冲突。
+     */
+    public List<Integer> conflictsIn(int dim, Area intent) {
         List<Integer> conflicts = new ArrayList<>();
         for (Map.Entry<Integer, Area> entry : inDim(dim).entrySet()) {
-            if (intent.conflict(entry.getValue().shape())) {
+            if (intent.weightConflict(entry.getValue())) {
                 conflicts.add(entry.getKey());
             }
         }
         return conflicts;
     }
 
-    /** 该维度下是否已有区域与给定区域冲突。 */
+    /** 该维度下是否已有区域与给定区域冲突（平局规则）。 */
     public boolean conflicts(int dim, Area intent) {
         for (Area area : inDim(dim).values()) {
-            if (intent.conflict(area)) {
+            if (intent.weightConflict(area)) {
                 return true;
             }
         }

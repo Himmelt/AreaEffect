@@ -2,7 +2,6 @@ package org.soraworld.areaeffect.client.effect;
 
 import org.soraworld.areaeffect.common.effect.EffectTypes;
 
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -30,9 +29,5 @@ public final class EffectRenderers {
      */
     public Set<String> typeIds() {
         return renderers.keySet();
-    }
-
-    public Collection<EffectRenderer> all() {
-        return renderers.values();
     }
 }

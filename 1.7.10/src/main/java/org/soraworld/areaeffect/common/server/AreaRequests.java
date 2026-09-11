@@ -178,7 +178,10 @@ public class AreaRequests {
             return;
         }
         AreaShape intent = sel.build();
-        List<Integer> conflicts = table.conflictsIn(player.dimension, intent);
+        // 平局规则预检：先构造候选区域（含其亮度效果及权重），重叠且同种效果权重相等才阻止；
+        // 权重互不相等的重叠允许通过。返回冲突 id 以便客户端自动显示它们的线框。
+        Area candidate = new Area(intent, lightness, duration);
+        List<Integer> conflicts = table.conflictsIn(player.dimension, candidate);
         if (!conflicts.isEmpty()) {
             Players.chat(player, "chat.create.conflict");
             // 把冲突区域的框线都显示出来

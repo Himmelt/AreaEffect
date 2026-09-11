@@ -20,6 +20,7 @@ gui.areaeffect.selection.off=OFF
 gui.areaeffect.edit.selection=Area Wireframe
 gui.areaeffect.edit.lightness=Target lightness (CIE L*):
 gui.areaeffect.edit.duration=Transition duration (s):
+gui.areaeffect.edit.weight=Weight (higher wins):
 gui.areaeffect.edit.save=Save
 gui.areaeffect.edit.tp=Teleport
 gui.areaeffect.edit.del=Delete
