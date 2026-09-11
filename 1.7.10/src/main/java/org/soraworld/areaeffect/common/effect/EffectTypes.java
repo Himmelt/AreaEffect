@@ -4,17 +4,34 @@ import io.netty.buffer.ByteBuf;
 import net.minecraft.nbt.NBTTagCompound;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * 效果类型注册表与反序列化工厂。新增效果时：
  * 1. 实现 {@link AreaEffect} 子类并给出 typeId；
- * 2. 在此围绕 NBT/Buf 的读写各接一条分支。
+ * 2. 把 typeId 加进 {@link #ALL}，并在此围绕 NBT/Buf 的读写各接一条分支；
+ * 3. 在 {@link #newDefault} 里给出"添加效果"用的默认实例。
  */
 public final class EffectTypes {
 
     public static final String TYPE_LIGHTNESS = "lightness";
 
+    /** 可添加的效果类型全集（面板"添加效果"按钮遍历此表）。 */
+    public static final List<String> ALL = Collections.unmodifiableList(Arrays.asList(TYPE_LIGHTNESS));
+
     private EffectTypes() {
+    }
+
+    /** 新增一个指定类型的默认效果实例（面板"添加效果"用）；未知类型返回 null。 */
+    public static AreaEffect newDefault(String typeId) {
+        switch (typeId) {
+            case TYPE_LIGHTNESS:
+                return new LightnessEffect(90.0F, 1.0F);
+            default:
+                return null;
+        }
     }
 
     /**

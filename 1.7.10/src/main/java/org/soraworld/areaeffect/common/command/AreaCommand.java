@@ -57,22 +57,8 @@ public class AreaCommand extends CommandBase {
         } else if ("pos2".equals(sub)) {
             proxy.onSelectToolRight(player, new Vec3i(player));
         } else if ("create".equals(sub)) {
-            float lightness = 100.0F;
-            float duration = 1.0F;
-            // 只把参数解析放进 try：原先 createArea 也在 try 里，于是创建过程中的任何异常
-            // 都会被报成"参数不是有效的小数"，把玩家和排查者一起带偏。
-            try {
-                if (args.length >= 2) {
-                    lightness = Float.parseFloat(args[1]);
-                }
-                if (args.length >= 3) {
-                    duration = Float.parseFloat(args[2]);
-                }
-            } catch (NumberFormatException e) {
-                proxy.sendChatTranslation(player, "chat.invalid.float");
-                return;
-            }
-            proxy.createArea(player, lightness, duration);
+            // 只创建空区域（不带效果），效果由面板（默认 J 键）后续添加
+            proxy.createArea(player);
         } else if ("tool".equals(sub)) {
             proxy.commandTool(player);
         } else {

@@ -5,8 +5,6 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.soraworld.areaeffect.common.area.AreaTable;
 import org.soraworld.areaeffect.common.effect.AreaEffect;
-import org.soraworld.areaeffect.common.effect.EffectTypes;
-import org.soraworld.areaeffect.common.effect.LightnessEffect;
 import org.soraworld.areaeffect.common.net.AreaSync;
 import org.soraworld.areaeffect.common.network.Area;
 import org.soraworld.areaeffect.common.network.MessageConflictAreas;
@@ -101,11 +99,18 @@ public class AreaRequests {
                 deduped.add(effect);
             }
         }
-        // 不变式：每个区域恒定带一条亮度效果。客户端可以提交空列表（或只带其它类型的效果），
-        // 而渲染端只在"区域内有亮度效果"时才驱动过渡 —— 缺了它，玩家站进该区域时画面会
-        // 沿用上一个区域的亮度（见 ClientProxy#updateClientLight）。这里补一条保留当前值的兜底。
-        if (!seenTypes.contains(EffectTypes.TYPE_LIGHTNESS)) {
-            deduped.add(new LightnessEffect(area.getLightness(), area.getDuration()));
+        // 效果集已允许为空（区域可以不带任何效果，见 Area#getEffects 的约定）。
+        // 这里复制一份"待生效"的区域评估它与其它重叠区域是否产生同种效果权重平局：
+        // 区域允许重叠，但同种效果的权重在重叠集合内必须唯一（平局即禁重叠），
+        // 否则渲染端取权重最高者时结果不确定（见 Area#weightConflict）。
+        Area pending = new Area(area.shape());
+        pending.id = area.id;
+        pending.setEffects(deduped);
+        for (Area other : table.inDim(packet.dim).values()) {
+            if (other.id != area.id && pending.weightConflict(other)) {
+                Players.chat(player, "chat.setprops.conflict");
+                return;
+            }
         }
         area.setEffects(deduped);
         area.setRemark(packet.remark);
@@ -168,19 +173,21 @@ public class AreaRequests {
     }
 
     /**
-     * 按当前选区创建区域（指令入口）。
+     * 按当前选区创建区域（指令入口）：只创建区域本体，<b>不携带任何效果</b>。
+     * 空区域的 weightConflict 恒为 false（无同种效果可比），故重叠本身总是放行；
+     * 效果在面板里添加保存时由 {@link #onSetProps} 再做权重平局校验。
      * 冲突时不创建，并把冲突区域 id 发回客户端以便自动显示它们的线框。
      */
-    public void create(EntityPlayerMP player, float lightness, float duration) {
+    public void create(EntityPlayerMP player) {
         Selection sel = selections.existing(player);
         if (sel == null || !sel.isBuildable()) {
             Players.chat(player, "chat.create.noselect");
             return;
         }
         AreaShape intent = sel.build();
-        // 平局规则预检：先构造候选区域（含其亮度效果及权重），重叠且同种效果权重相等才阻止；
-        // 权重互不相等的重叠允许通过。返回冲突 id 以便客户端自动显示它们的线框。
-        Area candidate = new Area(intent, lightness, duration);
+        // 平局规则预检：构造候选空区域。空区域无同种效果可比，正常情况下不会冲突，
+        // 保留这一层判定仅作防御（与 table.add 内部的判定一致、双保险）。
+        Area candidate = new Area(intent);
         List<Integer> conflicts = table.conflictsIn(player.dimension, candidate);
         if (!conflicts.isEmpty()) {
             Players.chat(player, "chat.create.conflict");
@@ -188,7 +195,7 @@ public class AreaRequests {
             PacketChannel.sendTo(new MessageConflictAreas(player.dimension, conflicts), player);
             return;
         }
-        Area area = table.add(player.dimension, intent, lightness, duration);
+        Area area = table.add(player.dimension, intent);
         if (area == null) {
             Players.chat(player, "chat.create.conflict");
             return;

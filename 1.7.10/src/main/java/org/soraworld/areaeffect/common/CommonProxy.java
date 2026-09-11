@@ -223,9 +223,9 @@ public class CommonProxy {
         return areas.findAt(player);
     }
 
-    /** 按当前选区创建区域（指令入口），业务逻辑在请求层。 */
-    public void createArea(EntityPlayerMP player, float lightness, float duration) {
-        requests.create(player, lightness, duration);
+    /** 按当前选区创建区域（指令入口，只创建空区域），业务逻辑在请求层。 */
+    public void createArea(EntityPlayerMP player) {
+        requests.create(player);
     }
 
     /** 向客户端同步当前选区工具（MP 客户端不读 config）。 */

@@ -49,6 +49,12 @@ public class Area {
         this.effects = Collections.singletonList(new LightnessEffect(lightness, duration));
     }
 
+    /** 创建不带任何效果的纯区域（区域创建阶段无效果，效果由面板后续添加）。 */
+    public Area(AreaShape shape) {
+        this.shape = shape;
+        this.effects = Collections.emptyList();
+    }
+
     /** 旧存档兼容工厂：以六坐标构造长方体区域。 */
     public static Area box(int x1, int y1, int z1, int x2, int y2, int z2, float lightness, float duration) {
         AreaShape shape = new PrismShape(PrismShape.Section.RECT, PrismShape.Height.BOUNDED,

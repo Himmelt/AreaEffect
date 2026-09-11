@@ -157,10 +157,11 @@ public class AreaTable {
     }
 
     /**
-     * 新增区域：先做冲突判定，冲突则返回 null 且不占用 id；否则分配 id 入表并返回实例。
+     * 新增一个<b>不携带任何效果</b>的空区域：先做冲突判定，冲突则返回 null 且不占用 id；
+     * 否则分配 id 入表并返回实例。效果由用户在面板里后续添加（见 {@code AreaEffects}）。
      */
-    public Area add(int dim, AreaShape shape, float lightness, float duration) {
-        Area area = new Area(shape, lightness, duration);
+    public Area add(int dim, AreaShape shape) {
+        Area area = new Area(shape);
         if (conflicts(dim, area)) {
             return null;
         }

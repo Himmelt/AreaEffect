@@ -16,6 +16,13 @@ public abstract class AreaEffect {
     private float weight = 0.0F;
 
     /**
+     * 复制一份独立的实例（含权重）。GUI 编辑效果参数时使用副本做成"工作列表"，
+     * 避免原地改写共享 {@code Area} 持有的效果对象、脏掉存档原值。
+     * 子类必须实现，且要把各自类型专属字段一并复制过来。
+     */
+    public abstract AreaEffect copy();
+
+    /**
      * 效果类型 id，用于网络/NBT 反序列化时区分实现。
      */
     public abstract String typeId();
