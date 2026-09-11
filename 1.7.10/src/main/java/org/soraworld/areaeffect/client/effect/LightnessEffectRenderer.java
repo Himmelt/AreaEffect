@@ -59,9 +59,13 @@ public class LightnessEffectRenderer implements EffectRenderer {
             bAnim = true;
             lAnim = false;
         }
-        double durationNanos = Math.max(0.05D, seconds) * 1.0e9D;
+        // seconds=0 表示不过渡、瞬间到位：durationNanos<=0 时把进度直接取 1，
+        // 当帧即吸附到目标并结束动画（同时避免除以 0 得到 NaN/Infinity）。
+        // 不再设 0.05 下限——下限已随语义改为 0（见 LightnessEffect.MIN_DURATION）。
+        double durationNanos = Math.max(0.0D, seconds) * 1.0e9D;
+        boolean instant = durationNanos <= 0.0D;
         if (bAnim) {
-            double p = (System.nanoTime() - bStart) / durationNanos;
+            double p = instant ? 1.0D : (System.nanoTime() - bStart) / durationNanos;
             if (p >= 1.0D) {
                 blend = bTo;
                 bAnim = false;
@@ -70,7 +74,7 @@ public class LightnessEffectRenderer implements EffectRenderer {
             }
         }
         if (lAnim) {
-            double p = (System.nanoTime() - lStart) / durationNanos;
+            double p = instant ? 1.0D : (System.nanoTime() - lStart) / durationNanos;
             if (p >= 1.0D) {
                 uL = lTo;
                 lAnim = false;

@@ -17,7 +17,7 @@
    多边形形状（多边形柱 / 全高多边形柱）的选点方式不同：左键逐个追加顶点，右键空气撤回上一个顶点；
    顶点达到 3 个即自动闭合、可以创建，不需要手动闭合操作。单个选区最多 64 个顶点。
 
-2. 每个区域独立设置目标亮度（CIE L*，0-100）与过渡时长（0.1-60 秒），进出区域时画面平滑过渡。
+2. 每个区域独立设置目标亮度（CIE L*，0-100）与过渡时长（0-60 秒，0 表示不过渡、瞬间变化），进出区域时画面平滑过渡。
 
 3. 选区与区域线框由本模组自绘，无需安装 WE-CUI 等外部模组。
 
@@ -150,8 +150,8 @@ area darker.
    closes automatically and can be created — there is no manual closing step. A single selection
    holds at most 64 vertices.
 
-2. Each area has its own target lightness (CIE L*, 0-100) and transition duration (0.1-60 s);
-   the screen fades smoothly when entering or leaving an area.
+2. Each area has its own target lightness (CIE L*, 0-100) and transition duration (0-60 s, where 0
+   means no transition — an instant change); the screen fades smoothly when entering or leaving an area.
 
 3. Selection and area wireframes are drawn by this mod itself — no WE-CUI or other mod required.
 

@@ -25,7 +25,7 @@ public abstract class AreaEffect {
     public abstract void writeToBuf(ByteBuf buf);
 
     /**
-     * 对参数做边界处理（如亮度 0..100、时长 0.05..60）。默认空，子类覆写。
+     * 对参数做边界处理（如亮度 0..100、时长 0..60）。默认空，子类覆写。
      */
     public void sanitize() {
     }

@@ -207,10 +207,11 @@ public class GuiAreas extends GuiScreen {
         int sw = detX2 - detX1 - 20;
         lightSlider = new FlatSlider(detX1 + 10, top + 44, sw, 18,
                 translate("gui.areaeffect.edit.lightness"), 0.0F, 100.0F, 90.0F, 1.0F);
-        // 下限取 0.1（与渲染端 Math.max(0.05, …) 的实际生效下限一致）：
-        // LightnessEffect 对 <=0 会静默回落为 1 秒，滑条不应允许拖出这种无效值
+        // 时长滑条上下限直接引用 LightnessEffect.MIN_DURATION/MAX_DURATION（闭区间 [0,60]），
+        // 边界只在一处定义。下限 0 是合法值：表示不过渡、亮度瞬间到位（渲染端按 instant 处理）。
         durationSlider = new FlatSlider(detX1 + 10, top + 70, sw, 18,
-                translate("gui.areaeffect.edit.duration"), 0.1F, 60.0F, 1.0F, 0.1F);
+                translate("gui.areaeffect.edit.duration"),
+                LightnessEffect.MIN_DURATION, LightnessEffect.MAX_DURATION, 1.0F, 0.1F);
         remarkField = new GuiTextField(fontRendererObj, detX1 + 34, top + 6, sw - 24, 16);
         remarkField.setMaxStringLength(Area.REMARK_MAX);
         buttonList.add(lightSlider);
