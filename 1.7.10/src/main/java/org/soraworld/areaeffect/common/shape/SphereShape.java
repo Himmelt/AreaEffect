@@ -22,19 +22,28 @@ public class SphereShape extends AreaShape {
         this.cx = center.x;
         this.cy = center.y;
         this.cz = center.z;
-        int dx = surface.x - center.x;
-        int dy = surface.y - center.y;
-        int dz = surface.z - center.z;
-        this.radius = (int) Math.sqrt(dx * dx + dy * dy + dz * dz);
+        this.radius = computeRadius(center, surface);
     }
 
     private static Bounds computeBounds(Vec3i center, Vec3i surface) {
-        int dx = surface.x - center.x;
-        int dy = surface.y - center.y;
-        int dz = surface.z - center.z;
-        int r = (int) Math.sqrt(dx * dx + dy * dy + dz * dz);
+        int r = computeRadius(center, surface);
         return new Bounds(center.x - r, center.y - r, center.z - r,
                 center.x + r, center.y + r, center.z + r);
+    }
+
+    /**
+     * 由球心/球面点求整数半径。坐标差与平方和一律用 {@code double}：
+     * int 相乘在单轴跨度超过 ~46340 格时就会溢出（{@code dx*dx} 回绕甚至变负，
+     * {@code Math.sqrt(负数)=NaN}、{@code (int)NaN=0}），而 {@code /aef pos1}…{@code pos2}
+     * 的锚点是玩家坐标，大服务器上很容易相差数万格。用 double 计算不会溢出，
+     * 结果再收窄到 int 上限（正常世界坐标远达不到该上限）。
+     */
+    private static int computeRadius(Vec3i center, Vec3i surface) {
+        double dx = (double) surface.x - center.x;
+        double dy = (double) surface.y - center.y;
+        double dz = (double) surface.z - center.z;
+        double r = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        return r >= Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) r;
     }
 
     public int centerX() {
@@ -60,13 +69,12 @@ public class SphereShape extends AreaShape {
 
     @Override
     public boolean contains(double x, double y, double z) {
-        int bx = floor(x);
-        int by = floor(y);
-        int bz = floor(z);
-        int dx = bx - cx;
-        int dy = by - cy;
-        int dz = bz - cz;
-        return dx * dx + dy * dy + dz * dz <= radius * radius + 0.001D;
+        // 坐标差与平方和用 double：int 平方和在大半径（三个平方相加）时会溢出 int，
+        // 回绕成小数后会把球外方块误判为球内。见 computeRadius 的溢出说明。
+        double dx = (double) floor(x) - cx;
+        double dy = (double) floor(y) - cy;
+        double dz = (double) floor(z) - cz;
+        return dx * dx + dy * dy + dz * dz <= (double) radius * radius + 0.001D;
     }
 
     private static int floor(double v) {
@@ -115,11 +123,11 @@ public class SphereShape extends AreaShape {
                 continue; // 该层至少一球未覆盖
             }
             for (int bx = x1; bx <= x2; bx++) {
-                int dxa = bx - cx;
-                int dxb = bx - s.cx;
+                double dxa = (double) bx - cx;
+                double dxb = (double) bx - s.cx;
                 for (int bz = z1; bz <= z2; bz++) {
-                    int dza = bz - cz;
-                    int dzb = bz - s.cz;
+                    double dza = (double) bz - cz;
+                    double dzb = (double) bz - s.cz;
                     if (dxa * dxa + dza * dza <= ra && dxb * dxb + dzb * dzb <= rb) {
                         return true;
                     }

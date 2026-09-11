@@ -82,9 +82,10 @@ public class PrismShape extends AreaShape {
                 return bx >= bounds.minX && bx <= bounds.maxX
                         && bz >= bounds.minZ && bz <= bounds.maxZ;
             case CIRCLE: {
-                int dx = bx - cx;
-                int dz = bz - cz;
-                return dx * dx + dz * dz <= radius * radius + 0.001D;
+                // double 计算，避免 int 平方和在大半径时溢出（见 circleRadius 注释）
+                double dx = (double) bx - cx;
+                double dz = (double) bz - cz;
+                return dx * dx + dz * dz <= (double) radius * radius + 0.001D;
             }
             default:
                 return polygonContains(bx, bz);
@@ -117,9 +118,12 @@ public class PrismShape extends AreaShape {
     }
 
     private static int circleRadius(Vec3i center, Vec3i surface) {
-        int dx = surface.x - center.x;
-        int dz = surface.z - center.z;
-        return (int) Math.sqrt(dx * dx + dz * dz);
+        // 坐标差与平方和用 double：int 相乘在单轴跨度超过 ~46340 格时溢出，
+        // 会把半径算成 0（sqrt(负)=NaN、(int)NaN=0）或错误值。见 SphereShape.computeRadius。
+        double dx = (double) surface.x - center.x;
+        double dz = (double) surface.z - center.z;
+        double r = Math.sqrt(dx * dx + dz * dz);
+        return r >= Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) r;
     }
 
     private static Bounds computeBounds(Section section, Height height, List<Vec3i> anchors, boolean closed) {
@@ -400,9 +404,9 @@ public class PrismShape extends AreaShape {
                 continue; // 该层超出球体范围
             }
             for (int bx = x1; bx <= x2; bx++) {
-                int dx = bx - cx;
+                double dx = (double) bx - cx;
                 for (int bz = z1; bz <= z2; bz++) {
-                    int dz = bz - cz;
+                    double dz = (double) bz - cz;
                     if (dx * dx + dz * dz <= rr2 && sectionContains(bx, bz)) {
                         return true;
                     }
