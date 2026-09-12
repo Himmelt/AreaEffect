@@ -37,6 +37,7 @@ gui.areaeffect.shape.round_pillar=Full Round Pillar
 gui.areaeffect.shape.sphere=Sphere
 gui.areaeffect.shape.polygon=Polygon Prism
 gui.areaeffect.shape.polygon_pillar=Full Polygon Pillar
+gui.areaeffect.shape.dimension=Whole Dimension
 chat.command.usage=Usage: /areaeffect pos1|pos2|create|tool (press J for the area manager)
 gui.areaeffect.list.dim=Dim %s
 gui.areaeffect.desc.box=(%s,%s,%s) ~ (%s,%s,%s)
@@ -46,3 +47,4 @@ gui.areaeffect.desc.round_pillar=center (%s,%s) R=%s full height
 gui.areaeffect.desc.polygon=polygon vertices=%s height=%s
 gui.areaeffect.desc.polygon_pillar=polygon vertices=%s full height
 gui.areaeffect.desc.sphere=center (%s,%s,%s) R=%s
+gui.areaeffect.desc.dimension=Whole dimension

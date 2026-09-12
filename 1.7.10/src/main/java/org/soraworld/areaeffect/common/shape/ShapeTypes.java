@@ -20,11 +20,13 @@ public final class ShapeTypes {
     public static final String TYPE_SPHERE = "sphere";
     public static final String TYPE_POLYGON = "polygon";
     public static final String TYPE_POLYGON_PILLAR = "polygon_pillar";
+    /** 维度形状：无视选区，覆盖整个维度（见 {@link DimensionShape}）。 */
+    public static final String TYPE_DIMENSION = "dimension";
 
     /** GUI 形状菜单按钮顺序。 */
     public static final String[] ALL = {
             TYPE_BOX, TYPE_SQUARE_PILLAR, TYPE_CYLINDER, TYPE_ROUND_PILLAR,
-            TYPE_SPHERE, TYPE_POLYGON, TYPE_POLYGON_PILLAR
+            TYPE_SPHERE, TYPE_POLYGON, TYPE_POLYGON_PILLAR, TYPE_DIMENSION
     };
 
     private ShapeTypes() {
@@ -67,6 +69,9 @@ public final class ShapeTypes {
             case TYPE_POLYGON_PILLAR:
                 // 多边形自动闭合：顶点 ≥3 即视为闭合可创建
                 return anchors.size() >= 3;
+            case TYPE_DIMENSION:
+                // 维度形状无视选区：不需要任何锚点，恒可创建
+                return true;
             default:
                 return false;
         }
@@ -105,6 +110,9 @@ public final class ShapeTypes {
                 return new PrismShape(PrismShape.Section.POLYGON, PrismShape.Height.BOUNDED, anchors, closed);
             case TYPE_POLYGON_PILLAR:
                 return new PrismShape(PrismShape.Section.POLYGON, PrismShape.Height.FULL, anchors, closed);
+            case TYPE_DIMENSION:
+                // 维度形状不消费锚点，忽略传入的 closed
+                return new DimensionShape();
             default:
                 return null;
         }
