@@ -133,38 +133,12 @@ public class AreaTable {
     }
 
     /**
-     * 找出与给定形状冲突（平局规则，方块级精确判定）的全部已存区域 id。
-     * 见 {@link Area#weightConflict}：仅当"重叠且同种效果权重相等"时才视作冲突。
-     */
-    public List<Integer> conflictsIn(int dim, Area intent) {
-        List<Integer> conflicts = new ArrayList<>();
-        for (Map.Entry<Integer, Area> entry : inDim(dim).entrySet()) {
-            if (intent.weightConflict(entry.getValue())) {
-                conflicts.add(entry.getKey());
-            }
-        }
-        return conflicts;
-    }
-
-    /** 该维度下是否已有区域与给定区域冲突（平局规则）。 */
-    public boolean conflicts(int dim, Area intent) {
-        for (Area area : inDim(dim).values()) {
-            if (intent.weightConflict(area)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * 新增一个<b>不携带任何效果</b>的空区域：先做冲突判定，冲突则返回 null 且不占用 id；
-     * 否则分配 id 入表并返回实例。效果由用户在面板里后续添加（见 {@code AreaEffects}）。
+     * 新增一个<b>不携带任何效果</b>的空区域，直接分配 id 入表并返回实例。
+     * 区域<b>允许任意重叠</b>、不做任何冲突校验；效果与权重由用户在面板里后续配置
+     * （重叠集内同种效果的胜负由渲染端"权重优先、同权取较大 id"决定）。
      */
     public Area add(int dim, AreaShape shape) {
         Area area = new Area(shape);
-        if (conflicts(dim, area)) {
-            return null;
-        }
         area.id = allocateId();
         put(dim, area.id, area);
         return area;

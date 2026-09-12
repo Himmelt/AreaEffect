@@ -18,7 +18,6 @@ import org.soraworld.areaeffect.common.network.Area;
 import org.soraworld.areaeffect.common.network.MessageAreaDelete;
 import org.soraworld.areaeffect.common.network.MessageAreaUpdate;
 import org.soraworld.areaeffect.common.network.MessageClickAir;
-import org.soraworld.areaeffect.common.network.MessageConflictAreas;
 import org.soraworld.areaeffect.common.network.MessageDeleteRequest;
 import org.soraworld.areaeffect.common.network.MessageListReply;
 import org.soraworld.areaeffect.common.network.MessageListRequest;
@@ -109,7 +108,8 @@ public class CommonProxy {
         PacketChannel.register(10, MessageTpRequest.class);
         PacketChannel.register(11, MessageSelectShape.class);
         PacketChannel.register(12, MessageToolSync.class);
-        PacketChannel.register(13, MessageConflictAreas.class);
+        // 13 为历史遗留空缺（原冲突提示消息 MessageConflictAreas 已随"放开重叠"删除）。
+        // 保留编号不回收：一旦复用，与旧包混连时会误解析成已删除的消息类型。
         PacketChannel.register(14, MessageClickAir.class);
     }
 

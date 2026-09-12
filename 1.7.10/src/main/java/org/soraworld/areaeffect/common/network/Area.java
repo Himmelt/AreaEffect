@@ -166,31 +166,6 @@ public class Area {
         return contains(pos.x, pos.y, pos.z);
     }
 
-    public boolean conflict(Area area) {
-        return shape.conflict(area.shape());
-    }
-
-    /**
-     * 平局规则下的冲突判定（创建/更新区域时使用）：两区域<b>形状重叠</b>，且存在某类
-     * <b>同种效果、权重相等</b>时，才视为冲突。
-     *
-     * <p>这样区域<b>允许重叠</b>——只要重叠区域内同种效果的权重互不相等即可；一旦有
-     * 同种效果权重平局则拒绝，保证重叠集合里同种效果的权重唯一，渲染端取权重最高者时确定、不抖动。
-     */
-    public boolean weightConflict(Area other) {
-        if (!shape.conflict(other.shape())) {
-            return false;
-        }
-        for (AreaEffect a : effects) {
-            for (AreaEffect b : other.effects) {
-                if (a.typeId().equals(b.typeId()) && a.getWeight() == b.getWeight()) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
     /** 亮度效果的权重；无亮度效果时返回默认 0。 */
     public float getWeight() {
         LightnessEffect effect = lightnessEffect();

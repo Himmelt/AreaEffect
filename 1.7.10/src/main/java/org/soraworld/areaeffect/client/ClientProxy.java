@@ -26,7 +26,6 @@ import org.soraworld.areaeffect.common.network.Area;
 import org.soraworld.areaeffect.common.network.MessageAreaDelete;
 import org.soraworld.areaeffect.common.network.MessageAreaUpdate;
 import org.soraworld.areaeffect.common.network.MessageClickAir;
-import org.soraworld.areaeffect.common.network.MessageConflictAreas;
 import org.soraworld.areaeffect.common.network.MessageDeleteRequest;
 import org.soraworld.areaeffect.common.network.MessageListReply;
 import org.soraworld.areaeffect.common.network.MessageListRequest;
@@ -101,15 +100,6 @@ public class ClientProxy extends CommonProxy {
         PacketChannel.bindClient(MessageSelection.class, this::handleSelection);
         PacketChannel.bindClient(MessageListReply.class, this::handleListReply);
         PacketChannel.bindClient(MessageToolSync.class, this::handleToolSync);
-        PacketChannel.bindClient(MessageConflictAreas.class, this::handleConflictAreas);
-    }
-
-    /** 创建冲突：自动开启冲突区域的线框显示。 */
-    public void handleConflictAreas(MessageConflictAreas packet) {
-        runOnClientThread(() -> {
-            Set<Integer> ids = visibleAreas.computeIfAbsent(packet.dim, d -> ConcurrentHashMap.newKeySet());
-            ids.addAll(packet.ids);
-        });
     }
 
     /** 同步服务端设置的选区工具（MP 客户端不读 config）。netty 线程回调，写 tool 须回主线程。 */
@@ -418,11 +408,11 @@ public class ClientProxy extends CommonProxy {
     }
 
     /**
-     * 每帧客户端更新：一次性取回所有包含玩家的区域（区域允许重叠），再<b>按效果类型</b>
-     * 各自解析获胜者（权重最高者），分发给对应运行时驱动过渡。区域外则让所有运行时回退到 0。
+     * 每帧客户端更新：一次性取回所有包含玩家的区域（区域允许任意重叠），再<b>按效果类型</b>
+     * 各自解析获胜者（权重最高，同权取较大 id），分发给对应运行时驱动过渡。区域外则让所有运行时回退到 0。
      *
      * <p>每种效果类型的"进入/切换/离开"由该类型获胜区域 id 与上一帧对比判定，因此不同类型可独立过渡；
-     * 同种效果在重叠集合内权重唯一（见 Area#weightConflict 的平局规则），获胜者确定、同帧不抖动。
+     * 重叠集合内同种效果获胜者由"权重优先、同权取较大 id"确定，结果恒定、同帧不抖动。
      */
     public void updateClientLight(EntityPlayer player) {
         LightmapHook.tryInstall(mc);
@@ -436,12 +426,14 @@ public class ClientProxy extends CommonProxy {
             if (renderer == null) {
                 continue;
             }
-            // 解析该类型获胜者：重叠区域内权重最高者（不存在的类型结果为 null）
+            // 解析该类型获胜者：重叠区域内权重最高者；权重相同时取较大 id（即后创建者），
+            // 保证重叠集合内结果确定、同帧不抖动（不存在的类型结果为 null）
             AreaEffect winner = null;
             Area winnerArea = null;
             for (Area area : containing) {
                 AreaEffect eff = effectOf(area, typeId);
-                if (eff != null && (winner == null || eff.getWeight() > winner.getWeight())) {
+                if (eff != null && (winnerArea == null || eff.getWeight() > winner.getWeight()
+                        || (eff.getWeight() == winner.getWeight() && area.id > winnerArea.id))) {
                     winner = eff;
                     winnerArea = area;
                 }

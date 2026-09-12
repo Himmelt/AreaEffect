@@ -10,7 +10,8 @@ import net.minecraft.nbt.NBTTagCompound;
 public abstract class AreaEffect {
 
     /**
-     * 效果权重：重叠区域内同种效果按权重选最高者显示（见 Area#weightConflict 的平局规则）。
+     * 效果权重：重叠区域内同种效果按权重选最高者显示，权重相同则取较大 id 的区域
+     * （即后创建者，见 ClientProxy#updateClientLight 的决胜规则）。
      * 仅在"一区域内每种效果至多一个实例"的前提下定义，故权重归属到单个效果实例即可。
      */
     private float weight = 0.0F;

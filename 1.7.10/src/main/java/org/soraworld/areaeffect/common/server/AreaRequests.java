@@ -7,7 +7,6 @@ import org.soraworld.areaeffect.common.area.AreaTable;
 import org.soraworld.areaeffect.common.effect.AreaEffect;
 import org.soraworld.areaeffect.common.net.AreaSync;
 import org.soraworld.areaeffect.common.network.Area;
-import org.soraworld.areaeffect.common.network.MessageConflictAreas;
 import org.soraworld.areaeffect.common.network.MessageDeleteRequest;
 import org.soraworld.areaeffect.common.network.MessageListReply;
 import org.soraworld.areaeffect.common.network.MessageSelectShape;
@@ -99,19 +98,8 @@ public class AreaRequests {
                 deduped.add(effect);
             }
         }
-        // 效果集已允许为空（区域可以不带任何效果，见 Area#getEffects 的约定）。
-        // 这里复制一份"待生效"的区域评估它与其它重叠区域是否产生同种效果权重平局：
-        // 区域允许重叠，但同种效果的权重在重叠集合内必须唯一（平局即禁重叠），
-        // 否则渲染端取权重最高者时结果不确定（见 Area#weightConflict）。
-        Area pending = new Area(area.shape());
-        pending.id = area.id;
-        pending.setEffects(deduped);
-        for (Area other : table.inDim(packet.dim).values()) {
-            if (other.id != area.id && pending.weightConflict(other)) {
-                Players.chat(player, "chat.setprops.conflict");
-                return;
-            }
-        }
+        // 效果集已允许为空（区域可以不带任何效果）。区域允许任意重叠，不做同种效果权重平局校验，
+        // 重叠集内同种效果谁显示由渲染端"权重优先、同权取较大 id"决定（见 ClientProxy#updateClientLight）。
         area.setEffects(deduped);
         area.setRemark(packet.remark);
         store.markDirty();
@@ -174,9 +162,7 @@ public class AreaRequests {
 
     /**
      * 按当前选区创建区域（指令入口）：只创建区域本体，<b>不携带任何效果</b>。
-     * 空区域的 weightConflict 恒为 false（无同种效果可比），故重叠本身总是放行；
-     * 效果在面板里添加保存时由 {@link #onSetProps} 再做权重平局校验。
-     * 冲突时不创建，并把冲突区域 id 发回客户端以便自动显示它们的线框。
+     * 区域<b>允许任意重叠</b>，不做任何重叠/平局校验；效果在面板里配置，保存即生效。
      */
     public void create(EntityPlayerMP player) {
         Selection sel = selections.existing(player);
@@ -185,21 +171,7 @@ public class AreaRequests {
             return;
         }
         AreaShape intent = sel.build();
-        // 平局规则预检：构造候选空区域。空区域无同种效果可比，正常情况下不会冲突，
-        // 保留这一层判定仅作防御（与 table.add 内部的判定一致、双保险）。
-        Area candidate = new Area(intent);
-        List<Integer> conflicts = table.conflictsIn(player.dimension, candidate);
-        if (!conflicts.isEmpty()) {
-            Players.chat(player, "chat.create.conflict");
-            // 把冲突区域的框线都显示出来
-            PacketChannel.sendTo(new MessageConflictAreas(player.dimension, conflicts), player);
-            return;
-        }
         Area area = table.add(player.dimension, intent);
-        if (area == null) {
-            Players.chat(player, "chat.create.conflict");
-            return;
-        }
         Players.chat(player, "chat.create.done");
         if (Players.isDedicated()) {
             AreaSync.toAll(player.dimension, area.id, area);
