@@ -3,8 +3,6 @@ package org.soraworld.areaeffect.common.shape;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.soraworld.areaeffect.common.util.Vec3d;
 import org.soraworld.areaeffect.common.util.Vec3i;
 
@@ -17,8 +15,6 @@ import java.util.List;
  * 形状由构造时传入的锚点决定，渲染用 {@link #edges()}，判定用 {@link #contains}。
  */
 public abstract class AreaShape {
-
-    protected static final Logger LOGGER = LogManager.getLogger("AreaEffect");
 
     /** 闭区间方块坐标包围盒。通天柱 FULL 高度下 minY=0、maxY=255。 */
     public static final class Bounds {
@@ -160,16 +156,12 @@ public abstract class AreaShape {
     /**
      * 从 NBT 读回锚点列表（type 键由调用方 {@link ShapeTypes} 分派）。
      * 与 buf 路径同源地收窄到 {@link Selection#MAX_ANCHORS}：正常选区不可能超过该值，
-     * 超限只可能来自被手工编辑或异版本的存档，截断并告警好过让它在网络上被静默截断。
+     * 超限只可能来自被手工编辑或异版本的存档，截断好过让它在网络上被静默截断。
      */
     protected static List<Vec3i> readAnchorsNbt(NBTTagCompound tag) {
         List<Vec3i> anchors = new ArrayList<>();
         NBTTagList list = tag.getTagList("anchors", 10);
         int count = Math.min(list.tagCount(), Selection.MAX_ANCHORS);
-        if (list.tagCount() > Selection.MAX_ANCHORS) {
-            LOGGER.warn("Shape has {} anchors in save, truncated to {} (Selection.MAX_ANCHORS)",
-                    list.tagCount(), Selection.MAX_ANCHORS);
-        }
         for (int i = 0; i < count; i++) {
             NBTTagCompound anchorTag = list.getCompoundTagAt(i);
             anchors.add(new Vec3i(anchorTag.getInteger("x"), anchorTag.getInteger("y"), anchorTag.getInteger("z")));

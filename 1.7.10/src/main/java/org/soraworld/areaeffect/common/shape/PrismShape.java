@@ -75,7 +75,7 @@ public class PrismShape extends AreaShape {
         return sectionContains(floor(x), floor(z));
     }
 
-    /** XZ 截面判定（方块坐标），与 {@link #contains} 的 XZ 判据一致，供冲突采样复用。 */
+    /** XZ 截面判定（方块坐标），与 {@link #contains} 的 XZ 判据一致。 */
     boolean sectionContains(int bx, int bz) {
         switch (section) {
             case RECT:
