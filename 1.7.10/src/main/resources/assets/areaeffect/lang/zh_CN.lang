@@ -1,5 +1,4 @@
 chat.create.done=已创建新的区域
-chat.create.conflict=选区和已有区域冲突，请重新选择
 chat.create.noselect=请先创建一个选区
 chat.tool.set=选择工具设置为 : %s
 chat.tool.get=当前选择工具为 : %s
@@ -38,7 +37,7 @@ gui.areaeffect.shape.round_pillar=全高圆柱
 gui.areaeffect.shape.sphere=球体
 gui.areaeffect.shape.polygon=多边形柱
 gui.areaeffect.shape.polygon_pillar=全高多边形柱
-chat.command.usage=用法: /areaeffect pos1|pos2|create [亮度] [时长]|tool（区域管理请按 J 键）
+chat.command.usage=用法: /areaeffect pos1|pos2|create|tool（区域管理请按 J 键）
 gui.areaeffect.list.dim=维度 %s
 gui.areaeffect.desc.box=(%s,%s,%s) ~ (%s,%s,%s)
 gui.areaeffect.desc.square_pillar=(%s,%s) ~ (%s,%s) 全高

@@ -1,5 +1,4 @@
 chat.create.done=Area is created
-chat.create.conflict=Selected area conflicts with existed areas
 chat.create.noselect=Please select start pos and end pos first
 chat.tool.set=Set select tool to : %s
 chat.tool.get=Current select tool is : %s
@@ -38,7 +37,7 @@ gui.areaeffect.shape.round_pillar=Full Round Pillar
 gui.areaeffect.shape.sphere=Sphere
 gui.areaeffect.shape.polygon=Polygon Prism
 gui.areaeffect.shape.polygon_pillar=Full Polygon Pillar
-chat.command.usage=Usage: /areaeffect pos1|pos2|create [lightness] [duration]|tool (press J for the area manager)
+chat.command.usage=Usage: /areaeffect pos1|pos2|create|tool (press J for the area manager)
 gui.areaeffect.list.dim=Dim %s
 gui.areaeffect.desc.box=(%s,%s,%s) ~ (%s,%s,%s)
 gui.areaeffect.desc.square_pillar=(%s,%s) ~ (%s,%s) full height

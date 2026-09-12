@@ -111,47 +111,10 @@ public abstract class AreaShape {
     public abstract Object[] describeArgs();
 
     /**
-     * v2 冲突检测：先 AABB 包围盒相交粗筛（保守快速），通过后再做方块级精确判定。
-     * 精确语义：两区域冲突 ⇔ 存在整数方块同时位于两区域内
-     * （即玩家站在该方块会同时触发两个区域的效果），判据与 {@link #contains} 完全一致。
-     * 采样超出 {@link #CONFLICT_SAMPLE_LIMIT} 预算时退回保守判定（视为冲突）。
+     * 冲突几何判定（conflict/boundsOverlap/exactConflict/采样预算/Section/existsShared）随
+     * "放开区域重叠"一并移除：区域允许任意重叠后，形状间冲突检测不再有调用方。
+     * 玩家所在区域查询已改用 {@link #boundsContains} 粗筛 + {@link #contains} 精确判定。
      */
-    public boolean conflict(AreaShape other) {
-        return boundsOverlap(other) && exactConflict(other);
-    }
-
-    /** AABB 包围盒相交粗判（保守）。 */
-    private boolean boundsOverlap(AreaShape other) {
-        return bounds.minX <= other.bounds.maxX && bounds.maxX >= other.bounds.minX
-                && bounds.minY <= other.bounds.maxY && bounds.maxY >= other.bounds.minY
-                && bounds.minZ <= other.bounds.maxZ && bounds.maxZ >= other.bounds.minZ;
-    }
-
-    /** 方块级精确冲突判定（仅在 AABB 已相交时调用）：是否存在共享整数方块。 */
-    protected abstract boolean exactConflict(AreaShape other);
-
-    /**
-     * 冲突精确采样的单对预算（方块数）：超出则退回保守判定（视为冲突），
-     * 防止极端大区域（如超大跨度多边形）逐方块采样卡顿服务端。
-     */
-    protected static final long CONFLICT_SAMPLE_LIMIT = 1 << 18;
-
-    /** 2D 截面谓词（方块坐标，XZ 平面），判据须与对应形状 contains 的 XZ 部分一致。 */
-    protected interface Section {
-        boolean contains(int bx, int bz);
-    }
-
-    /** 在 [x1..x2]×[z1..z2] 方块范围内寻找同时命中两个截面的点（命中即返回，提前退出）。 */
-    protected static boolean existsShared(int x1, int x2, int z1, int z2, Section a, Section b) {
-        for (int bx = x1; bx <= x2; bx++) {
-            for (int bz = z1; bz <= z2; bz++) {
-                if (a.contains(bx, bz) && b.contains(bx, bz)) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
 
     public Vec3d center() {
         return new Vec3d((bounds.minX + bounds.maxX + 1.0D) / 2.0D,

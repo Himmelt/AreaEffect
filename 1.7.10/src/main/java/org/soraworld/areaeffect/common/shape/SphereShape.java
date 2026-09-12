@@ -46,22 +46,6 @@ public class SphereShape extends AreaShape {
         return r >= Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) r;
     }
 
-    public int centerX() {
-        return cx;
-    }
-
-    public int centerY() {
-        return cy;
-    }
-
-    public int centerZ() {
-        return cz;
-    }
-
-    public int radius() {
-        return radius;
-    }
-
     @Override
     public String typeId() {
         return ShapeTypes.TYPE_SPHERE;
@@ -80,61 +64,6 @@ public class SphereShape extends AreaShape {
     private static int floor(double v) {
         int i = (int) v;
         return v < i ? i - 1 : i;
-    }
-
-    @Override
-    protected boolean exactConflict(AreaShape other) {
-        if (other instanceof SphereShape) {
-            return conflictSphere((SphereShape) other);
-        }
-        if (other instanceof PrismShape) {
-            // 柱 × 球的逐层采样实现挂在 PrismShape，委托过去保证判据单点维护
-            return other.exactConflict(this);
-        }
-        // 未知形状配对：无精确判据，保守视为冲突（拒绝创建），避免静默漏判
-        LOGGER.warn("No exact conflict rule for SphereShape vs {}, treating as conflict", other.getClass().getName());
-        return true;
-    }
-
-    /**
-     * 球 × 球：按 Y 逐层降维——两球在层 by 上的截面各是圆盘
-     * dx²+dz² <= r²+ε-dy²（与 {@link #contains} 判据一致），做 2D 共享点采样。
-     */
-    private boolean conflictSphere(SphereShape s) {
-        int y1 = Math.max(bounds.minY, s.bounds.minY);
-        int y2 = Math.min(bounds.maxY, s.bounds.maxY);
-        int x1 = Math.max(bounds.minX, s.bounds.minX);
-        int x2 = Math.min(bounds.maxX, s.bounds.maxX);
-        int z1 = Math.max(bounds.minZ, s.bounds.minZ);
-        int z2 = Math.min(bounds.maxZ, s.bounds.maxZ);
-        long grid = (long) (x2 - x1 + 1) * (z2 - z1 + 1);
-        if (grid <= 0L) {
-            return false;
-        }
-        if ((long) (y2 - y1 + 1) * grid > CONFLICT_SAMPLE_LIMIT) {
-            return true; // 采样预算超限：退回保守判定（视为冲突）
-        }
-        double raBase = (double) radius * radius + 0.001D;
-        double rbBase = (double) s.radius * s.radius + 0.001D;
-        for (int by = y1; by <= y2; by++) {
-            double ra = raBase - (double) (by - cy) * (by - cy);
-            double rb = rbBase - (double) (by - s.cy) * (by - s.cy);
-            if (ra < 0.0D || rb < 0.0D) {
-                continue; // 该层至少一球未覆盖
-            }
-            for (int bx = x1; bx <= x2; bx++) {
-                double dxa = (double) bx - cx;
-                double dxb = (double) bx - s.cx;
-                for (int bz = z1; bz <= z2; bz++) {
-                    double dza = (double) bz - cz;
-                    double dzb = (double) bz - s.cz;
-                    if (dxa * dxa + dza * dza <= ra && dxb * dxb + dzb * dzb <= rb) {
-                        return true;
-                    }
-                }
-            }
-        }
-        return false;
     }
 
     @Override
