@@ -10,6 +10,12 @@ import net.minecraft.nbt.NBTTagCompound;
 public abstract class AreaEffect {
 
     /**
+     * 权重的合法上限，GUI 滑条（GuiAreas 的 weightSlider）与 {@link #sanitize} 共用它，
+     * 使数据模型与 UI 对权重的取值范围保持一致。
+     */
+    public static final float MAX_WEIGHT = 100.0F;
+
+    /**
      * 效果权重：重叠区域内同种效果按权重选最高者显示，权重相同则取较大 id 的区域
      * （即后创建者，见 ClientProxy#updateClientLight 的决胜规则）。
      * 仅在"一区域内每种效果至多一个实例"的前提下定义，故权重归属到单个效果实例即可。
@@ -54,7 +60,8 @@ public abstract class AreaEffect {
     }
 
     private static float clampWeight(float weight) {
-        return Float.isNaN(weight) ? 0.0F : Math.max(0.0F, weight);
+        return Float.isNaN(weight) ? 0.0F
+                : (weight < 0.0F ? 0.0F : (weight > MAX_WEIGHT ? MAX_WEIGHT : weight));
     }
 
     /** 写入公共字段（权重）到 NBT。子类在 writeToNbt 里、类型专用字段<b>之前</b>先调用本方法。 */

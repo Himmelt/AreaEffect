@@ -281,7 +281,7 @@ public class GuiAreas extends GuiScreen {
         // 效果参数编辑滑条 + 备注输入框
         int sw = detX2 - detX1 - 20;
         weightSlider = new FlatSlider(detX1 + 10, top + 44, sw, 18,
-                translate("gui.areaeffect.edit.weight"), 0.0F, 100.0F, 0.0F, 1.0F);
+                translate("gui.areaeffect.edit.weight"), 0.0F, AreaEffect.MAX_WEIGHT, 0.0F, 1.0F);
         lightSlider = new FlatSlider(detX1 + 10, top + 66, sw, 18,
                 translate("gui.areaeffect.edit.lightness"), 0.0F, 100.0F, 90.0F, 1.0F);
         durationSlider = new FlatSlider(detX1 + 10, top + 88, sw, 18,

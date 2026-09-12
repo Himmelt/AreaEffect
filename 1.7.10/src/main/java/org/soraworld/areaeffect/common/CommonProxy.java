@@ -40,7 +40,7 @@ import java.io.File;
  *
  * <p>本类<b>只保留生命周期装配与薄委托</b>，业务逻辑已按职责迁移到四个组件：
  * <ul>
- *   <li>{@link AreaTable} —— 区域数据、查询、冲突判定与 id 分配</li>
+ *   <li>{@link AreaTable} —— 区域数据、玩家所在区域查询与 id 分配</li>
  *   <li>{@link SelectionManager} —— 每玩家选区状态与同步下发</li>
  *   <li>{@link AreaStore} —— 配置与区域 NBT 持久化（含合并落盘）</li>
  *   <li>{@link AreaRequests} —— 入站请求的鉴权与业务编排</li>
