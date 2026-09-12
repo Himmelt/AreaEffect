@@ -166,6 +166,11 @@ public class Area {
         return contains(pos.x, pos.y, pos.z);
     }
 
+    /** AABB 包围盒级包含粗判：排在精确 {@link #contains} 之前快速排除远距离区域。 */
+    public boolean boundsContains(Vec3d pos) {
+        return shape.boundsContains(pos.x, pos.y, pos.z);
+    }
+
     /** 亮度效果的权重；无亮度效果时返回默认 0。 */
     public float getWeight() {
         LightnessEffect effect = lightnessEffect();

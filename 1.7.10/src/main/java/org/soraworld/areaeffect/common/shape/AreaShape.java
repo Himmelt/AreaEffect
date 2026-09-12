@@ -72,6 +72,17 @@ public abstract class AreaShape {
     public abstract boolean contains(double x, double y, double z);
 
     /**
+     * AABB 包围盒级包含粗判（保守、闭区间）：坐标落在形状的轴对齐包围盒内才可能真正命中。
+     * 用于"玩家所在区域"查询时<b>先粗筛快速排除远距离区域</b>，命中的再走精确 {@link #contains}，
+     * 避免每次查询都对全部区域做昂贵的点在多边形判定。
+     */
+    public boolean boundsContains(double x, double y, double z) {
+        return x >= bounds.minX && x <= bounds.maxX
+                && y >= bounds.minY && y <= bounds.maxY
+                && z >= bounds.minZ && z <= bounds.maxZ;
+    }
+
+    /**
      * 渲染线段（世界绝对坐标，线框外沿已 +1）。
      *
      * <p>形状不可变，因此结果只计算一次并缓存：线框是<b>每帧</b>绘制的，而一次

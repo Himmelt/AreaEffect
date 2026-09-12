@@ -114,7 +114,7 @@ public class AreaTable {
         Vec3d pos = new Vec3d(player);
         for (Map.Entry<Integer, Area> entry : inDim(player.dimension).entrySet()) {
             Area area = entry.getValue();
-            if (area.contains(pos)) {
+            if (area.boundsContains(pos) && area.contains(pos)) {
                 return area;
             }
         }
@@ -125,7 +125,8 @@ public class AreaTable {
     public List<Area> findAt(int dim, Vec3d pos) {
         List<Area> result = new ArrayList<>();
         for (Area area : inDim(dim).values()) {
-            if (area.contains(pos)) {
+            // 先 AABB 粗筛排除远距离区域，命中再走精确点在形状判定，避免区域量大时每帧对全部区域全量 contains
+            if (area.boundsContains(pos) && area.contains(pos)) {
                 result.add(area);
             }
         }
