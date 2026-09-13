@@ -2,7 +2,6 @@ package org.soraworld.areaeffect.common.effect;
 
 import io.netty.buffer.ByteBuf;
 import net.minecraft.nbt.NBTTagCompound;
-import org.soraworld.areaeffect.common.util.GammaCurve;
 
 /**
  * 亮度效果：把区域整体渲染为设定的感知亮度（CIE L*），并支持秒级过渡时长。
