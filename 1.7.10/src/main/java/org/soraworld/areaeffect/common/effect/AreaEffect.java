@@ -81,7 +81,7 @@ public abstract class AreaEffect {
     }
 
     public void setTimeMode(int timeMode) {
-        this.timeMode = timeMode < TIME_ALWAYS ? TIME_ALWAYS : (timeMode > TIME_REAL ? TIME_REAL : timeMode);
+        this.timeMode = timeMode < TIME_ALWAYS ? TIME_ALWAYS : (Math.min(timeMode, TIME_REAL));
     }
 
     public float getStartHour() {
@@ -116,7 +116,7 @@ public abstract class AreaEffect {
      */
     public void sanitize() {
         weight = clampWeight(weight);
-        timeMode = timeMode < TIME_ALWAYS ? TIME_ALWAYS : (timeMode > TIME_REAL ? TIME_REAL : timeMode);
+        timeMode = timeMode < TIME_ALWAYS ? TIME_ALWAYS : (Math.min(timeMode, TIME_REAL));
         startHour = clampHour(startHour);
         endHour = clampHour(endHour);
     }
@@ -131,7 +131,7 @@ public abstract class AreaEffect {
 
     private static float clampWeight(float weight) {
         return Float.isNaN(weight) ? 0.0F
-                : (weight < 0.0F ? 0.0F : (weight > MAX_WEIGHT ? MAX_WEIGHT : weight));
+                : (weight < 0.0F ? 0.0F : (Math.min(weight, MAX_WEIGHT)));
     }
 
     /** 写入公共字段（权重与时间段）到 NBT。子类在 writeToNbt 里、类型专用字段<b>之前</b>先调用本方法。 */
