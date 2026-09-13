@@ -39,6 +39,7 @@ import org.soraworld.areaeffect.common.shape.Selection;
 import org.soraworld.areaeffect.common.util.Vec3i;
 import org.soraworld.areaeffect.common.util.Vec3d;
 
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -421,18 +422,24 @@ public class ClientProxy extends CommonProxy {
         Vec3d pos = new Vec3d(player);
         List<Area> containing = areas.findAt(dim, pos);
 
+        // 当前游戏/现实时间（小时，0..24），供时间段过滤
+        float gameHour = (player.worldObj.getWorldTime() % 24000L) / 1000.0F;
+        float realHour = LocalTime.now().getHour() + LocalTime.now().getMinute() / 60.0F;
+
         for (String typeId : renderers.typeIds()) {
             EffectRenderer renderer = renderers.get(typeId);
             if (renderer == null) {
                 continue;
             }
             // 解析该类型获胜者：重叠区域内权重最高者；权重相同时取较大 id（即后创建者），
-            // 保证重叠集合内结果确定、同帧不抖动（不存在的类型结果为 null）
+            // 保证重叠集合内结果确定、同帧不抖动（不存在的类型结果为 null）。
+            // 不在启用时间段内的效果按"不存在"处理，不参与权重决胜。
             AreaEffect winner = null;
             Area winnerArea = null;
             for (Area area : containing) {
                 AreaEffect eff = effectOf(area, typeId);
-                if (eff != null && (winnerArea == null || eff.getWeight() > winner.getWeight()
+                if (eff != null && eff.inTimeWindow(gameHour, realHour)
+                        && (winnerArea == null || eff.getWeight() > winner.getWeight()
                         || (eff.getWeight() == winner.getWeight() && area.id > winnerArea.id))) {
                     winner = eff;
                     winnerArea = area;

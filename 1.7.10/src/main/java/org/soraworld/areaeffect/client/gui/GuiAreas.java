@@ -59,6 +59,8 @@ public class GuiAreas extends GuiScreen {
     private static final int BTN_SEL = 3;
     private static final int BTN_ADD_EFFECT = 4;
     private static final int BTN_DEL_EFFECT = 5;
+    /** 详情栏：时间段模式（始终/游戏/现实）轮切按钮。 */
+    private static final int BTN_TIME_MODE = 6;
 
     private final ClientProxy proxy;
 
@@ -81,6 +83,9 @@ public class GuiAreas extends GuiScreen {
     private FlatSlider weightSlider;
     private FlatSlider lightSlider;
     private FlatSlider durationSlider;
+    private FlatButton timeModeButton;
+    private FlatSlider startHourSlider;
+    private FlatSlider endHourSlider;
     private GuiTextField remarkField;
 
     // 四栏几何
@@ -287,11 +292,20 @@ public class GuiAreas extends GuiScreen {
         durationSlider = new FlatSlider(detX1 + 10, top + 88, sw, 18,
                 translate("gui.areaeffect.edit.duration"),
                 LightnessEffect.MIN_DURATION, LightnessEffect.MAX_DURATION, 1.0F, 0.1F);
+        // 时间段：模式轮切按钮 + 起始/结束小时滑条（0..24，步进 0.5 小时）
+        timeModeButton = new FlatButton(BTN_TIME_MODE, detX1 + 10, top + 110, sw, 18, "");
+        startHourSlider = new FlatSlider(detX1 + 10, top + 132, sw, 18,
+                translate("gui.areaeffect.edit.startHour"), 0.0F, 24.0F, 6.0F, 0.5F);
+        endHourSlider = new FlatSlider(detX1 + 10, top + 154, sw, 18,
+                translate("gui.areaeffect.edit.endHour"), 0.0F, 24.0F, 18.0F, 0.5F);
         remarkField = new GuiTextField(fontRendererObj, detX1 + 34, top + 6, sw - 24, 16);
         remarkField.setMaxStringLength(Area.REMARK_MAX);
         buttonList.add(weightSlider);
         buttonList.add(lightSlider);
         buttonList.add(durationSlider);
+        buttonList.add(timeModeButton);
+        buttonList.add(startHourSlider);
+        buttonList.add(endHourSlider);
         syncDetailWidgets();
     }
 
@@ -309,7 +323,8 @@ public class GuiAreas extends GuiScreen {
             }
         }
         // 防御：initGui 若中途异常被吞，控件可能为 null；此时清空选中走空界面分支，避免 NPE 连锁
-        if (weightSlider == null || lightSlider == null || durationSlider == null || remarkField == null) {
+        if (weightSlider == null || lightSlider == null || durationSlider == null
+                || timeModeButton == null || startHourSlider == null || endHourSlider == null || remarkField == null) {
             selected = null;
             return;
         }
@@ -317,6 +332,7 @@ public class GuiAreas extends GuiScreen {
         weightSlider.visible = hasEffect;
         lightSlider.visible = hasEffect;
         durationSlider.visible = hasEffect;
+        timeModeButton.visible = hasEffect;
         remarkField.setVisible(has);
         if (hasEffect) {
             AreaEffect effect = pendingEffects.get(effectIdx);
@@ -329,6 +345,12 @@ public class GuiAreas extends GuiScreen {
                 lightSlider.setValueRaw(light.getLightness());
                 durationSlider.setValueRaw(light.getDuration());
             }
+            boolean timed = effect.getTimeMode() != AreaEffect.TIME_ALWAYS;
+            startHourSlider.visible = timed;
+            endHourSlider.visible = timed;
+            timeModeButton.displayString = timeModeLabel(effect.getTimeMode());
+            startHourSlider.setValueRaw(effect.getStartHour());
+            endHourSlider.setValueRaw(effect.getEndHour());
             for (Object b : buttonList) {
                 GuiButton btn = (GuiButton) b;
                 if (btn.id == BTN_SEL) {
@@ -464,6 +486,18 @@ public class GuiAreas extends GuiScreen {
                     light.setDuration(dv);
                     changed = true;
                 }
+            }
+            // 时间段：模式轮切只改字段（按钮文案由 syncDetailWidgets 维护）；
+            // 小时滑条实时回写，ALWAYS 下控件隐藏且不影响判定
+            float sh = startHourSlider.getValue();
+            float eh = endHourSlider.getValue();
+            if (sh != effect.getStartHour()) {
+                effect.setStartHour(sh);
+                changed = true;
+            }
+            if (eh != effect.getEndHour()) {
+                effect.setEndHour(eh);
+                changed = true;
             }
             if (changed) {
                 proxy.previewAreaProps(dims.get(dimIdx), selected.id, effectiveLightness(), effectiveDuration());
@@ -672,6 +706,14 @@ public class GuiAreas extends GuiScreen {
             }
             return;
         }
+        if (button.id == BTN_TIME_MODE) {
+            if (pendingEffects != null && effectIdx >= 0 && effectIdx < pendingEffects.size()) {
+                AreaEffect effect = pendingEffects.get(effectIdx);
+                effect.setTimeMode((effect.getTimeMode() + 1) % 3);
+                syncDetailWidgets();
+            }
+            return;
+        }
         if (button.id == BTN_DEL_EFFECT) {
             if (pendingEffects != null && effectIdx >= 0 && effectIdx < pendingEffects.size()) {
                 pendingEffects.remove(effectIdx);
@@ -704,6 +746,19 @@ public class GuiAreas extends GuiScreen {
             proxy.toggleAreaVisible(dim, selected.id);
             button.displayString = selectionText();
         }
+    }
+
+    /** 时间段模式的按钮文案（始终开启 / 游戏时间 / 现实时间）。 */
+    private String timeModeLabel(int mode) {
+        String name;
+        if (mode == AreaEffect.TIME_GAME) {
+            name = translate("gui.areaeffect.edit.timeMode.game");
+        } else if (mode == AreaEffect.TIME_REAL) {
+            name = translate("gui.areaeffect.edit.timeMode.real");
+        } else {
+            name = translate("gui.areaeffect.edit.timeMode.always");
+        }
+        return translate("gui.areaeffect.edit.timeMode") + ": " + name;
     }
 
     /** 区域线框按钮的当前文案（开/关状态）。 */

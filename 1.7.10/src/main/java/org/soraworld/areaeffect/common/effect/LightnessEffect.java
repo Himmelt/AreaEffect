@@ -41,7 +41,7 @@ public class LightnessEffect extends AreaEffect {
     @Override
     public AreaEffect copy() {
         LightnessEffect copy = new LightnessEffect(lightness, duration);
-        copy.setWeight(getWeight());
+        copyCommonTo(copy);
         return copy;
     }
 
