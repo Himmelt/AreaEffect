@@ -27,12 +27,12 @@ public class AreaClientHandler {
     }
 
     /**
-     * 连接建立：连外部服务器时先清掉上一个会话的区域镜像（见 {@code ClientProxy#onServerConnected}）。
-     * 单机（本地连接）不清 —— 那时客户端与服务端共用同一份数据，清了就是把世界数据清了。
+     * 连接建立：先清空客户端区域镜像（无论单机/外部服务器），随后由登录全量同步重建，
+     * 避免上个会话的残留以幽灵区域留存（见 {@code ClientProxy#onServerConnected}）。
      */
     @SubscribeEvent
     public void onConnected(FMLNetworkEvent.ClientConnectedToServerEvent event) {
-        proxy.onServerConnected(event.isLocal);
+        proxy.onServerConnected();
     }
 
     @SubscribeEvent

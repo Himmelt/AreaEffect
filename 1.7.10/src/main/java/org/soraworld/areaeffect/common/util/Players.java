@@ -2,7 +2,6 @@ package org.soraworld.areaeffect.common.util;
 
 import net.minecraft.command.ICommandSender;
 import net.minecraft.entity.player.EntityPlayerMP;
-import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.ChatComponentTranslation;
 
 /**
@@ -32,14 +31,5 @@ public final class Players {
     /** 发送一条以另一翻译键作为参数的消息（用于拼装物品名等）。 */
     public static void chatWith(EntityPlayerMP player, String key, String argKey) {
         player.addChatMessage(new ChatComponentTranslation(key, new ChatComponentTranslation(argKey)));
-    }
-
-    /**
-     * 当前是否专用服务端。单机下客户端与服务端加载的是同一代理实例、数据本就同源，
-     * 调用点据此跳过对本地玩家的回发同步（推送也无害，只是无谓）。
-     */
-    public static boolean isDedicated() {
-        MinecraftServer server = MinecraftServer.getServer();
-        return server != null && server.isDedicatedServer();
     }
 }

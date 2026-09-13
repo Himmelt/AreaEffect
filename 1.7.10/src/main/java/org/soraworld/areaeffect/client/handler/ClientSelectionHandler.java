@@ -33,7 +33,7 @@ public class ClientSelectionHandler {
     @SubscribeEvent(receiveCanceled = true)
     public void onInteract(PlayerInteractEvent event) {
         EntityPlayer player = event.entityPlayer;
-        if (player != mc.thePlayer || !proxy.isSelectTool(player.getHeldItem())) {
+        if (player != mc.thePlayer || !proxy.isSelectToolLocal(player.getHeldItem())) {
             return;
         }
         if (event.action == PlayerInteractEvent.Action.RIGHT_CLICK_AIR) {

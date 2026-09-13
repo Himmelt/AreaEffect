@@ -14,7 +14,6 @@ import net.minecraftforge.common.config.Configuration;
 import org.soraworld.areaeffect.common.area.AreaTable;
 import org.soraworld.areaeffect.common.handler.AreaServerHandler;
 import org.soraworld.areaeffect.common.net.AreaSync;
-import org.soraworld.areaeffect.common.network.Area;
 import org.soraworld.areaeffect.common.network.MessageAreaDelete;
 import org.soraworld.areaeffect.common.network.MessageAreaUpdate;
 import org.soraworld.areaeffect.common.network.MessageClickAir;
@@ -52,7 +51,7 @@ import java.io.File;
  */
 public class CommonProxy {
 
-    /** 区域数据集。单机下客户端与服务端共用同一实例，故无需回发同步包。 */
+    /** 服务端权威区域数据集；客户端另有独立镜像 {@code ClientProxy#clientAreas}，二者不共享实例、经协议同步。 */
     protected final AreaTable areas = new AreaTable();
     /** 每玩家选区状态（服务端权威）。 */
     protected final SelectionManager selections = new SelectionManager();
@@ -64,8 +63,9 @@ public class CommonProxy {
     protected AreaRequests requests;
 
     /**
-     * 当前选区工具。单机下服务端线程会在指令里改写它，而客户端线程（渲染/交互）与 netty 线程
-     * 都要读，故声明为 volatile 保证可见性 —— 引用赋值本身是原子的，不需要加锁。
+     * 服务端权威的当前选区工具，仅在服务端线程读写（指令改、config 载入、点击判定、下发同步）。
+     * 客户端另有独立镜像 {@code ClientProxy#clientTool}，经 {@code MessageToolSync} 同步、不共享本字段。
+     * 保留 volatile 仅作廉价的跨线程安全发布保险。
      */
     protected volatile Item tool = Items.wooden_axe;
 
@@ -218,11 +218,6 @@ public class CommonProxy {
         selections.clear(player, syncClient);
     }
 
-    /** 玩家当前所在区域；不在任何区域内返回 null。 */
-    public Area findAreaAt(EntityPlayer player) {
-        return areas.findAt(player);
-    }
-
     /** 按当前选区创建区域（指令入口，只创建空区域），业务逻辑在请求层。 */
     public void createArea(EntityPlayerMP player) {
         requests.create(player);
@@ -233,11 +228,9 @@ public class CommonProxy {
         PacketChannel.sendTo(new MessageToolSync(getToolName()), player);
     }
 
-    /** 玩家登录时把已有区域全量推给他（单机下数据同源，无需推送）。 */
+    /** 玩家登录时把已有区域全量推给他；单机（集成服）同样走此协议回环，令客户端镜像与专用服一致地重建。 */
     public void sendAllAreasTo(EntityPlayerMP player) {
-        if (Players.isDedicated()) {
-            areas.byDim().forEach((dim, dimAreas) -> dimAreas.forEach((id, area) -> AreaSync.toPlayer(player, dim, id, area)));
-        }
+        areas.byDim().forEach((dim, dimAreas) -> dimAreas.forEach((id, area) -> AreaSync.toPlayer(player, dim, id, area)));
     }
 
     public void commandTool(EntityPlayerMP player) {
@@ -245,7 +238,7 @@ public class CommonProxy {
         if (stack != null) {
             tool = stack.getItem();
             save();
-            // 专用服客户端持有独立的 tool 副本，变更后须实时推送（单机共享字段，推送也无害）
+            // 客户端只读自有镜像 clientTool，故工具变更后必须实时推送；单机同样经此回环更新镜像
             sendToolSync(player);
             Players.chatWith(player, "chat.tool.set", tool.getUnlocalizedName(stack) + ".name");
         } else {

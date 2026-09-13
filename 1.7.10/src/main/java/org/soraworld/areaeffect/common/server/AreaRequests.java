@@ -173,9 +173,8 @@ public class AreaRequests {
         AreaShape intent = sel.build();
         Area area = table.add(player.dimension, intent);
         Players.chat(player, "chat.create.done");
-        if (Players.isDedicated()) {
-            AreaSync.toAll(player.dimension, area.id, area);
-        }
+        // 单机（集成服）同样走完整网络回环，与专用服一致，杜绝"共享实例即时可见"的捷径
+        AreaSync.toAll(player.dimension, area.id, area);
         // 创建成功后重置选区（保留形状类型，锚点清空），可直接开始下一个选区
         sel.anchors.clear();
         selections.sync(player);

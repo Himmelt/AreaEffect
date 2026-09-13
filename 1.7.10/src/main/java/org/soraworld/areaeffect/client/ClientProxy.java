@@ -9,6 +9,7 @@ import net.minecraft.client.settings.KeyBinding;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.init.Items;
 import net.minecraft.item.Item;
+import net.minecraft.item.ItemStack;
 import net.minecraft.util.ChatComponentTranslation;
 import net.minecraftforge.common.MinecraftForge;
 import org.lwjgl.input.Keyboard;
@@ -20,6 +21,7 @@ import org.soraworld.areaeffect.client.handler.ClientSelectionHandler;
 import org.soraworld.areaeffect.client.handler.LightmapHook;
 import org.soraworld.areaeffect.client.handler.SelectionRenderHandler;
 import org.soraworld.areaeffect.common.CommonProxy;
+import org.soraworld.areaeffect.common.area.AreaTable;
 import org.soraworld.areaeffect.common.effect.AreaEffect;
 import org.soraworld.areaeffect.common.effect.LightnessEffect;
 import org.soraworld.areaeffect.common.network.Area;
@@ -61,7 +63,7 @@ public class ClientProxy extends CommonProxy {
     private final Map<Integer, Set<Integer>> visibleAreas = new ConcurrentHashMap<>();
 
     /** 编辑预览亮度/时长覆盖：dim → id → {lightness, duration}。
-     *  独立于共享 Area，预览值不进入 areas，避免被落盘。 */
+     *  独立于客户端镜像 {@link #clientAreas}、从不写回区域对象，故镜像始终等于服务端同步值、未保存的编辑不外泄。 */
     private final Map<Integer, Map<Integer, float[]>> previewLd = new ConcurrentHashMap<>();
     /** 编辑预览备注覆盖：dim → id → String（同样不入共享对象）。 */
     private final Map<Integer, Map<Integer, String>> previewRemarks = new ConcurrentHashMap<>();
@@ -80,6 +82,19 @@ public class ClientProxy extends CommonProxy {
     private final ConcurrentLinkedQueue<Runnable> clientTasks = new ConcurrentLinkedQueue<>();
 
     private final Minecraft mc = Minecraft.getMinecraft();
+
+    /**
+     * 客户端只读镜像：与继承自 {@code CommonProxy} 的服务端权威 {@code areas} 相互独立、永不共享实例。
+     * 只由网络入站处理器（{@link #handleUpdate}/{@link #handleDelete}）写入，渲染与 GUI 一律读它；
+     * 单机（集成服）同样经完整网络回环填充，不走共享捷径。权威 {@code areas} 不参与客户端渲染。
+     */
+    private final AreaTable clientAreas = new AreaTable();
+
+    /**
+     * 客户端选区工具镜像：与服务端权威 {@code CommonProxy#tool} 独立、不共享。只由 {@link #handleToolSync}
+     * 经 {@code MessageToolSync} 写入、{@link #clientReset} 复位，客户端交互判定 {@link #isSelectToolLocal} 只读它。
+     */
+    private Item clientTool = Items.wooden_axe;
 
     @Override
     public void onPreInit(FMLPreInitializationEvent event) {
@@ -103,20 +118,21 @@ public class ClientProxy extends CommonProxy {
         PacketChannel.bindClient(MessageToolSync.class, this::handleToolSync);
     }
 
-    /** 同步服务端设置的选区工具（MP 客户端不读 config）。netty 线程回调，写 tool 须回主线程。 */
+    /** 同步服务端下发的选区工具到客户端镜像 {@link #clientTool}（客户端不读 config）。netty 回调，写须回主线程。 */
     public void handleToolSync(MessageToolSync packet) {
         runOnClientThread(() -> {
             try {
                 Object object = Item.itemRegistry.getObject(packet.toolName);
-                if (object instanceof Item) {
-                    tool = (Item) object;
-                } else {
-                    tool = Items.wooden_axe;
-                }
+                clientTool = (object instanceof Item) ? (Item) object : Items.wooden_axe;
             } catch (Throwable ignored) {
-                tool = Items.wooden_axe;
+                clientTool = Items.wooden_axe;
             }
         });
+    }
+
+    /** 客户端本地判定：手持物是否为选区工具（读客户端镜像 {@link #clientTool}，非服务端权威 tool）。 */
+    public boolean isSelectToolLocal(ItemStack stack) {
+        return stack != null && stack.getItem().equals(clientTool);
     }
 
     public void sendListRequest() {
@@ -136,17 +152,14 @@ public class ClientProxy extends CommonProxy {
     }
 
     /**
-     * 连接建立时的会话初始化：连外部服务器时，本地区域表只是镜像，先清掉上一个会话的残留 ——
-     * 否则等登录全量同步按 id 覆盖之后，只存在于旧会话的 id 会以幽灵区域的形式留下来。
+     * 连接建立：清空客户端区域镜像 {@link #clientAreas}，随后由登录全量同步重建。
      *
-     * <p>{@code local} 为真表示连的是本机集成服（单机）：此时 {@link #areas} 与集成服务端是
-     * <b>同一个实例</b>（见 {@code CommonProxy#areas}），归服务端所有，绝不能在这里清。
-     * 单机退出世界后该表保持不动，下次加载世界由 {@code AreaStore#load} 负责 clear + 重读。
+     * <p>镜像与集成服务端的权威 {@code areas} 是<b>不同实例</b>，因此无论单机还是连外部服务器都可安全清空
+     * （清了不会动到世界数据）；不清则上个会话残留的 id 会以幽灵区域留存。单机同样走此路径，
+     * 与专用服共用一条"清空 → 全量同步"的时序。
      */
-    public void onServerConnected(boolean local) {
-        if (!local) {
-            areas.clear();
-        }
+    public void onServerConnected() {
+        clientAreas.clear();
     }
 
     public void handleUpdate(MessageAreaUpdate packet) {
@@ -154,14 +167,18 @@ public class ClientProxy extends CommonProxy {
             return; // 反序列化失败（如未知形状），丢弃避免注入 null
         }
         runOnClientThread(() -> {
-            areas.put(packet.dim, packet.id, packet.data);
+            // Area.fromByteBuf 有意不携带 id（id 只走 packet.id），反序列化出的 Area.id 恒为默认 0；
+            // 服务端在入表前会赋 id（AreaTable#add / AreaStore），客户端镜像此处补齐，
+            // 否则 GUI 的 "#"+area.id 及一切按 id 的定位都会把同步来的区域读成 #0。
+            packet.data.id = packet.id;
+            clientAreas.put(packet.dim, packet.id, packet.data);
         });
     }
 
     public void handleDelete(MessageAreaDelete packet) {
         // 同上：镜像写入与界面刷新一并回客户端主线程执行
         runOnClientThread(() -> {
-            areas.remove(packet.dim, packet.id);
+            clientAreas.remove(packet.dim, packet.id);
             // 已开启线框的区域没了就不再画，顺势摘掉本地显示集合，免得每帧空转
             Set<Integer> ids = visibleAreas.get(packet.dim);
             if (ids != null) {
@@ -301,7 +318,7 @@ public class ClientProxy extends CommonProxy {
         List<Area> result = new ArrayList<>();
         Set<Integer> ids = visibleAreas.get(dim);
         if (ids != null) {
-            Map<Integer, Area> dimAreas = areas.inDim(dim);
+            Map<Integer, Area> dimAreas = clientAreas.inDim(dim);
             for (Integer id : ids) {
                 Area area = dimAreas.get(id);
                 if (area != null) {
@@ -388,14 +405,19 @@ public class ClientProxy extends CommonProxy {
         }
     }
 
-    /** 客户端本地区域列表快照（按 id 升序，用于返回列表界面，无需再走服务端请求）。 */
+    /** 客户端本地区域列表快照（读客户端镜像，按 id 升序，用于返回列表界面，无需再走服务端请求）。 */
     public List<Area> getAreasLocal(int dim) {
-        return areas.sortedIn(dim);
+        return clientAreas.sortedIn(dim);
     }
 
-    /** 所有存在区域的维度列表（升序）。 */
+    /** 所有存在区域的维度列表（读客户端镜像，升序）。 */
     public List<Integer> getDimsLocal() {
-        return areas.dims();
+        return clientAreas.dims();
+    }
+
+    /** 客户端玩家当前所在区域：读客户端镜像 {@link #clientAreas}（服务端权威查询见 {@code AreaTable#findAt}）。 */
+    public Area findAreaAt(EntityPlayer player) {
+        return clientAreas.findAt(player);
     }
 
     /** 区域内指定类型的效果实例；该类型效果不在该区域时返回 null。 */
@@ -420,7 +442,7 @@ public class ClientProxy extends CommonProxy {
         drainClientTasks();
         int dim = player.dimension;
         Vec3d pos = new Vec3d(player);
-        List<Area> containing = areas.findAt(dim, pos);
+        List<Area> containing = clientAreas.findAt(dim, pos);
 
         // 当前游戏/现实时间（小时，0..24），供时间段过滤
         float gameHour = (player.worldObj.getWorldTime() % 24000L) / 1000.0F;
@@ -455,7 +477,7 @@ public class ClientProxy extends CommonProxy {
                 renderEffect = effectOf(effectiveArea(dim, winnerArea), typeId);
                 // 保留最近一次亮度效果的时长，作为"离开所有区域"淡出的速度
                 if (winner instanceof LightnessEffect) {
-                    lastDuration = winner.getDuration();
+                    lastDuration = ((LightnessEffect) winner).getDuration();
                 }
             }
             renderer.onFrame(areaChanged, renderEffect, lastDuration);
@@ -463,12 +485,11 @@ public class ClientProxy extends CommonProxy {
     }
 
     public void clientReset() {
-        tool = Items.wooden_axe;
+        clientTool = Items.wooden_axe;
         lastDuration = 1.0F;
-        // 【不要在这里清 areas】：单机下它与集成服务端是同一实例（见 CommonProxy#areas 的说明），
-        // 而 Minecraft.loadWorld 会先断连接（触发本方法）、后停集成服并走 onServerStopping 的兜底
-        // flushStore —— 若此刻存档恰好是脏的，就会把空表写回存档、清空全部区域。
-        // 镜像的清理改在「连上外部服务器」时做（onServerConnected），单机则交给下一次 AreaStore#load。
+        // 清客户端镜像：它与集成服务端的权威 areas 已是不同实例，清它不会动到世界数据；
+        // 权威表的落盘由 AreaStore 负责（服务端侧），镜像则在下次 onServerConnected 清空并经登录全量同步重建。
+        clientAreas.clear();
         selections.clearAll();
         selSelection = null;
         overlayShape = null;

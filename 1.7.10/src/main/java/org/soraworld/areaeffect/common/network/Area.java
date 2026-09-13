@@ -38,9 +38,9 @@ public class Area {
     private String remark = "";
 
     /**
-     * 挂载的效果列表（copy-on-write）：单机下集成服在服务器线程整组替换，
-     * 渲染线程每帧遍历同一对象，原地 clear/addAll 会触发并发修改异常，
-     * 故所有变更都替换为新的不可变快照，读取方拿到的永远是完整旧列表。
+     * 挂载的效果列表（copy-on-write）：任何变更都整组替换为新的不可变快照，绝不原地 clear/addAll。
+     * 原因：列表会被逐帧遍历（渲染 / 序列化），若原地改写与遍历交叠会读到半更新状态或触发并发修改异常；
+     * 整组替换保证读取方拿到的永远是一份完整、一致的旧列表。
      */
     private volatile List<AreaEffect> effects = new ArrayList<>();
 

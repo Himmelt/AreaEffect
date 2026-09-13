@@ -1,5 +1,7 @@
 package org.soraworld.areaeffect.common.shape;
 
+import org.soraworld.areaeffect.common.util.Vec3i;
+
 import java.util.ArrayList;
 import java.util.List;
 
