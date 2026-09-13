@@ -5,11 +5,8 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.soraworld.areaeffect.common.area.AreaTable;
 import org.soraworld.areaeffect.common.effect.AreaEffect;
-import org.soraworld.areaeffect.common.effect.EffectTypes;
-import org.soraworld.areaeffect.common.effect.LightnessEffect;
 import org.soraworld.areaeffect.common.net.AreaSync;
 import org.soraworld.areaeffect.common.network.Area;
-import org.soraworld.areaeffect.common.network.MessageConflictAreas;
 import org.soraworld.areaeffect.common.network.MessageDeleteRequest;
 import org.soraworld.areaeffect.common.network.MessageListReply;
 import org.soraworld.areaeffect.common.network.MessageSelectShape;
@@ -101,12 +98,8 @@ public class AreaRequests {
                 deduped.add(effect);
             }
         }
-        // 不变式：每个区域恒定带一条亮度效果。客户端可以提交空列表（或只带其它类型的效果），
-        // 而渲染端只在"区域内有亮度效果"时才驱动过渡 —— 缺了它，玩家站进该区域时画面会
-        // 沿用上一个区域的亮度（见 ClientProxy#updateClientLight）。这里补一条保留当前值的兜底。
-        if (!seenTypes.contains(EffectTypes.TYPE_LIGHTNESS)) {
-            deduped.add(new LightnessEffect(area.getLightness(), area.getDuration()));
-        }
+        // 效果集已允许为空（区域可以不带任何效果）。区域允许任意重叠，不做同种效果权重平局校验，
+        // 重叠集内同种效果谁显示由渲染端"权重优先、同权取较大 id"决定（见 ClientProxy#updateClientLight）。
         area.setEffects(deduped);
         area.setRemark(packet.remark);
         store.markDirty();
@@ -168,28 +161,17 @@ public class AreaRequests {
     }
 
     /**
-     * 按当前选区创建区域（指令入口）。
-     * 冲突时不创建，并把冲突区域 id 发回客户端以便自动显示它们的线框。
+     * 按当前选区创建区域（指令入口）：只创建区域本体，<b>不携带任何效果</b>。
+     * 区域<b>允许任意重叠</b>，不做任何重叠/平局校验；效果在面板里配置，保存即生效。
      */
-    public void create(EntityPlayerMP player, float lightness, float duration) {
+    public void create(EntityPlayerMP player) {
         Selection sel = selections.existing(player);
         if (sel == null || !sel.isBuildable()) {
             Players.chat(player, "chat.create.noselect");
             return;
         }
         AreaShape intent = sel.build();
-        List<Integer> conflicts = table.conflictsIn(player.dimension, intent);
-        if (!conflicts.isEmpty()) {
-            Players.chat(player, "chat.create.conflict");
-            // 把冲突区域的框线都显示出来
-            PacketChannel.sendTo(new MessageConflictAreas(player.dimension, conflicts), player);
-            return;
-        }
-        Area area = table.add(player.dimension, intent, lightness, duration);
-        if (area == null) {
-            Players.chat(player, "chat.create.conflict");
-            return;
-        }
+        Area area = table.add(player.dimension, intent);
         Players.chat(player, "chat.create.done");
         if (Players.isDedicated()) {
             AreaSync.toAll(player.dimension, area.id, area);

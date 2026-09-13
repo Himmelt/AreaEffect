@@ -1,5 +1,4 @@
 chat.create.done=Area is created
-chat.create.conflict=Selected area conflicts with existed areas
 chat.create.noselect=Please select start pos and end pos first
 chat.tool.set=Set select tool to : %s
 chat.tool.get=Current select tool is : %s
@@ -15,11 +14,24 @@ key.areaeffect.selrender=Toggle Selection Render
 key.categories.areaeffect=AreaEffect
 gui.areaeffect.list.title2=Area Manager
 gui.areaeffect.list.noselect=Click an area to view details
+gui.areaeffect.list.noeffect=No effect in this area, click Add Effect
+gui.areaeffect.edit.addEffect=Add Effect
+gui.areaeffect.edit.delEffect=Remove Effect
+gui.areaeffect.edit.effectName=Effect: %s
+gui.areaeffect.effect.lightness=Lightness
+gui.areaeffect.effectlist.none=No effect in this area, click Add Effect
 gui.areaeffect.selection.on=ON
 gui.areaeffect.selection.off=OFF
 gui.areaeffect.edit.selection=Area Wireframe
 gui.areaeffect.edit.lightness=Target lightness (CIE L*):
 gui.areaeffect.edit.duration=Transition duration (s):
+gui.areaeffect.edit.weight=Weight (higher wins):
+gui.areaeffect.edit.timeMode=Active Period
+gui.areaeffect.edit.timeMode.always=Always
+gui.areaeffect.edit.timeMode.game=Game Time
+gui.areaeffect.edit.timeMode.real=Real Time
+gui.areaeffect.edit.startHour=Start hour:
+gui.areaeffect.edit.endHour=End hour:
 gui.areaeffect.edit.save=Save
 gui.areaeffect.edit.tp=Teleport
 gui.areaeffect.edit.del=Delete
@@ -31,7 +43,8 @@ gui.areaeffect.shape.round_pillar=Full Round Pillar
 gui.areaeffect.shape.sphere=Sphere
 gui.areaeffect.shape.polygon=Polygon Prism
 gui.areaeffect.shape.polygon_pillar=Full Polygon Pillar
-chat.command.usage=Usage: /areaeffect pos1|pos2|create [lightness] [duration]|tool (press J for the area manager)
+gui.areaeffect.shape.dimension=Whole Dimension
+chat.command.usage=Usage: /areaeffect pos1|pos2|create|tool (press J for the area manager)
 gui.areaeffect.list.dim=Dim %s
 gui.areaeffect.desc.box=(%s,%s,%s) ~ (%s,%s,%s)
 gui.areaeffect.desc.square_pillar=(%s,%s) ~ (%s,%s) full height
@@ -40,3 +53,4 @@ gui.areaeffect.desc.round_pillar=center (%s,%s) R=%s full height
 gui.areaeffect.desc.polygon=polygon vertices=%s height=%s
 gui.areaeffect.desc.polygon_pillar=polygon vertices=%s full height
 gui.areaeffect.desc.sphere=center (%s,%s,%s) R=%s
+gui.areaeffect.desc.dimension=Whole dimension

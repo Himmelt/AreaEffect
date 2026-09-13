@@ -109,12 +109,11 @@ public class AreaStore {
                     if (shape == null) {
                         continue;
                     }
-                    area = new Area(shape, 100.0F, 1.0F);
+                    area = new Area(shape);
                 } else {
                     // 旧存档兼容：无 shape 键按 box 从 x1..z2 读取
                     area = Area.box(tag.getInteger("x1"), tag.getInteger("y1"), tag.getInteger("z1"),
-                            tag.getInteger("x2"), tag.getInteger("y2"), tag.getInteger("z2"),
-                            100.0F, 1.0F);
+                            tag.getInteger("x2"), tag.getInteger("y2"), tag.getInteger("z2"));
                 }
                 area.setRemark(tag.getString("remark"));
                 area.setEffects(readEffectsNbt(tag.getTagList("effects", 10)));

@@ -75,7 +75,7 @@ public class PrismShape extends AreaShape {
         return sectionContains(floor(x), floor(z));
     }
 
-    /** XZ 截面判定（方块坐标），与 {@link #contains} 的 XZ 判据一致，供冲突采样复用。 */
+    /** XZ 截面判定（方块坐标），与 {@link #contains} 的 XZ 判据一致。 */
     boolean sectionContains(int bx, int bz) {
         switch (section) {
             case RECT:
@@ -341,79 +341,6 @@ public class PrismShape extends AreaShape {
 
     private static void line(List<Edge> result, double x1, double y1, double z1, double x2, double y2, double z2) {
         result.add(new Edge(x1, y1, z1, x2, y2, z2));
-    }
-
-    @Override
-    protected boolean exactConflict(AreaShape other) {
-        if (other instanceof PrismShape) {
-            return conflictPrism((PrismShape) other);
-        }
-        if (other instanceof SphereShape) {
-            return conflictSphere((SphereShape) other);
-        }
-        // 未知形状配对：无精确判据，保守视为冲突（拒绝创建），避免静默漏判
-        LOGGER.warn("No exact conflict rule for PrismShape vs {}, treating as conflict", other.getClass().getName());
-        return true;
-    }
-
-    /**
-     * 柱 × 柱：两柱的方块集均为"截面 × Y 区间"的笛卡尔积，AABB 预筛已保证
-     * Y 区间与 XZ 包围盒相交，故只需在 XZ 包围盒交集内找共享截面方块。
-     */
-    private boolean conflictPrism(PrismShape p) {
-        int x1 = Math.max(bounds.minX, p.bounds.minX);
-        int x2 = Math.min(bounds.maxX, p.bounds.maxX);
-        int z1 = Math.max(bounds.minZ, p.bounds.minZ);
-        int z2 = Math.min(bounds.maxZ, p.bounds.maxZ);
-        long grid = (long) (x2 - x1 + 1) * (z2 - z1 + 1);
-        if (grid <= 0L) {
-            return false;
-        }
-        if (grid > CONFLICT_SAMPLE_LIMIT) {
-            return true; // 采样预算超限：退回保守判定（视为冲突）
-        }
-        return existsShared(x1, x2, z1, z2, this::sectionContains, p::sectionContains);
-    }
-
-    /**
-     * 柱 × 球：按 Y 逐层降维——球在层 by 上的截面是圆盘
-     * dx²+dz² <= r²+ε-dy²（与 {@link SphereShape#contains} 判据一致），
-     * 与柱截面做 2D 共享点采样。
-     */
-    private boolean conflictSphere(SphereShape s) {
-        int y1 = Math.max(bounds.minY, s.bounds.minY);
-        int y2 = Math.min(bounds.maxY, s.bounds.maxY);
-        int x1 = Math.max(bounds.minX, s.bounds.minX);
-        int x2 = Math.min(bounds.maxX, s.bounds.maxX);
-        int z1 = Math.max(bounds.minZ, s.bounds.minZ);
-        int z2 = Math.min(bounds.maxZ, s.bounds.maxZ);
-        long grid = (long) (x2 - x1 + 1) * (z2 - z1 + 1);
-        if (grid <= 0L) {
-            return false;
-        }
-        if ((long) (y2 - y1 + 1) * grid > CONFLICT_SAMPLE_LIMIT) {
-            return true; // 采样预算超限：退回保守判定（视为冲突）
-        }
-        int cx = s.centerX();
-        int cz = s.centerZ();
-        double rr2Base = (double) s.radius() * s.radius() + 0.001D;
-        for (int by = y1; by <= y2; by++) {
-            int dy = by - s.centerY();
-            double rr2 = rr2Base - (double) dy * dy;
-            if (rr2 < 0.0D) {
-                continue; // 该层超出球体范围
-            }
-            for (int bx = x1; bx <= x2; bx++) {
-                double dx = (double) bx - cx;
-                for (int bz = z1; bz <= z2; bz++) {
-                    double dz = (double) bz - cz;
-                    if (dx * dx + dz * dz <= rr2 && sectionContains(bx, bz)) {
-                        return true;
-                    }
-                }
-            }
-        }
-        return false;
     }
 
     @Override

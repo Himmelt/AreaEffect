@@ -142,6 +142,12 @@ public class SelectionRenderHandler {
             case ShapeTypes.TYPE_POLYGON:
                 polygon(tessellator, x, y, s);
                 break;
+            case ShapeTypes.TYPE_DIMENSION:
+                // 维度：外框 + 十字平分线，示意"覆盖整个维度"
+                rect(tessellator, x, y, x + f, y + f);
+                line(tessellator, cx, y + f * 0.15F, cx, y + f * 0.85F);
+                line(tessellator, x + f * 0.15F, cy, x + f * 0.85F, cy);
+                break;
             default: // polygon_pillar
                 polygon(tessellator, x, y, s);
                 break;
@@ -162,6 +168,8 @@ public class SelectionRenderHandler {
                 return new float[]{1.0F, 0.5F, 0.9F};
             case ShapeTypes.TYPE_POLYGON:
                 return new float[]{1.0F, 0.65F, 0.3F};
+            case ShapeTypes.TYPE_DIMENSION:
+                return new float[]{0.55F, 0.4F, 1.0F};
             default:
                 return new float[]{1.0F, 0.4F, 0.4F};
         }

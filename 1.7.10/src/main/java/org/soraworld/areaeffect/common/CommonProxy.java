@@ -18,7 +18,6 @@ import org.soraworld.areaeffect.common.network.Area;
 import org.soraworld.areaeffect.common.network.MessageAreaDelete;
 import org.soraworld.areaeffect.common.network.MessageAreaUpdate;
 import org.soraworld.areaeffect.common.network.MessageClickAir;
-import org.soraworld.areaeffect.common.network.MessageConflictAreas;
 import org.soraworld.areaeffect.common.network.MessageDeleteRequest;
 import org.soraworld.areaeffect.common.network.MessageListReply;
 import org.soraworld.areaeffect.common.network.MessageListRequest;
@@ -41,7 +40,7 @@ import java.io.File;
  *
  * <p>本类<b>只保留生命周期装配与薄委托</b>，业务逻辑已按职责迁移到四个组件：
  * <ul>
- *   <li>{@link AreaTable} —— 区域数据、查询、冲突判定与 id 分配</li>
+ *   <li>{@link AreaTable} —— 区域数据、玩家所在区域查询与 id 分配</li>
  *   <li>{@link SelectionManager} —— 每玩家选区状态与同步下发</li>
  *   <li>{@link AreaStore} —— 配置与区域 NBT 持久化（含合并落盘）</li>
  *   <li>{@link AreaRequests} —— 入站请求的鉴权与业务编排</li>
@@ -109,7 +108,8 @@ public class CommonProxy {
         PacketChannel.register(10, MessageTpRequest.class);
         PacketChannel.register(11, MessageSelectShape.class);
         PacketChannel.register(12, MessageToolSync.class);
-        PacketChannel.register(13, MessageConflictAreas.class);
+        // 13 为历史遗留空缺（原冲突提示消息 MessageConflictAreas 已随"放开重叠"删除）。
+        // 保留编号不回收：一旦复用，与旧包混连时会误解析成已删除的消息类型。
         PacketChannel.register(14, MessageClickAir.class);
     }
 
@@ -223,9 +223,9 @@ public class CommonProxy {
         return areas.findAt(player);
     }
 
-    /** 按当前选区创建区域（指令入口），业务逻辑在请求层。 */
-    public void createArea(EntityPlayerMP player, float lightness, float duration) {
-        requests.create(player, lightness, duration);
+    /** 按当前选区创建区域（指令入口，只创建空区域），业务逻辑在请求层。 */
+    public void createArea(EntityPlayerMP player) {
+        requests.create(player);
     }
 
     /** 向客户端同步当前选区工具（MP 客户端不读 config）。 */

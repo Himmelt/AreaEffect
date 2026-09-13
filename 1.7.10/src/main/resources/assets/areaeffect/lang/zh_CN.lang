@@ -1,5 +1,4 @@
 chat.create.done=已创建新的区域
-chat.create.conflict=选区和已有区域冲突，请重新选择
 chat.create.noselect=请先创建一个选区
 chat.tool.set=选择工具设置为 : %s
 chat.tool.get=当前选择工具为 : %s
@@ -15,11 +14,24 @@ key.areaeffect.selrender=切换选区线框显示
 key.categories.areaeffect=AreaEffect
 gui.areaeffect.list.title2=区域管理
 gui.areaeffect.list.noselect=点击左侧区域查看详情
+gui.areaeffect.list.noeffect=该区域暂无效果，点「添加效果」新增
+gui.areaeffect.edit.addEffect=添加效果
+gui.areaeffect.edit.delEffect=删除效果
+gui.areaeffect.edit.effectName=效果：%s
+gui.areaeffect.effect.lightness=亮度
+gui.areaeffect.effectlist.none=该区域暂无效果，点「添加效果」新增
 gui.areaeffect.selection.on=开
 gui.areaeffect.selection.off=关
 gui.areaeffect.edit.selection=区域线框
 gui.areaeffect.edit.lightness=目标亮度 (CIE L*):
 gui.areaeffect.edit.duration=过渡时长 (秒):
+gui.areaeffect.edit.weight=权重 (越大越优先):
+gui.areaeffect.edit.timeMode=生效时段
+gui.areaeffect.edit.timeMode.always=始终开启
+gui.areaeffect.edit.timeMode.game=游戏时间
+gui.areaeffect.edit.timeMode.real=现实时间
+gui.areaeffect.edit.startHour=起始小时:
+gui.areaeffect.edit.endHour=结束小时:
 gui.areaeffect.edit.save=保存
 gui.areaeffect.edit.tp=传送
 gui.areaeffect.edit.del=删除
@@ -31,7 +43,8 @@ gui.areaeffect.shape.round_pillar=全高圆柱
 gui.areaeffect.shape.sphere=球体
 gui.areaeffect.shape.polygon=多边形柱
 gui.areaeffect.shape.polygon_pillar=全高多边形柱
-chat.command.usage=用法: /areaeffect pos1|pos2|create [亮度] [时长]|tool（区域管理请按 J 键）
+gui.areaeffect.shape.dimension=整个维度
+chat.command.usage=用法: /areaeffect pos1|pos2|create|tool（区域管理请按 J 键）
 gui.areaeffect.list.dim=维度 %s
 gui.areaeffect.desc.box=(%s,%s,%s) ~ (%s,%s,%s)
 gui.areaeffect.desc.square_pillar=(%s,%s) ~ (%s,%s) 全高
@@ -40,3 +53,4 @@ gui.areaeffect.desc.round_pillar=圆心(%s,%s) R=%s 全高
 gui.areaeffect.desc.polygon=多边形 顶点=%s 高=%s
 gui.areaeffect.desc.polygon_pillar=多边形 顶点=%s 全高
 gui.areaeffect.desc.sphere=球心(%s,%s,%s) R=%s
+gui.areaeffect.desc.dimension=整个维度

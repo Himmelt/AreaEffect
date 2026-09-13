@@ -30,12 +30,20 @@ public class Selection {
         this.anchors.clear();
     }
 
+    /** 是否为维度形状（无需锚点，创建即整个维度）。 */
+    public boolean isDimension() {
+        return ShapeTypes.TYPE_DIMENSION.equals(shapeType);
+    }
+
     public boolean isPolygon() {
         return ShapeTypes.isPolygon(shapeType);
     }
 
-    /** 左键点击处理（服务端分派）。 */
+    /** 左键点击处理（服务端分派）。维度形状无视选区，不收集锚点。 */
     public void onClickLeft(Vec3i pos) {
+        if (isDimension()) {
+            return;
+        }
         if (ShapeTypes.isPolygon(shapeType)) {
             // 多边形：追加顶点（自动闭合预览由渲染处理，无需手动闭合）
             if (anchors.size() < MAX_ANCHORS) {
@@ -49,6 +57,9 @@ public class Selection {
 
     /** 右键点击处理（服务端分派，BLOCK / AIR 交互共用）。多边形下撤回上一个点；AIR 无坐标，二点形状忽略。 */
     public void onClickRight(Vec3i pos) {
+        if (isDimension()) {
+            return;
+        }
         if (ShapeTypes.isPolygon(shapeType)) {
             undoLastVertex();
         } else if (pos != null) {

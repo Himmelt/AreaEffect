@@ -39,24 +39,34 @@ public class LightnessEffect extends AreaEffect {
     }
 
     @Override
+    public AreaEffect copy() {
+        LightnessEffect copy = new LightnessEffect(lightness, duration);
+        copyCommonTo(copy);
+        return copy;
+    }
+
+    @Override
     public String typeId() {
         return EffectTypes.TYPE_LIGHTNESS;
     }
 
     @Override
     public void writeToNbt(NBTTagCompound tag) {
+        writeNbtFields(tag);
         tag.setFloat("lightness", lightness);
         tag.setFloat("duration", duration);
     }
 
     @Override
     public void writeToBuf(ByteBuf buf) {
+        writeBufFields(buf);
         buf.writeFloat(lightness);
         buf.writeFloat(duration);
     }
 
     @Override
     public void sanitize() {
+        super.sanitize();
         lightness = floatIsNaN(lightness) ? 100.0F : Math.max(0.0F, Math.min(100.0F, lightness));
         duration = clampDuration(duration);
     }

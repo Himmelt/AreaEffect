@@ -3,8 +3,6 @@ package org.soraworld.areaeffect.common.shape;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.soraworld.areaeffect.common.util.Vec3d;
 import org.soraworld.areaeffect.common.util.Vec3i;
 
@@ -17,8 +15,6 @@ import java.util.List;
  * 形状由构造时传入的锚点决定，渲染用 {@link #edges()}，判定用 {@link #contains}。
  */
 public abstract class AreaShape {
-
-    protected static final Logger LOGGER = LogManager.getLogger("AreaEffect");
 
     /** 闭区间方块坐标包围盒。通天柱 FULL 高度下 minY=0、maxY=255。 */
     public static final class Bounds {
@@ -72,6 +68,17 @@ public abstract class AreaShape {
     public abstract boolean contains(double x, double y, double z);
 
     /**
+     * AABB 包围盒级包含粗判（保守、闭区间）：坐标落在形状的轴对齐包围盒内才可能真正命中。
+     * 用于"玩家所在区域"查询时<b>先粗筛快速排除远距离区域</b>，命中的再走精确 {@link #contains}，
+     * 避免每次查询都对全部区域做昂贵的点在多边形判定。
+     */
+    public boolean boundsContains(double x, double y, double z) {
+        return x >= bounds.minX && x <= bounds.maxX
+                && y >= bounds.minY && y <= bounds.maxY
+                && z >= bounds.minZ && z <= bounds.maxZ;
+    }
+
+    /**
      * 渲染线段（世界绝对坐标，线框外沿已 +1）。
      *
      * <p>形状不可变，因此结果只计算一次并缓存：线框是<b>每帧</b>绘制的，而一次
@@ -100,47 +107,10 @@ public abstract class AreaShape {
     public abstract Object[] describeArgs();
 
     /**
-     * v2 冲突检测：先 AABB 包围盒相交粗筛（保守快速），通过后再做方块级精确判定。
-     * 精确语义：两区域冲突 ⇔ 存在整数方块同时位于两区域内
-     * （即玩家站在该方块会同时触发两个区域的效果），判据与 {@link #contains} 完全一致。
-     * 采样超出 {@link #CONFLICT_SAMPLE_LIMIT} 预算时退回保守判定（视为冲突）。
+     * 冲突几何判定（conflict/boundsOverlap/exactConflict/采样预算/Section/existsShared）随
+     * "放开区域重叠"一并移除：区域允许任意重叠后，形状间冲突检测不再有调用方。
+     * 玩家所在区域查询已改用 {@link #boundsContains} 粗筛 + {@link #contains} 精确判定。
      */
-    public boolean conflict(AreaShape other) {
-        return boundsOverlap(other) && exactConflict(other);
-    }
-
-    /** AABB 包围盒相交粗判（保守）。 */
-    private boolean boundsOverlap(AreaShape other) {
-        return bounds.minX <= other.bounds.maxX && bounds.maxX >= other.bounds.minX
-                && bounds.minY <= other.bounds.maxY && bounds.maxY >= other.bounds.minY
-                && bounds.minZ <= other.bounds.maxZ && bounds.maxZ >= other.bounds.minZ;
-    }
-
-    /** 方块级精确冲突判定（仅在 AABB 已相交时调用）：是否存在共享整数方块。 */
-    protected abstract boolean exactConflict(AreaShape other);
-
-    /**
-     * 冲突精确采样的单对预算（方块数）：超出则退回保守判定（视为冲突），
-     * 防止极端大区域（如超大跨度多边形）逐方块采样卡顿服务端。
-     */
-    protected static final long CONFLICT_SAMPLE_LIMIT = 1 << 18;
-
-    /** 2D 截面谓词（方块坐标，XZ 平面），判据须与对应形状 contains 的 XZ 部分一致。 */
-    protected interface Section {
-        boolean contains(int bx, int bz);
-    }
-
-    /** 在 [x1..x2]×[z1..z2] 方块范围内寻找同时命中两个截面的点（命中即返回，提前退出）。 */
-    protected static boolean existsShared(int x1, int x2, int z1, int z2, Section a, Section b) {
-        for (int bx = x1; bx <= x2; bx++) {
-            for (int bz = z1; bz <= z2; bz++) {
-                if (a.contains(bx, bz) && b.contains(bx, bz)) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
 
     public Vec3d center() {
         return new Vec3d((bounds.minX + bounds.maxX + 1.0D) / 2.0D,
@@ -186,16 +156,12 @@ public abstract class AreaShape {
     /**
      * 从 NBT 读回锚点列表（type 键由调用方 {@link ShapeTypes} 分派）。
      * 与 buf 路径同源地收窄到 {@link Selection#MAX_ANCHORS}：正常选区不可能超过该值，
-     * 超限只可能来自被手工编辑或异版本的存档，截断并告警好过让它在网络上被静默截断。
+     * 超限只可能来自被手工编辑或异版本的存档，截断好过让它在网络上被静默截断。
      */
     protected static List<Vec3i> readAnchorsNbt(NBTTagCompound tag) {
         List<Vec3i> anchors = new ArrayList<>();
         NBTTagList list = tag.getTagList("anchors", 10);
         int count = Math.min(list.tagCount(), Selection.MAX_ANCHORS);
-        if (list.tagCount() > Selection.MAX_ANCHORS) {
-            LOGGER.warn("Shape has {} anchors in save, truncated to {} (Selection.MAX_ANCHORS)",
-                    list.tagCount(), Selection.MAX_ANCHORS);
-        }
         for (int i = 0; i < count; i++) {
             NBTTagCompound anchorTag = list.getCompoundTagAt(i);
             anchors.add(new Vec3i(anchorTag.getInteger("x"), anchorTag.getInteger("y"), anchorTag.getInteger("z")));

@@ -114,42 +114,32 @@ public class AreaTable {
         Vec3d pos = new Vec3d(player);
         for (Map.Entry<Integer, Area> entry : inDim(player.dimension).entrySet()) {
             Area area = entry.getValue();
-            if (area.contains(pos)) {
+            if (area.boundsContains(pos) && area.contains(pos)) {
                 return area;
             }
         }
         return null;
     }
 
-    /** 找出与给定形状冲突（方块级精确判定）的全部已存区域 id。 */
-    public List<Integer> conflictsIn(int dim, AreaShape intent) {
-        List<Integer> conflicts = new ArrayList<>();
-        for (Map.Entry<Integer, Area> entry : inDim(dim).entrySet()) {
-            if (intent.conflict(entry.getValue().shape())) {
-                conflicts.add(entry.getKey());
-            }
-        }
-        return conflicts;
-    }
-
-    /** 该维度下是否已有区域与给定区域冲突。 */
-    public boolean conflicts(int dim, Area intent) {
+    /** 指定维度内所有包含给定坐标的区域（区域允许重叠，渲染端需拿到全部候选再按权重决出）。 */
+    public List<Area> findAt(int dim, Vec3d pos) {
+        List<Area> result = new ArrayList<>();
         for (Area area : inDim(dim).values()) {
-            if (intent.conflict(area)) {
-                return true;
+            // 先 AABB 粗筛排除远距离区域，命中再走精确点在形状判定，避免区域量大时每帧对全部区域全量 contains
+            if (area.boundsContains(pos) && area.contains(pos)) {
+                result.add(area);
             }
         }
-        return false;
+        return result;
     }
 
     /**
-     * 新增区域：先做冲突判定，冲突则返回 null 且不占用 id；否则分配 id 入表并返回实例。
+     * 新增一个<b>不携带任何效果</b>的空区域，直接分配 id 入表并返回实例。
+     * 区域<b>允许任意重叠</b>、不做任何冲突校验；效果与权重由用户在面板里后续配置
+     * （重叠集内同种效果的胜负由渲染端"权重优先、同权取较大 id"决定）。
      */
-    public Area add(int dim, AreaShape shape, float lightness, float duration) {
-        Area area = new Area(shape, lightness, duration);
-        if (conflicts(dim, area)) {
-            return null;
-        }
+    public Area add(int dim, AreaShape shape) {
+        Area area = new Area(shape);
         area.id = allocateId();
         put(dim, area.id, area);
         return area;

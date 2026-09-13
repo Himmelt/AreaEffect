@@ -49,11 +49,17 @@ public class Area {
         this.effects = Collections.singletonList(new LightnessEffect(lightness, duration));
     }
 
-    /** 旧存档兼容工厂：以六坐标构造长方体区域。 */
-    public static Area box(int x1, int y1, int z1, int x2, int y2, int z2, float lightness, float duration) {
+    /** 创建不带任何效果的纯区域（区域创建阶段无效果，效果由面板后续添加）。 */
+    public Area(AreaShape shape) {
+        this.shape = shape;
+        this.effects = Collections.emptyList();
+    }
+
+    /** 旧存档兼容工厂：以六坐标构造长方体区域（无效果；旧存档的淡入/亮度随后经 effects 读入覆盖）。 */
+    public static Area box(int x1, int y1, int z1, int x2, int y2, int z2) {
         AreaShape shape = new PrismShape(PrismShape.Section.RECT, PrismShape.Height.BOUNDED,
                 Arrays.asList(new Vec3i(x1, y1, z1), new Vec3i(x2, y2, z2)), false);
-        return new Area(shape, lightness, duration);
+        return new Area(shape);
     }
 
     public AreaShape shape() {
@@ -146,7 +152,7 @@ public class Area {
         if (shape == null) {
             return null; // 形状不可识别：字节已消费到元素边界，调用方可安全继续读下一个
         }
-        Area area = new Area(shape, 100.0F, 1.0F);
+        Area area = new Area(shape);
         area.setRemark(remark);
         area.setEffects(effects);
         return area;
@@ -160,8 +166,15 @@ public class Area {
         return contains(pos.x, pos.y, pos.z);
     }
 
-    public boolean conflict(Area area) {
-        return shape.conflict(area.shape());
+    /** AABB 包围盒级包含粗判：排在精确 {@link #contains} 之前快速排除远距离区域。 */
+    public boolean boundsContains(Vec3d pos) {
+        return shape.boundsContains(pos.x, pos.y, pos.z);
+    }
+
+    /** 亮度效果的权重；无亮度效果时返回默认 0。 */
+    public float getWeight() {
+        LightnessEffect effect = lightnessEffect();
+        return effect == null ? 0.0F : effect.getWeight();
     }
 
     public void center(EntityPlayer player) {
