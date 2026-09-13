@@ -38,15 +38,10 @@ import org.soraworld.areaeffect.common.network.MessageSelectShape;
 import org.soraworld.areaeffect.common.network.MessageToolSync;
 import org.soraworld.areaeffect.common.network.PacketChannel;
 import org.soraworld.areaeffect.common.shape.Selection;
-import org.soraworld.areaeffect.common.util.Vec3i;
 import org.soraworld.areaeffect.common.util.Vec3d;
 
 import java.time.LocalTime;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
@@ -132,7 +127,7 @@ public class ClientProxy extends CommonProxy {
 
     /** 客户端本地判定：手持物是否为选区工具（读客户端镜像 {@link #clientTool}，非服务端权威 tool）。 */
     public boolean isSelectToolLocal(ItemStack stack) {
-        return stack != null && stack.getItem().equals(clientTool);
+        return stack != null && Objects.equals(stack.getItem(), clientTool);
     }
 
     public void sendListRequest() {
@@ -196,9 +191,7 @@ public class ClientProxy extends CommonProxy {
         runOnClientThread(() -> {
             selSelection = new Selection();
             selSelection.shapeType = packet.shapeType;
-            for (Vec3i anchor : packet.anchors) {
-                selSelection.anchors.add(anchor);
-            }
+            Collections.addAll(selSelection.anchors, packet.anchors);
         });
     }
 
