@@ -45,6 +45,8 @@ final class GuiTheme {
     static final int COLOR_SLIDER_TRACK = 0x1A1A1AAA;
     /** 滑动条滑块。 */
     static final int COLOR_SLIDER_THUMB = 0xE8E8E8FF;
+    /** 滑动条滑块悬停/拖拽高亮（填充类，不透明黄）。 */
+    static final int COLOR_SLIDER_THUMB_HOT = 0xFFFF00FF;
     /** 滑动条数值文字。 */
     static final int COLOR_SLIDER_TEXT = 0xF0F0F0;
     /** 滚动条轨道。 */

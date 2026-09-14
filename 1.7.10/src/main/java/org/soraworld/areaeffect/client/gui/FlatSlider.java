@@ -7,6 +7,7 @@ import static org.soraworld.areaeffect.client.gui.GuiTheme.COLOR_BORDER;
 import static org.soraworld.areaeffect.client.gui.GuiTheme.COLOR_SLIDER_FILL;
 import static org.soraworld.areaeffect.client.gui.GuiTheme.COLOR_SLIDER_TEXT;
 import static org.soraworld.areaeffect.client.gui.GuiTheme.COLOR_SLIDER_THUMB;
+import static org.soraworld.areaeffect.client.gui.GuiTheme.COLOR_SLIDER_THUMB_HOT;
 import static org.soraworld.areaeffect.client.gui.GuiTheme.COLOR_SLIDER_TRACK;
 import static org.soraworld.areaeffect.client.gui.GuiTheme.argb;
 
@@ -17,6 +18,10 @@ import static org.soraworld.areaeffect.client.gui.GuiTheme.argb;
  * （切换选中项时用，不做步进），{@link #getValue()} 供保存时读取。
  */
 class FlatSlider extends GuiButton {
+
+    private static final int THUMB_W = 8;
+    /** 距滑块中心不超过此像素即视为悬停在滑块上（与 RangeSlider 口径一致）。 */
+    private static final int GRAB = THUMB_W;
 
     private final float min;
     private final float max;
@@ -68,6 +73,13 @@ class FlatSlider extends GuiButton {
         setValue(min + frac * (max - min));
     }
 
+    /** 某数值对应的滑块中心 x（与 {@link #setValueFromMouse} 互逆）。 */
+    private int centerOf(float v) {
+        int track = width - 8 - THUMB_W;
+        float frac = (v - min) / (max - min);
+        return xPosition + 8 + (int) (track * frac);
+    }
+
     @Override
     public boolean mousePressed(Minecraft mc, int mouseX, int mouseY) {
         if (super.mousePressed(mc, mouseX, mouseY)) {
@@ -107,14 +119,15 @@ class FlatSlider extends GuiButton {
         drawRect(xPosition, yPosition, xPosition + 1, yPosition + height, argb(COLOR_BORDER));
         drawRect(xPosition + width - 1, yPosition, xPosition + width, yPosition + height, argb(COLOR_BORDER));
         // 填充与滑块（8px 宽，便于拖动）
-        float frac = (value - min) / (max - min);
-        int thumbW = 8;
-        int track = width - 8 - thumbW;
-        int tx = xPosition + 4 + (int) (track * frac);
+        int cx = centerOf(value);
+        int tx = cx - THUMB_W / 2;
         if (tx > xPosition + 4) {
-            drawRect(xPosition + 3, yPosition + 3, tx + thumbW / 2, yPosition + height - 3, argb(COLOR_SLIDER_FILL));
+            drawRect(xPosition + 3, yPosition + 3, cx, yPosition + height - 3, argb(COLOR_SLIDER_FILL));
         }
-        drawRect(tx, yPosition + 2, tx + thumbW, yPosition + height - 2, argb(COLOR_SLIDER_THUMB));
+        // 悬停/拖拽中滑块点亮为高亮黄（与 RangeSlider 观感一致）
+        boolean over = enabled && mouseY >= yPosition && mouseY < yPosition + height;
+        boolean hot = dragging || (over && Math.abs(mouseX - cx) <= GRAB);
+        drawRect(tx, yPosition + 2, tx + THUMB_W, yPosition + height - 2, argb(hot ? COLOR_SLIDER_THUMB_HOT : COLOR_SLIDER_THUMB));
         drawCenteredString(mc.fontRenderer, displayString,
                 xPosition + width / 2, yPosition + (height - 8) / 2, COLOR_SLIDER_TEXT);
     }

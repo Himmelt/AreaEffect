@@ -28,7 +28,8 @@ public final class EffectTypes {
     public static AreaEffect newDefault(String typeId) {
         switch (typeId) {
             case TYPE_LIGHTNESS:
-                return new LightnessEffect(90.0F, 1.0F);
+                // 亮度效果默认：亮度 100、过渡 1 秒（权重由 AreaEffect 默认为 0）
+                return new LightnessEffect(100.0F, 1.0F);
             default:
                 return null;
         }
