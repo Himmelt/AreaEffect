@@ -45,8 +45,10 @@ final class GuiTheme {
     static final int COLOR_SLIDER_TRACK = 0x1A1A1AAA;
     /** 滑动条滑块。 */
     static final int COLOR_SLIDER_THUMB = 0xE8E8E8FF;
-    /** 滑动条滑块悬停/拖拽高亮（填充类，不透明黄）。 */
+    /** 滑动条滑块悬停/拖拽高亮（填充类，不透明黄）。也用于图标按钮的悬停字形色。 */
     static final int COLOR_SLIDER_THUMB_HOT = 0xFFFF00FF;
+    /** 危险动作（删除区域）悬停时的字形色（填充类，不透明红）：与安全动作的黄色区分开。 */
+    static final int COLOR_DANGER = 0xFF6B6BFF;
     /** 滑动条数值文字。 */
     static final int COLOR_SLIDER_TEXT = 0xF0F0F0;
     /** 滚动条轨道。 */

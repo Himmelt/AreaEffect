@@ -110,8 +110,12 @@ class RangeSlider extends GuiButton {
         return String.format("%02d:%02d", totalMin / 60, totalMin % 60);
     }
 
+    /**
+     * 文案刻意压紧（箭头两侧不留空格）：这一行的实宽决定了详情栏的宽度下限，
+     * 原文案 {@code 生效时段: 游戏时间  06:00 → 18:00} 实测 186px，会把详情栏锁在 46% 以上。
+     */
     private void updateDisplay() {
-        displayString = timed ? modeText + "  " + fmtClock(start) + " → " + fmtClock(end) : modeText;
+        displayString = timed ? modeText + "  " + fmtClock(start) + "→" + fmtClock(end) : modeText;
     }
 
     /** 把鼠标 x 映射到 [min,max] 上并夹取、步进。与绘制几何一致：滑块中心对齐鼠标。 */
