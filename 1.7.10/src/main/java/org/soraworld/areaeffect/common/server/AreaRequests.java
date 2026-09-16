@@ -1,6 +1,9 @@
 package org.soraworld.areaeffect.common.server;
 
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.world.Teleporter;
+import net.minecraft.world.WorldServer;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.soraworld.areaeffect.common.area.AreaTable;
@@ -192,8 +195,34 @@ public class AreaRequests {
             return;
         }
         if (player.dimension != located.dim) {
-            player.travelToDimension(located.dim);
+            int origin = player.dimension;
+            WorldServer target = player.mcServer.worldServerForDimension(located.dim);
+            // 走 transferPlayerToDimension 但塞一个「不建门」的 Teleporter：非末地来源时 vanilla 放置段
+            // 仍会把玩家正常并入目标世界，却不再在目标端就地造/找传送门，落点统一交给下面的 center()
+            player.mcServer.getConfigurationManager()
+                    .transferPlayerToDimension(player, located.dim, new NoPortalTeleporter(target));
+            // 离开末地(origin==1)时 vanilla 会整块跳过 placing 段（连 teleporter 都不咨询）：
+            // 玩家被移出旧世界却没进目标世界 → 掉虚空卡死。此处补回目标世界。
+            if (origin == 1) {
+                target.spawnEntityInWorld(player);
+                target.updateEntityWithOptionalForce(player, false);
+            }
         }
         located.area.center(player);
+    }
+
+    /**
+     * 空实现传送门放置的 {@link Teleporter}：只借用 {@code transferPlayerToDimension} 的世界转移簿记，
+     * 不希望 vanilla 在目标维度就地造门（自定义维度上尤其多余）。最终落点由 {@code Area#center} 精确设定。
+     */
+    private static final class NoPortalTeleporter extends Teleporter {
+        NoPortalTeleporter(WorldServer worldIn) {
+            super(worldIn);
+        }
+
+        @Override
+        public void placeInPortal(Entity entity, double x, double y, double z, float yaw) {
+            // 故意留空：不建门、不重定位
+        }
     }
 }
