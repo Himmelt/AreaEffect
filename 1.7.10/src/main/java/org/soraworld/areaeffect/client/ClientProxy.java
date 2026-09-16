@@ -167,6 +167,12 @@ public class ClientProxy extends CommonProxy {
             // 否则 GUI 的 "#"+area.id 及一切按 id 的定位都会把同步来的区域读成 #0。
             packet.data.id = packet.id;
             clientAreas.put(packet.dim, packet.id, packet.data);
+            // 更新已打开的管理界面：保存/他端改动经此回显后，界面必须换绑到新实例，
+            // 否则 areas 快照仍指向旧实例，"切到别的区域再切回来"会重读到保存前的旧值。
+            // refreshFromProxy 内部按 dirty 保护未保存编辑，故不会覆盖正在进行的改动。
+            if (mc.currentScreen instanceof GuiAreas) {
+                ((GuiAreas) mc.currentScreen).refreshFromProxy();
+            }
         });
     }
 

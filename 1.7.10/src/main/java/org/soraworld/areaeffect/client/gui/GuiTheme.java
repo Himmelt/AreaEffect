@@ -37,6 +37,8 @@ final class GuiTheme {
     static final int COLOR_TEXT_HINT = 0x808080;
     /** 禁用文字。 */
     static final int COLOR_TEXT_DISABLED = 0x707070;
+    /** 全屏黑色半透明底（铺满整块画面，详情栏留透明）。 */
+    static final int COLOR_BG = 0x000000CC;
     /** 按钮常态底。 */
     static final int COLOR_BTN_BG = 0x222222AA;
     /** 按钮禁用底。 */

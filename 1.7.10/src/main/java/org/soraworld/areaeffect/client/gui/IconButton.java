@@ -110,13 +110,18 @@ class IconButton extends GuiButton {
                 drawRect(x + in, y + in, x + in + 1, b + 1, a);
                 drawRect(r, y + in, r + 1, b + 1, a);
                 if (on) {
-                    drawRect(x + in + 3, y + in + 3, r - 2, b - 2, a);
+                    drawRect(x + in + 1, y + in + 1, r, b, a);
                 }
                 break;
             }
             case GLYPH_SAVE: {
-                drawLine(x + 2, y + s / 2, x + s / 2 - 1, y + s - 4, a);
-                drawLine(x + s / 2 - 1, y + s - 4, x + s - 2, y + 2, a);
+                // 对勾：两笔均为严格 45°（横纵增量相等），左短右长，顶点落在下方偏左
+                int vx = x + s / 3;
+                int vy = y + (s * 2) / 3;
+                int leftArm = s / 4;
+                int rightArm = s / 2;
+                drawLine(vx, vy, vx - leftArm, vy - leftArm, a);   // 左笔 ↖ 45°
+                drawLine(vx, vy, vx + rightArm, vy - rightArm, a); // 右笔 ↗ 45°
                 break;
             }
             case GLYPH_PREV: {

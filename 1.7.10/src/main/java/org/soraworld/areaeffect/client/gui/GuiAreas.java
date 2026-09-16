@@ -19,8 +19,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.soraworld.areaeffect.client.gui.GuiTheme.COLOR_ACCENT;
+import static org.soraworld.areaeffect.client.gui.GuiTheme.COLOR_BG;
 import static org.soraworld.areaeffect.client.gui.GuiTheme.COLOR_BORDER;
-import static org.soraworld.areaeffect.client.gui.GuiTheme.COLOR_BTN_BG;
 import static org.soraworld.areaeffect.client.gui.GuiTheme.COLOR_DANGER;
 import static org.soraworld.areaeffect.client.gui.GuiTheme.COLOR_HOVER_ROW;
 import static org.soraworld.areaeffect.client.gui.GuiTheme.COLOR_SCROLL_THUMB;
@@ -76,8 +76,6 @@ public class GuiAreas extends GuiScreen {
     private static final int NAV_W = 18;
     /** 底栏「区域操作条」总高（含与内容区共用的那 1px 横线）。 */
     private static final int ACTION_H = 22;
-    /** 相邻元素间共用的 1px 线。 */
-    private static final int GAP = 1;
     /** 效果栏顶部「添加/删除」按钮行的高度。 */
     private static final int TOOLBAR_H = 16;
     /** 底栏图标按钮边长、图标间距，以及删除后额外留出的空档。 */
@@ -459,12 +457,12 @@ public class GuiAreas extends GuiScreen {
                 IconButton.GLYPH_PREV, COLOR_SLIDER_THUMB_HOT, 0));
         buttonList.add(new IconButton(BTN_NAV_R, tabAreaX2, tabY1, NAV_W, TAB_H - 1,
                 IconButton.GLYPH_NEXT, COLOR_SLIDER_THUMB_HOT, 0));
-        // 效果栏顶部工具条：左右边由列分隔线提供，组内一根分隔线 + 一条底线
-        int toolW = (effectX2 - effectX1 - GAP) / 2;
+        // 效果栏顶部工具条：左右边由列分隔线提供；两按钮齐平、共用中间一根竖线（删除按钮的 B_LEFT 提供），各自一条底线
+        int toolW = (effectX2 - effectX1) / 2;
         buttonList.add(new FlatButton(BTN_ADD_EFFECT, effectX1, bodyY1, toolW, TOOLBAR_H,
                 translate("gui.areaeffect.edit.addEffect"), FlatButton.B_BOTTOM));
-        buttonList.add(new FlatButton(BTN_DEL_EFFECT, effectX1 + toolW + GAP, bodyY1,
-                effectX2 - (effectX1 + toolW + GAP), TOOLBAR_H,
+        buttonList.add(new FlatButton(BTN_DEL_EFFECT, effectX1 + toolW, bodyY1,
+                effectX2 - (effectX1 + toolW), TOOLBAR_H,
                 translate("gui.areaeffect.edit.delEffect"), FlatButton.B_LEFT | FlatButton.B_BOTTOM));
 
         // 底栏四个图标：自右向左排。保存常驻最右（最常用）；删除隔离在最左、右侧留空档、悬停红 ——
@@ -497,19 +495,20 @@ public class GuiAreas extends GuiScreen {
                 Math.max(40, remarkX2 - remarkX1), 16);
         remarkField.setMaxStringLength(Area.REMARK_MAX);
 
-        // 详情栏四条滑条：本栏只服务效果（没有标题/备注/保存），直接从顶部起排
+        // 详情栏四条滑条：权重 / 过渡时长 / 生效时段 是所有效果通用参数在前，亮度（LightnessEffect 专属）在后；
+        // 本栏只服务效果（没有标题/备注/保存），直接从顶部起排
         int sw = detailW - 20;
         weightSlider = new FlatSlider(detX1 + 10, bodyY1 + SLIDER_TOP, sw, SLIDER_H,
                 translate("gui.areaeffect.edit.weight"), 0.0F, AreaEffect.MAX_WEIGHT, 0.0F, 1.0F);
-        lightSlider = new FlatSlider(detX1 + 10, bodyY1 + SLIDER_TOP + SLIDER_PITCH, sw, SLIDER_H,
-                translate("gui.areaeffect.edit.lightness"), 0.0F, 100.0F, 100.0F, 1.0F);
-        durationSlider = new FlatSlider(detX1 + 10, bodyY1 + SLIDER_TOP + SLIDER_PITCH * 2, sw, SLIDER_H,
+        durationSlider = new FlatSlider(detX1 + 10, bodyY1 + SLIDER_TOP + SLIDER_PITCH, sw, SLIDER_H,
                 translate("gui.areaeffect.edit.duration"),
                 LightnessEffect.MIN_DURATION, LightnessEffect.MAX_DURATION, 1.0F, 0.1F);
         // 时段三合一控件：拖游标改区间、点非游标区域轮切模式（始终→游戏→现实），步进 1 分钟、显示 HH:mm
-        timeRangeSlider = new RangeSlider(detX1 + 10, bodyY1 + SLIDER_TOP + SLIDER_PITCH * 3, sw, SLIDER_H,
+        timeRangeSlider = new RangeSlider(detX1 + 10, bodyY1 + SLIDER_TOP + SLIDER_PITCH * 2, sw, SLIDER_H,
                 0.0F, 24.0F, 6.0F, 18.0F, HOUR_STEP);
         timeRangeSlider.setOnModeToggle(this::cycleTimeMode);
+        lightSlider = new FlatSlider(detX1 + 10, bodyY1 + SLIDER_TOP + SLIDER_PITCH * 3, sw, SLIDER_H,
+                translate("gui.areaeffect.edit.lightness"), 0.0F, 100.0F, 100.0F, 1.0F);
         buttonList.add(weightSlider);
         buttonList.add(lightSlider);
         buttonList.add(durationSlider);
@@ -625,7 +624,8 @@ public class GuiAreas extends GuiScreen {
 
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
-        // 透明背景：不绘制 drawDefaultBackground
+        // 先铺全屏半透明底，再画标题与内容，使标题「区域管理」位于背景之上而非被其覆盖
+        drawBackground();
         drawCenteredString(fontRendererObj, translate("gui.areaeffect.list.title2"), width / 2, 8, COLOR_TEXT_HEAD);
 
         drawChrome();
@@ -639,6 +639,20 @@ public class GuiAreas extends GuiScreen {
         drawScrollBar(effectCol, pendingEffects == null ? 0 : pendingEffects.size());
 
         super.drawScreen(mouseX, mouseY, partialTicks);
+    }
+
+    /**
+     * 全屏黑色半透明底：铺满整块画面（含外框之外），唯独把详情栏（右栏效果参数区
+     * detX1..detX2 × bodyY1..bodyY2）留成透明 —— 拖亮度滑条时要能透过它看到世界里的实时预览。
+     * 用四块不重叠矩形绕出这个方洞：洞上方整幅、洞下方整幅、洞左侧、洞右侧（均在 body 纵向区间内）。
+     * 外框线与内容随后绘制，盖在这层底之上。
+     */
+    private void drawBackground() {
+        int bg = argb(COLOR_BG);
+        drawRect(0, 0, width, bodyY1, bg);
+        drawRect(0, bodyY2, width, height, bg);
+        drawRect(0, bodyY1, detX1, bodyY2, bg);
+        drawRect(detX2, bodyY1, width, bodyY2, bg);
     }
 
     /**
@@ -680,10 +694,9 @@ public class GuiAreas extends GuiScreen {
                 } else if (hov) {
                     drawRect(x, tabY1, x2, tabLineY, argb(COLOR_HOVER_ROW));
                 }
-                // 相邻 tab 共用一根竖线：画在自己的右边界内侧；最后一个不画（其右是 nav 或框边）
-                if (i < dims.size() - 1) {
-                    drawRect(x2 - 1, tabY1, x2, tabLineY, argb(COLOR_BORDER));
-                }
+                // 每个 tab 各画自己右边界那根竖线：相邻 tab 仍共用一根（下一个不画左边），
+                // 最右 tab 因此在自身右缘收口
+                drawRect(x2 - 1, tabY1, x2, tabLineY, argb(COLOR_BORDER));
                 drawCenteredString(fontRendererObj, tabLabel(dims.get(i)), (x + x2) / 2, tabY1 + 5,
                         sel ? COLOR_TEXT_HEAD : COLOR_TEXT_BODY);
                 disableClip();
@@ -801,14 +814,6 @@ public class GuiAreas extends GuiScreen {
         String shownCid = trim(cid, cidW - 2);
         if (!shownCid.isEmpty()) {
             fontRendererObj.drawStringWithShadow(shownCid, cidX1, cidY, COLOR_TEXT_HEAD);
-        }
-        // 底栏只有一行位置放不下完整的范围描述，悬停 #id 槽位时在条上方补出
-        if (area != null && isHover(mouseX, mouseY, cidX1, actY1, cidX1 + cidW, actY2)) {
-            String desc = translateFormatted(area.shape().describeKey(), area.shape().describeArgs());
-            int w = fontRendererObj.getStringWidth(desc);
-            int x = Math.min(cidX1, frameX2 - 2 - w);
-            drawRect(x - 2, actY1 - 14, x + w + 2, actY1 - 1, argb(COLOR_BTN_BG));
-            fontRendererObj.drawStringWithShadow(desc, x, actY1 - 11, COLOR_TEXT_BODY);
         }
         // 备注框由 vanilla GuiTextField 自己画（保留原版观感：黑底 + 灰描边）
         remarkField.drawTextBox();
@@ -1189,10 +1194,6 @@ public class GuiAreas extends GuiScreen {
         return shown;
     }
 
-    private static boolean isHover(int mouseX, int mouseY, int x1, int y1, int x2, int y2) {
-        return mouseX >= x1 && mouseX < x2 && mouseY >= y1 && mouseY < y2;
-    }
-
     private static int clampInt(int value, int min, int max) {
         return value < min ? min : Math.min(value, max);
     }
@@ -1219,10 +1220,6 @@ public class GuiAreas extends GuiScreen {
 
     private static String translate(String key) {
         return StatCollector.translateToLocal(key);
-    }
-
-    private static String translateFormatted(String key, Object... args) {
-        return StatCollector.translateToLocalFormatted(key, args);
     }
 
     private static String fmt(float v) {
