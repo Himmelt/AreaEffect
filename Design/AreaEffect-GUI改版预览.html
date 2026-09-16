@@ -1,0 +1,1060 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AreaEffect · 区域管理界面改版预览</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    background: var(--color-background-tertiary, #F4F4F5);
+    color: var(--color-text-primary, #1A1A1A);
+    font-size: 13px;
+    line-height: 1.6;
+    padding: 20px 24px 48px;
+  }
+  h1 { font-size: 15px; font-weight: 500; margin: 0 0 4px; }
+  h2 { font-size: 13px; font-weight: 500; margin: 24px 0 8px; }
+  p.sub { margin: 0; font-size: 13px; color: var(--color-text-secondary, #5C5C5C); }
+  .bar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px;
+    margin: 16px 0; padding: 12px 14px;
+    background: var(--color-background-primary, #FFF);
+    border: 0.5px solid var(--color-border-tertiary, rgba(0,0,0,.15));
+    border-radius: var(--border-radius-lg, 12px);
+  }
+  .bar label { font-size: 12px; color: var(--color-text-secondary, #5C5C5C); }
+  .bar input[type=range] { width: 180px; vertical-align: middle; }
+  .seg { display: inline-flex; border: 0.5px solid var(--color-border-secondary, rgba(0,0,0,.3)); border-radius: 8px; overflow: hidden; }
+  .seg button {
+    font: inherit; font-size: 12px; padding: 4px 10px; background: transparent; border: 0;
+    border-right: 0.5px solid var(--color-border-secondary, rgba(0,0,0,.3)); cursor: pointer;
+    color: var(--color-text-primary, #1A1A1A);
+  }
+  .seg button:last-child { border-right: 0; }
+  .seg button.on { background: var(--color-background-info, #E6F1FB); color: var(--color-text-info, #0C447C); }
+  .status {
+    font-size: 12px; color: var(--color-text-secondary, #5C5C5C);
+    font-variant-numeric: tabular-nums;
+  }
+  .btitle { font-size: 12px; font-weight: 500; color: var(--color-text-primary, #1A1A1A); }
+  .ratio { display: inline-flex; align-items: center; gap: 6px; }
+  .ratio label { font-size: 12px; color: var(--color-text-secondary, #5C5C5C); }
+  .ratio input[type=range] { width: 116px; }
+  .ratio b { font-size: 12px; font-weight: 400; min-width: 84px; font-variant-numeric: tabular-nums; }
+  .reset {
+    font: inherit; font-size: 12px; padding: 4px 10px; background: transparent;
+    border: 0.5px solid var(--color-border-secondary, rgba(0,0,0,.3));
+    border-radius: 8px; cursor: pointer; color: var(--color-text-primary, #1A1A1A);
+  }
+  .stage {
+    overflow: auto; padding: 16px;
+    background: var(--color-background-secondary, #FAFAFA);
+    border: 0.5px solid var(--color-border-tertiary, rgba(0,0,0,.15));
+    border-radius: var(--border-radius-lg, 12px);
+  }
+  .stage-size { position: relative; }
+  .screen {
+    position: absolute; top: 0; left: 0;
+    transform-origin: top left;
+    background: #6B7681;
+    --line: #86A6A6;
+    --line-ctrl: #6E8C8C;
+    --sel: rgba(0,255,255,.8);
+    --hover: rgba(0,255,255,.33);
+    --accent: #FFFF00;
+    --btn-bg: rgba(34,34,34,.67);
+    --btn-dis: rgba(17,17,17,.67);
+    --track: rgba(26,26,26,.67);
+    --fill: rgba(100,255,100,.5);
+    --thumb: #E8E8E8;
+    --thumb-hot: #FFFF00;
+    --danger: #FF6B6B;
+    --t-head: #FFFFFF;
+    --t-body: #E0E0E0;
+    --t-hint: #808080;
+    --t-dis: #707070;
+    --t-slider: #F0F0F0;
+  }
+  .mc-title {
+    position: absolute; top: 0; left: 0; right: 0; height: 26px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--t-head); font-size: 12px;
+  }
+  .frame {
+    position: absolute; top: 26px; bottom: 8px; left: 3%; right: 3%;
+    border: 1px solid var(--line);
+    display: flex; flex-direction: column;
+  }
+  .actionbar {
+    flex: 0 0 22px; height: 22px; display: flex; align-items: center; gap: 8px;
+    padding: 0 8px; border-top: 1px solid var(--line); overflow: hidden;
+  }
+  .actionbar.gone { display: none; }
+  .actionbar .cid {
+    flex: 0 0 104px; font-size: 11px; color: var(--t-head);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .a-remark {
+    flex: 1 1 auto; min-width: 0; height: 16px; font-family: inherit; font-size: 11px;
+    background: #000; color: var(--t-body); border: 1px solid #A0A0A0; padding: 0 2px; outline: none;
+  }
+  .a-remark:disabled { color: var(--t-dis); border-color: #5E6A6A; background: #12181A; }
+  .a-acts { flex: 0 0 auto; display: flex; gap: 3px; }
+  .a-acts .chip { width: 18px; height: 18px; }
+  .a-acts .chip svg { width: 14px; height: 14px; }
+  .chip.danger { margin-right: 10px; }
+  .chip.danger:hover { color: var(--danger); }
+  .chip.dis { opacity: .45; cursor: default; }
+  .chip.dis:hover { color: var(--t-body); }
+  .chip.hot, .d-save.hot { color: var(--thumb-hot); border-color: var(--thumb-hot); }
+  .dot {
+    flex: 0 0 auto; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--thumb-hot); opacity: 0;
+  }
+  .dot.on { opacity: 1; }
+  .tabbar {
+    flex: 0 0 18px; height: 18px; display: flex; align-items: stretch;
+    border-bottom: 1px solid var(--line);
+  }
+  .nav {
+    flex: 0 0 18px; width: 18px; display: flex; align-items: center; justify-content: center;
+    background: var(--btn-bg); color: var(--t-body); font-size: 11px; cursor: pointer;
+    user-select: none;
+  }
+  .nav.off { color: var(--t-dis); cursor: default; }
+  .nav.gone { display: none; }
+  .tabs {
+    flex: 1 1 auto; display: flex; overflow-x: auto; overflow-y: hidden;
+    border-left: 1px solid var(--line); border-right: 1px solid var(--line);
+    scrollbar-width: none;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tabs.flush { border-left: 0; border-right: 0; }
+  .tab {
+    flex: 0 0 auto; display: flex; align-items: center; padding: 0 8px;
+    font-size: 11px; color: var(--t-body); cursor: pointer; white-space: nowrap;
+    border-right: 1px solid var(--line);
+  }
+  .tab:last-child { border-right: 0; }
+  .tab.on { background: var(--sel); color: var(--t-head); }
+  .tab:not(.on):hover { background: var(--hover); }
+  .body { flex: 1 1 auto; display: flex; min-height: 0; }
+  .col { display: flex; flex-direction: column; min-width: 0; position: relative; }
+  .col + .col { border-left: 1px solid var(--line); }
+  .col-area { flex: 20 1 0; }
+  .col-effect { flex: 24 1 0; }
+  .col-detail { flex: 44 1 0; overflow: hidden; }
+  .list { flex: 1 1 auto; position: relative; overflow: hidden; }
+  .row {
+    position: absolute; left: 0; right: 0; height: 18px;
+    display: flex; align-items: center; gap: 4px; padding: 0 6px;
+    font-size: 11px; color: var(--t-body); cursor: pointer;
+    white-space: nowrap; overflow: hidden;
+  }
+  .row.on { background: var(--sel); color: var(--t-head); }
+  .row:not(.on):hover { background: var(--hover); }
+  .row .id { flex: 0 0 auto; text-align: right; }
+  .row .rm { color: var(--accent); min-width: 0; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; }
+  .col-area .row { padding-right: 8px; }
+  .col-effect .row { padding-right: 16px; }
+  .row.on .rm { color: var(--accent); }
+  .chips { margin-left: auto; display: flex; gap: 3px; flex: 0 0 auto; }
+  .chip {
+    width: 12px; height: 12px; display: flex; align-items: center; justify-content: center;
+    background: var(--btn-bg); border: 1px solid var(--line-ctrl);
+    color: var(--t-body); cursor: pointer;
+  }
+  .chip:hover { color: var(--thumb-hot); }
+  .toolbar { flex: 0 0 16px; height: 16px; display: flex; }
+  .flat {
+    flex: 1 1 0; min-width: 0; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-family: inherit; color: var(--t-body);
+    background: var(--btn-bg); border: 0; border-bottom: 1px solid var(--line);
+    cursor: pointer; padding: 0; white-space: nowrap; overflow: hidden;
+  }
+  .flat + .flat { border-left: 1px solid var(--line); }
+  .flat:disabled { background: var(--btn-dis); color: var(--t-dis); cursor: default; }
+  .hint {
+    position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%);
+    text-align: center; font-size: 11px; color: var(--t-hint); padding: 0 8px;
+  }
+  .sbar { position: absolute; right: 1px; top: 4px; bottom: 4px; width: 6px; background: rgba(0,0,0,.2); }
+  .sbar i { position: absolute; left: 0; right: 0; display: block; background: #CCCCCC; }
+  .d-id { position: absolute; font-size: 11px; color: var(--t-head); }
+  .d-sec { position: absolute; left: 10px; font-size: 11px; color: #A8B4B4; }
+  .d-shape {
+    position: absolute; left: 10px; font-size: 11px; color: var(--t-hint);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .d-div { position: absolute; left: 0; right: 0; height: 1px; background: var(--line); }
+  .d-lab { position: absolute; left: 10px; font-size: 11px; color: var(--t-body); }
+  .d-remark {
+    position: absolute; height: 16px; font-family: inherit; font-size: 11px;
+    background: #000; color: var(--t-body); border: 1px solid #A0A0A0;
+    padding: 0 2px; outline: none;
+  }
+  .fslider, .rslider {
+    position: absolute; height: 18px; background: var(--track);
+    border: 1px solid var(--line-ctrl); cursor: pointer; user-select: none;
+    touch-action: none; overflow: hidden;
+  }
+  .fslider .fill, .rslider .fill { position: absolute; top: 3px; height: 11px; background: var(--fill); }
+  .fslider .thumb { position: absolute; top: 2px; width: 8px; height: 14px; background: var(--thumb); }
+  .fslider.hot .thumb { background: var(--thumb-hot); }
+  .mk { position: absolute; top: 2px; height: 14px; }
+  .mk-start {
+    width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent;
+    border-bottom: 14px solid var(--thumb);
+  }
+  .mk-end { width: 8px; background: var(--thumb); }
+  .rslider.hot .mk-start { border-bottom-color: var(--thumb-hot); }
+  .rslider.hot .mk-end { background: var(--thumb-hot); }
+  .slabel {
+    position: absolute; left: 0; right: 0; text-align: center; font-size: 11px;
+    color: var(--t-slider); line-height: 16px; pointer-events: none;
+  }
+  .d-save {
+    position: absolute; bottom: 4px; left: 50%; margin-left: -27px;
+    width: 54px; height: 18px; font-family: inherit; font-size: 11px;
+    color: var(--t-body); background: var(--btn-bg); border: 1px solid var(--line-ctrl);
+    cursor: pointer; padding: 0;
+  }
+  .d-save:disabled { background: var(--btn-dis); color: var(--t-dis); cursor: default; }
+  .d-save.hot { border-color: var(--thumb-hot); color: var(--thumb-hot); }
+  .d-save.in-band { position: static; left: auto; bottom: auto; margin: 0; }
+  .d-band {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 22px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 10px; border-top: 1px solid var(--line);
+  }
+  .band-dirty { font-size: 11px; color: var(--thumb-hot); opacity: 0; }
+  .band-dirty.on { opacity: 1; }
+  .badge { font-size: 12px; display: none; color: var(--color-text-warning, #8A5A00); }
+  .badge.on { display: inline; }
+  .notes { margin-top: 24px; }
+  .notes ul { margin: 8px 0 0; padding-left: 20px; }
+  .notes li { margin-bottom: 6px; }
+  .notes code {
+    font-family: var(--font-mono, ui-monospace, Consolas, monospace);
+    font-size: 12px; background: var(--color-background-secondary, #FAFAFA);
+    padding: 1px 4px; border-radius: 4px;
+  }
+</style>
+</head>
+<body>
+
+<h1>区域管理界面 · 改版预览</h1>
+<p class="sub">维度栏改为顶部横向 tab 条（宽度不足时两端出现 <code>&lt;</code> <code>&gt;</code> 翻动按钮）；所有相邻框线共用一根线。</p>
+
+<div class="bar">
+  <span><label for="w">界面宽度</label> <input id="w" type="range" min="400" max="900" step="10" value="480"> <span id="wv" class="status">480 × 270</span></span>
+  <span><label>显示缩放</label>
+    <span class="seg" id="zoom">
+      <button data-z="1">1×</button><button data-z="1.5" class="on">1.5×</button><button data-z="2">2×</button>
+    </span>
+  </span>
+  <span class="status" id="status"></span>
+  <span class="badge" id="dirty">有未保存改动</span>
+</div>
+
+<div class="bar">
+  <span class="btitle">三栏比例</span>
+  <span class="ratio"><label for="r0">区域</label><input id="r0" type="range" min="1" max="100" step="1" value="26"><b id="r0v">—</b></span>
+  <span class="ratio"><label for="r1">效果</label><input id="r1" type="range" min="1" max="100" step="1" value="22"><b id="r1v">—</b></span>
+  <span class="ratio"><label for="r2">详情</label><input id="r2" type="range" min="1" max="100" step="1" value="40"><b id="r2v">—</b></span>
+  <button class="reset" id="resetRatio">默认 26 : 22 : 40</button>
+  <button class="reset" id="oldRatio">旧基准 20 : 24 : 44</button>
+  <span class="btitle" style="margin-left:8px">区域级操作（备注/传送/删除/线框/保存）</span>
+  <span class="seg" id="l2Mode">
+    <button data-l2="bar" class="on">窗口底栏（推荐）</button>
+    <button data-l2="panel">详情栏内（原方案）</button>
+  </span>
+</div>
+
+<div class="stage">
+  <div class="stage-size" id="stageSize">
+    <div class="screen" id="screen">
+      <div class="mc-title">区域管理</div>
+      <div class="frame">
+        <div class="tabbar">
+          <div class="nav" id="navL" title="向前翻动">&#10094;</div>
+          <div class="tabs" id="tabs"></div>
+          <div class="nav" id="navR" title="向后翻动">&#10095;</div>
+        </div>
+        <div class="body" id="body">
+          <div class="col col-area"><div class="list" id="areaList"></div></div>
+          <div class="col col-effect">
+            <div class="toolbar" id="toolbar"></div>
+            <div class="list" id="effectList"></div>
+          </div>
+          <div class="col col-detail" id="detail"></div>
+        </div>
+        <div class="actionbar" id="actionBar"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="notes">
+  <h2>改动说明</h2>
+  <ul>
+    <li><b>维度 → tab 条</b>：原来的左栏（12%）取消，维度以 18px 高的 tab 条横排在内容区上方，选中项与原选中色一致（半透明青）。tab 条宽度按文字实测，<b>只有总宽超出可见宽度时</b>才出现两侧 <code>&lt;</code> <code>&gt;</code>；到达两端时按钮转灰不可点，不需要翻动时两个按钮整块隐藏（腾出宽度）。</li>
+    <li><b>框线共用</b>：整块外框只有 1px，tab 条与内容区共用一根横线，三栏之间共用一根竖线，两个工具按钮共用一根分割线 —— 相邻元素不再各画一圈边框。为在深色背景上看清，预览里线色由实值 <code>#4A6666</code> 提亮到 <code>#86A6A6</code>，实际绘制仍用原色。</li>
+    <li><b>默认配比按"内容需要"定，不是把原四栏等比放大</b>：按原比例归还 12% 的结果是区域栏 102px（备注只剩 66px ≈ 6 个汉字）而详情栏 225px 里内容只占上 96px。<b>26 : 22 : 40</b> 是反推出来的 —— 区域栏每行都要放 <code>#id</code> + 备注（信息密度最高），详情栏只有 4 条滑条（够放最长文案即可），效果栏够放「名称 + W 值」即可。滑杆按<b>权重</b>生效（不必凑满 100），右侧实时显示折算占比与像素宽；两个预设按钮可一键对比新默认与旧基准 20 : 24 : 44。</li>
+    <li><b>时段滑条文案压缩（它决定了详情栏的宽度下限）</b>：原 <code>生效时段: 游戏时间  06:00 → 18:00</code> 实测 186px，逼着详情栏必须 ≥46% 才不裁字，右栏因此缩不下来。压成 <code>时段 游戏  06:00→18:00</code>（约 121px）后详情栏能收到 40% 以下。模式全名只留在状态栏提示语里（"时段模式轮切为「游戏时间」"），需要时再给 <code>gui.areaeffect.edit.timeMode.*</code> 补一组短名文案。</li>
+    <li><b>删除按钮隔离</b>：四个图标原来等距 3px，而删除是唯一不可逆的动作（<code>onDeleteRequest</code> 立即落盘 + 广播），误点代价最高。现在把它移到按钮组<b>最左</b>、右侧留 10px 空档，悬停用红（<code>#FF6B6B</code>）而非黄，与三个安全动作在空间和语义上分开 —— 同时最常用的「保存」仍在最右端。</li>
+    <li><b>区域级的东西全搬到底栏</b>：备注编辑、传送、删除、线框、保存本来分散在「区域列表行内图标」和「右栏顶部」两处，且都和别的东西混在一起。现在把 <b>L2（区域级）</b>整体收进窗口底栏一条 22px 的「区域操作条」，元素全部按固定尺寸/位置排：<code>#id · 形状名</code>（固定 104px 槽位，超出省略号）· 备注输入（占满剩余宽度）· 未保存圆点 · <b>传送 / 删除 / 线框 / 保存四个 18×18 图标</b>（固定 3px 间距、整体贴右边界）。底栏横跨三栏、又贴着整个面板的下边界，正好表达"作用于当前选中的区域"这件事。<br><b>备注框左边界对齐「区域列 | 效果列」那根共用竖线</b>：做法不是给输入框设一个固定左边距，而是反过来算 <code>#id</code> 槽位该多宽 —— 槽宽 = 区域列宽 − 15，于是"槽位右沿 + 8 + 8"正好落在竖线上。区域列宽随三栏比例实时变化，所以每次渲染都重算；写死 104px 的话比例一调就错位。备注框左边界对齐竖线后，它跨越的正好是效果与详情两栏。<br>保存改用 ✓ 图标与其余三个同规格 —— 图标式的好处是四个按钮尺寸一致、可以整体右对齐，不必为一个文字按钮留 54px 的宽槽；未选中区域时四个图标整体转灰而不是消失，避免布局跳动。有未保存改动时只有 ✓ 变黄。</li>
+    <li><b>右栏只放参数</b>：栏内<b>不含任何 L2 内容</b>（无 <code>#id</code>、无形状、无备注、无保存），也<b>不再自报"是什么效果"</b>——效果列表的选中行已经表明了，标题属于重复信息。整栏就是该效果的参数：权重、亮度、过渡时长、生效时段。作用的区域由左栏选中行 + 底栏 <code>#id</code> 指示，作用的<em>效果</em>由中右栏选中行指示：同一个「选中项即作用域」的规则，不需要在栏内再写一遍。形状完整坐标范围移到 <code>#id</code> 的悬停提示里，不占宽度。</li>
+    <li><b>区域列表行也不再给图标留位</b>：三个图标搬到操作条后，原代码里那段给选中行预留右侧宽度的逻辑（<code>rightPad += (ICON_S + ICON_GAP) * 3 - ICON_GAP + 4</code>）可以直接删掉，备注文字能显示得更全。</li>
+    <li><b>编号列右对齐</b>：<code>#id</code> 占一个定宽槽位并右对齐，备注仍左对齐紧接其后 —— 这样所有备注从同一个 x 起，扫读时是整齐的一列。槽位宽度按<b>本维度里最宽的编号</b>实测得出（预览用 canvas <code>measureText</code>，实机用 <code>fontRenderer.getStringWidth("#" + maxId)</code>），所以切换维度、编号位数变化时备注列左边界都不会左右跳。不能按字符数估算：<code>#3</code> 与 <code>#45</code> 差 6px，累积起来就是错位。</li>
+    <li><b>顺带补上形状范围</b>：<code>AreaShape#describeKey()/describeArgs()</code> 与语言文件里的 <code>gui.areaeffect.desc.*</code> 早已写好（注释明确写着"详情页展示文案"），但<b>全项目没有任何调用方</b>——上段的形状范围就是把这条现成的挂点接上，正好填掉右栏那片空白。</li>
+    <li><b>零效果的保存路径</b>：效果全部删掉后区域只剩备注可改，但保存按钮仍然在、仍然可点 —— 它与「添加/删除效果」不同级：保存属 L2（只要选中了区域就可用，实机 <code>syncDetailWidgets</code> 里 <code>btn.enabled = has</code>），增删效果属 L3。服务端也允许空效果集（<code>AreaRequests#onSetProps</code>："效果集已允许为空（区域可以不带任何效果）"），保存后区域照旧存在，形状/备注/线框/传送都在，只是不再产生亮度效果。为了让"删完还没保存"这件事看得见，预览里把本来就存在、却从未上屏的 <code>GuiAreas#dirty</code> 接到了保存按钮上：有未保存改动时按钮转黄、控制栏出现提示。</li>
+    <li><b>为什么保存也属于底栏</b>：它的门控是 L2（选中区域即可用，<code>btn.enabled = has</code>），而一次提交覆盖的是备注（L2）与整份效果工作副本（L3/L4）—— 门控在区域级、作用域是整栏，所以它是<b>区域级动作</b>。放进任何一栏内部都会被误读成"只保存这一段"；摆在横跨三栏的底栏才是诚实的表达。实测代价：底栏占 22px 栏高，三栏内容区从 196px 变成 196px（底栏吃的是原本空着的 30px 页脚带），所以列表可见行数一行没少。</li>
+    <li><b>对比选项</b>：控制栏可切「区域级操作 → 详情栏内（原方案）」，看备注+保存留在右栏、三个图标留在列表行的旧样子。当时的取舍：图标挤占列表行宽度、备注与效果参数混在一栏，层级归属要靠分区标题去补。</li>
+    <li><b>交互与真实实现一致</b>：编辑写在「工作副本」上、不动共享数据，点保存才回写；<code>添加效果</code> 在可添加类型全部挂载时禁用；时段控件拖游标改区间、点非游标区域轮切模式；行内三图标仅选中行显示、悬停变黄。</li>
+  </ul>
+  <p class="sub" style="margin-top:12px">默认宽度 480 就是 1080p 下「自动」GUI 缩放的实际值，此时 10 个维度放不下，两侧翻动按钮已经出现；把宽度加宽到约 520 以上就放得下，按钮整块隐藏。</p>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var ROW_H = 18, PAD = 4, BAR_W = 6, THUMB_W = 8, GRAB = 8;
+  var MIN_BAR_H = 14;
+
+  function eff(w, l, d, mode, s, e) {
+    return { type: 'lightness', weight: w, lightness: l, duration: d, timeMode: mode, start: s, end: e };
+  }
+
+  var DIMS = [
+    { id: 0, areas: [
+      { id: 3, remark: '主城区中心', effects: [eff(50, 100, 1, 1, 6, 18)] },
+      { id: 7, remark: '矿洞', effects: [eff(30, 35, 2, 0, 6, 18)] },
+      { id: 12, remark: '下界农场', effects: [eff(20, 90, 1, 2, 18, 6)] },
+      { id: 15, remark: '地牢', effects: [eff(40, 20, 1, 1, 20, 4)] },
+      { id: 18, remark: '传送厅', effects: [] },
+      { id: 21, remark: '出生点', effects: [eff(10, 100, 0, 0, 6, 18)] },
+      { id: 24, remark: '港口', effects: [eff(10, 80, 1, 0, 6, 18)] },
+      { id: 27, remark: '铁匠铺', effects: [eff(10, 70, 1, 0, 6, 18)] },
+      { id: 30, remark: '图书馆', effects: [eff(10, 60, 1, 0, 6, 18)] },
+      { id: 33, remark: '冶炼厂', effects: [eff(10, 45, 1, 0, 6, 18)] },
+      { id: 36, remark: '牧场', effects: [eff(10, 95, 1, 0, 6, 18)] },
+      { id: 39, remark: '试炼场', effects: [eff(10, 25, 1, 0, 6, 18)] },
+      { id: 42, remark: '空岛', effects: [eff(10, 100, 1, 0, 6, 18)] },
+      { id: 45, remark: '遗迹', effects: [eff(10, 55, 1, 0, 6, 18)] }
+    ] },
+    { id: -1, areas: [
+      { id: 5, remark: '地狱门厅', effects: [eff(50, 60, 1, 0, 6, 18)] },
+      { id: 9, remark: '要塞走廊', effects: [] },
+      { id: 11, remark: '熔岩湖', effects: [eff(20, 15, 2, 0, 6, 18)] },
+      { id: 13, remark: '猪灵交易所', effects: [eff(10, 85, 1, 0, 6, 18)] }
+    ] },
+    { id: 1, areas: [
+      { id: 4, remark: '末地门', effects: [eff(50, 40, 1, 0, 6, 18)] },
+      { id: 6, remark: '主岛', effects: [eff(10, 30, 1, 0, 6, 18)] },
+      { id: 8, remark: '外岛驿站', effects: [] }
+    ] },
+    { id: 2, areas: [ { id: 2, remark: '暮色森林', effects: [eff(50, 70, 1, 0, 6, 18)] }, { id: 10, remark: '娜迦庭院', effects: [] } ] },
+    { id: 3, areas: [ { id: 14, remark: '深邃洞穴', effects: [eff(50, 10, 3, 0, 6, 18)] }, { id: 16, remark: '水晶洞', effects: [] } ] },
+    { id: 4, areas: [ { id: 17, remark: '以太', effects: [eff(50, 100, 1, 0, 6, 18)] } ] },
+    { id: 5, areas: [ { id: 19, remark: '月球', effects: [] } ] },
+    { id: 6, areas: [ { id: 20, remark: '火星', effects: [] } ] },
+    { id: 7, areas: [ { id: 22, remark: '末影虚空', effects: [eff(50, 5, 0, 0, 6, 18)] } ] },
+    { id: 8, areas: [ { id: 23, remark: '梦境', effects: [] } ] }
+  ];
+
+  // 形状与范围文案。实机由 Area#shape() 的 describeKey()/describeArgs() 经 StatCollector 组装，
+  // 语言键 gui.areaeffect.desc.* 与 gui.areaeffect.shape.* 都已存在。
+  var SHAPE = {
+    3: '长方体 (12,60,12) ~ (48,80,48)', 7: '圆柱 圆心(30,20) R=16 高=30',
+    12: '长方体 (60,70,60) ~ (96,90,96)', 15: '长方体 (-40,10,-40) ~ (-16,30,-16)',
+    18: '全高方柱 (0,0) ~ (16,16)', 21: '球体 球心(0,72,0) R=24',
+    24: '长方体 (-80,60,-40) ~ (-40,70,-8)', 27: '长方体 (-12,60,8) ~ (4,70,24)',
+    30: '长方体 (20,62,8) ~ (40,74,28)', 33: '全高圆柱 圆心(-30,-30) R=20',
+    36: '长方体 (48,64,-40) ~ (88,72,-8)', 39: '多边形 顶点 6 高=40',
+    42: '长方体 (200,64,200) ~ (232,88,232)', 45: '球体 球心(-120,50,300) R=32',
+    5: '长方体 (-8,60,-8) ~ (8,76,8)', 9: '长方体 (0,40,0) ~ (8,44,64)',
+    11: '球体 球心(0,31,0) R=40', 13: '长方体 (16,60,16) ~ (40,72,40)',
+    4: '长方体 (0,50,0) ~ (16,70,16)', 6: '球体 球心(0,64,0) R=60',
+    8: '长方体 (100,60,100) ~ (120,72,120)', 2: '整个维度',
+    10: '球体 球心(0,64,0) R=40', 14: '长方体 (0,0,0) ~ (32,32,32)',
+    16: '球体 球心(64,20,64) R=24', 17: '整个维度',
+    19: '长方体 (-64,60,-64) ~ (64,120,64)', 20: '长方体 (-32,60,-32) ~ (32,100,32)',
+    22: '整个维度', 23: '球体 球心(0,100,0) R=80'
+  };
+
+  var state = {
+    dimIdx: 0,
+    selectedId: null,
+    effectIdx: -1,
+    pending: null,
+    remarkDraft: '',
+    width: 480,
+    zoom: 1.5,
+    scroll: 0,
+    dragging: null,
+    ratio: [26, 22, 40],
+    l2: 'bar',
+    dirty: false
+  };
+
+  /** 形状的紧凑名（"长方体 (12,60,12) ~ (48,80,48)" → "长方体"），只用于底栏 #id 后面。 */
+  function shapeName(id) {
+    var s = SHAPE[id];
+    if (!s) return '';
+    return s.indexOf(' ') < 0 ? s : s.split(' ')[0];
+  }
+
+  function saveBtn(extra) {
+    return '<button class="d-save save-mark' + (extra ? ' ' + extra : '') + (state.dirty ? ' hot' : '') + '" id="save">保存</button>';
+  }
+  function dirtyMark() { return '<span class="band-dirty' + (state.dirty ? ' on' : '') + '">有未保存改动</span>'; }
+
+  /**
+   * 区域操作条（窗口底栏）：区域级（L2）的东西全部集中在这里 ——
+   * 身份 #id、备注编辑、传送/删除/线框三个动作、未保存指示、保存。
+   * 这样右侧详情栏可以只做效果（L3/L4），不再混层级；列表行也把图标位让出来给备注文字。
+   */
+  function renderActionBar() {
+    var bar = $('actionBar');
+    var on = state.l2 === 'bar';
+    bar.classList.toggle('gone', !on);
+    if (!on) { bar.innerHTML = ''; return; }
+    var a = selected();
+    var shape = a ? shapeName(a.id) : '';
+    var dis = a ? '' : ' dis';
+    // #id · 形状名：L2 的身份信息归这条底栏；槽宽由 alignBarRemark 反算（对齐效果列左边界），
+    // 完整坐标范围放 title 不占宽度
+    var html = '<span class="cid"' + (a ? ' title="' + esc(SHAPE[a.id] || '') + '"' : '') + '>' +
+      (a ? '#' + a.id + (shape ? ' · ' + shape : '') : '未选中区域') + '</span>' +
+      '<input class="a-remark" maxlength="60" value="' + esc(a ? state.remarkDraft : '') + '"' +
+      (a ? '' : ' disabled placeholder="选中区域后可编辑备注"') + '>' +
+      '<span class="dot dirty-mark' + (state.dirty ? ' on' : '') + '" title="有未保存改动"></span>' +
+      // 四个按钮同为 18×18 图标、整体贴右边界；未选中区域时整体转灰而不是消失，避免布局跳动。
+      // 删除是唯一不可逆的动作（服务端立即落盘 + 广播），所以隔离在组的最左侧、右侧留 10px 空档，
+      // 悬停用红而非黄，与三个安全动作在空间和语义上都分开。
+      '<span class="a-acts">' +
+      '<span class="chip danger' + dis + '" data-act="del" title="删除区域">' + icon('del') + '</span>' +
+      '<span class="chip' + dis + '" data-act="tp" title="传送">' + icon('tp') + '</span>' +
+      '<span class="chip' + dis + '" data-act="sel" title="线框显示开关">' + icon('sel', a ? a.wire !== false : true) + '</span>' +
+      '<span class="chip save-mark' + dis + (state.dirty ? ' hot' : '') + '" data-act="save" title="保存">' + icon('save') + '</span>' +
+      '</span>';
+    bar.innerHTML = html;
+    Array.prototype.forEach.call(bar.querySelectorAll('.chip'), function (el) {
+      el.onclick = function () { doAreaAction(el.dataset.act); };
+    });
+    alignBarRemark();
+    bindRemark();
+  }
+
+  /**
+   * 让备注输入框的左边界落在「区域列 | 效果列」那根共用竖线上。
+   *
+   * <p>做法是反过来算 #id 槽位该多宽：#id 槽位 + 8(padding) + 8(gap) 的右沿要正好落在
+   * 区域列宽 + 1 处，于是槽宽 = 区域列宽 − 15。区域列宽随三栏比例实时变化，所以每次渲染
+   * 都要重算；不能写死 104px，否则比例一调就错位（窄区域列时槽位还会反过来把输入框推离竖线）。
+   */
+  function alignBarRemark() {
+    var bar = $('actionBar');
+    var cid = bar.querySelector('.cid');
+    if (!cid) return;
+    var inner = bar.clientWidth - 16;
+    var colW = COL_EL[0].offsetWidth;
+    var want = colW + 1 - 16;
+    // 127 = padding16 + 三个 gap24 + 脏点6 + 按钮组 81；按钮组现为 4×18 + 3 + 3 + 10 = 88
+    var fixed = 16 + 24 + 6 + 88;
+    var cap = Math.max(60, inner - fixed - 80);
+    cid.style.flexBasis = Math.max(44, Math.min(want, cap)) + 'px';
+  }
+
+  // 默认配比按「内容实际需要」定，而不是把原四栏等比放大：区域栏放 #id + 备注（信息密度最高、
+  // 每行都用到），详情栏只有 4 条滑条（内容只占上 96 / 196px），效果栏够放「名称 + W 值」即可。
+  var DEFAULT_RATIO = [26, 22, 40];
+  var OLD_RATIO = [20, 24, 44];
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  // 文本实宽测量：编号列要按"本列表中最宽的 #id"定宽，才能让所有备注从同一个 x 起（实机用
+  // fontRenderer.getStringWidth 做同样的事，不要按字符数估算 —— 位数不同的编号宽度差很多）。
+  var measureCtx = document.createElement('canvas').getContext('2d');
+  function measureText(s) {
+    measureCtx.font = '11px system-ui, "Segoe UI", "Microsoft YaHei", sans-serif';
+    return measureCtx.measureText(s).width;
+  }
+  var screenEl = $('screen'), tabsEl = $('tabs'), navL = $('navL'), navR = $('navR');
+  var areaList = $('areaList'), effectList = $('effectList'), detailEl = $('detail');
+
+  var COL_EL = [
+    document.querySelector('.col-area'),
+    document.querySelector('.col-effect'),
+    document.querySelector('.col-detail')
+  ];
+
+  // ---------- 三栏比例 ----------
+  function updateRatioLabels() {
+    var sum = state.ratio[0] + state.ratio[1] + state.ratio[2];
+    for (var i = 0; i < 3; i++) {
+      var px = COL_EL[i].clientWidth;
+      $('r' + i + 'v').textContent = (state.ratio[i] * 100 / sum).toFixed(1) + '% · ' + px + 'px';
+    }
+  }
+  function applyRatio() {
+    for (var i = 0; i < 3; i++) COL_EL[i].style.flex = state.ratio[i] + ' 1 0';
+    updateRatioLabels();
+  }
+  function refreshLayout() {
+    renderDetail();
+    layoutTabs();
+    updateRatioLabels();
+  }
+
+  function dim() { return DIMS[state.dimIdx]; }
+  function areas() { return dim().areas; }
+  function selected() {
+    for (var i = 0; i < areas().length; i++) if (areas()[i].id === state.selectedId) return areas()[i];
+    return null;
+  }
+  function curEffect() {
+    if (!state.pending || state.effectIdx < 0 || state.effectIdx >= state.pending.length) return null;
+    return state.pending[state.effectIdx];
+  }
+  function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+  function fill(c, v) { while (v.length < c) v = '0' + v; return v; }
+  function fmt1(v) { return v.toFixed(1); }
+  function clock(h) {
+    var m = clamp(Math.round(h * 60), 0, 1440);
+    return fill(2, String(Math.floor(m / 60))) + ':' + fill(2, String(m % 60));
+  }
+  /** 时段模式全名：用于状态栏提示语，语义要完整。 */
+  function modeName(m) { return m === 1 ? '游戏时间' : m === 2 ? '现实时间' : '始终开启'; }
+  /** 时段模式短名：只用于滑条内的文案，省宽度。 */
+  function modeShort(m) { return m === 1 ? '游戏' : m === 2 ? '现实' : '始终'; }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+
+  // 工作副本与共享数据分离：所有编辑先落在副本上，标脏只是为了让「保存」显形。
+  // GuiAreas#dirty 字段本来就在，此前只用于「外部刷新不清盘」，界面上没有任何体现。
+  function setDirtyUI(on) {
+    var bs = document.querySelectorAll('.dirty-mark');
+    for (var i = 0; i < bs.length; i++) bs[i].classList.toggle('on', on);
+    var ss = document.querySelectorAll('.save-mark');
+    for (var j = 0; j < ss.length; j++) ss[j].classList.toggle('hot', on);
+    $('dirty').classList.toggle('on', on);
+  }
+  function markDirty() { state.dirty = true; setDirtyUI(true); }
+  function clearDirty() { state.dirty = false; setDirtyUI(false); }
+  function note(msg) {
+    $('status').textContent = msg;
+  }
+
+  // ---------- 屏幕尺寸 ----------
+  function applySize() {
+    var h = Math.round(state.width * 9 / 16);
+    screenEl.style.width = state.width + 'px';
+    screenEl.style.height = h + 'px';
+    screenEl.style.transform = 'scale(' + state.zoom + ')';
+    $('stageSize').style.width = (state.width * state.zoom) + 'px';
+    $('stageSize').style.height = (h * state.zoom) + 'px';
+    $('wv').textContent = state.width + ' × ' + h;
+  }
+
+  // ---------- tab 条 ----------
+  function renderTabs() {
+    tabsEl.innerHTML = DIMS.map(function (d, i) {
+      return '<div class="tab' + (i === state.dimIdx ? ' on' : '') + '" data-i="' + i + '">维度 ' + d.id + '</div>';
+    }).join('');
+    Array.prototype.forEach.call(tabsEl.children, function (el) {
+      el.onclick = function () { selectDim(parseInt(el.dataset.i, 10)); };
+    });
+  }
+
+  function layoutTabs() {
+    var over = tabsEl.scrollWidth > tabsEl.clientWidth + 1;
+    navL.classList.toggle('gone', !over);
+    navR.classList.toggle('gone', !over);
+    tabsEl.classList.toggle('flush', !over);
+    navL.classList.toggle('off', !over || tabsEl.scrollLeft <= 0);
+    navR.classList.toggle('off', !over || tabsEl.scrollLeft >= tabsEl.scrollWidth - tabsEl.clientWidth - 1);
+  }
+
+  function stepTab(dir) {
+    var t = tabsEl.querySelector('.tab');
+    if (!t) return;
+    tabsEl.scrollLeft += dir * t.offsetWidth;
+    layoutTabs();
+  }
+
+  navL.onclick = function () { stepTab(-1); };
+  navR.onclick = function () { stepTab(1); };
+  tabsEl.addEventListener('wheel', function (e) {
+    if (tabsEl.scrollWidth <= tabsEl.clientWidth) return;
+    e.preventDefault();
+    stepTab(e.deltaY > 0 || e.deltaX > 0 ? 1 : -1);
+  }, { passive: false });
+  tabsEl.addEventListener('scroll', layoutTabs);
+
+  // ---------- 区域栏 ----------
+  function renderAreas() {
+    var d = dim(), html = [];
+    // 编号列宽度按本列表最宽的 #id 定（右对齐），保证备注列的左边界在切换维度时不左右跳动
+    var idW = 0;
+    for (var k = 0; k < d.areas.length; k++) idW = Math.max(idW, measureText('#' + d.areas[k].id));
+    idW = Math.ceil(idW) + 1;
+    for (var i = 0; i < d.areas.length; i++) {
+      var a = d.areas[i], on = a.id === state.selectedId;
+      // 备注编辑搬到底栏后，行内只做展示，也就不必再给三个图标预留右侧宽度
+      var text = on ? state.remarkDraft : a.remark;
+      var cell = text ? '<span class="rm">' + esc(text) + '</span>' : '';
+      html.push('<div class="row' + (on ? ' on' : '') + '" data-i="' + i + '" style="top:' + (PAD + i * ROW_H - state.scroll) + 'px">' +
+        '<span class="id" style="width:' + idW + 'px">#' + a.id + '</span>' + cell +
+        (on && state.l2 === 'panel' ? '<span class="chips">' +
+          '<span class="chip" data-act="tp" title="传送">' + icon('tp') + '</span>' +
+          '<span class="chip" data-act="del" title="删除">' + icon('del') + '</span>' +
+          '<span class="chip" data-act="sel" title="线框开关">' + icon('sel', a.wire !== false) + '</span>' +
+          '</span>' : '') +
+        '</div>');
+    }
+    areaList.innerHTML = html.join('') + scrollbarHtml(d.areas.length);
+    Array.prototype.forEach.call(areaList.querySelectorAll('.row'), function (el) {
+      el.onclick = function () { selectArea(areas()[parseInt(el.dataset.i, 10)]); };
+    });
+    Array.prototype.forEach.call(areaList.querySelectorAll('.chip'), function (el) {
+      el.onclick = function (e) {
+        e.stopPropagation();
+        doAreaAction(el.dataset.act);
+      };
+    });
+    bindRemark();
+  }
+
+  function icon(kind, on) {
+    var s = '<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1">';
+    if (kind === 'del') s += '<path d="M3 3L9 9M9 3L3 9"/>';
+    else if (kind === 'tp') s += '<path d="M3 9L9 3"/><path d="M5 3H9V7"/>';
+    else if (kind === 'save') s += '<path d="M2.5 6.5L5 9L9.5 3"/>';
+    else s += '<rect x="3" y="3" width="6" height="6"/>' + (on ? '<rect x="4.5" y="4.5" width="3" height="3" fill="currentColor" stroke="none"/>' : '');
+    return s + '</svg>';
+  }
+
+  // ---------- 滚动条（与 ScrollColumn 同口径） ----------
+  function barGeom(count) {
+    var list = areaList, view = list.clientHeight - PAD * 2;
+    var max = Math.max(0, count * ROW_H - view);
+    if (max <= 0) return null;
+    var bh = Math.max(MIN_BAR_H, Math.floor(view * view / Math.max(1, count * ROW_H)));
+    var by = PAD + Math.floor((view - bh) * state.scroll / max);
+    return { bh: bh, by: by };
+  }
+  function scrollbarHtml(count) {
+    var g = barGeom(count);
+    if (!g) return '';
+    return '<div class="sbar"><i style="top:' + g.by + 'px;height:' + g.bh + 'px"></i></div>';
+  }
+  function maxScroll(count) {
+    return Math.max(0, count * ROW_H - (areaList.clientHeight - PAD * 2));
+  }
+  areaList.addEventListener('wheel', function (e) {
+    e.preventDefault();
+    scrollAreas(e.deltaY > 0 ? 1 : -1);
+  }, { passive: false });
+  function scrollAreas(rows) {
+    state.scroll = clamp(state.scroll + rows * ROW_H, 0, maxScroll(areas().length));
+    renderAreas();
+  }
+
+  // ---------- 效果栏 ----------
+  function renderEffects() {
+    var has = !!selected();
+    var list = state.pending || [];
+    var all = list.length > 0; // 目前只有亮度一种类型
+    $('toolbar').innerHTML =
+      '<button class="flat" id="addEff"' + (has && !all ? '' : ' disabled') + '>添加效果</button>' +
+      '<button class="flat" id="delEff"' + (has && state.effectIdx >= 0 ? '' : ' disabled') + '>删除效果</button>';
+    $('addEff').onclick = addEffect;
+    $('delEff').onclick = delEffect;
+
+    var html = '';
+    for (var i = 0; i < list.length; i++) {
+      var e = list[i], on = i === state.effectIdx;
+      html += '<div class="row' + (on ? ' on' : '') + '" data-i="' + i + '" style="top:' + (PAD + i * ROW_H) + 'px">' +
+        '<span>亮度</span><span class="rm" style="margin-left:auto">W' + Math.round(e.weight) + '</span></div>';
+    }
+    effectList.innerHTML = html;
+    if (has && list.length === 0) {
+      effectList.innerHTML += '<div class="hint">该区域暂无效果，点「添加效果」新增</div>';
+    }
+    Array.prototype.forEach.call(effectList.querySelectorAll('.row'), function (el) {
+      el.onclick = function () {
+        state.effectIdx = parseInt(el.dataset.i, 10);
+        renderEffects(); renderDetail();
+      };
+    });
+  }
+
+  function addEffect() {
+    if (!state.pending) return;
+    state.pending.push(eff(0, 100, 1, 0, 6, 18));
+    if (state.effectIdx < 0) state.effectIdx = 0;
+    markDirty();
+    note('已添加 亮度 效果（默认 权重 0 / 亮度 100 / 过渡 1.0s），点「保存」才写回');
+    renderEffects(); renderDetail();
+  }
+  function delEffect() {
+    if (!state.pending || state.effectIdx < 0) return;
+    state.pending.splice(state.effectIdx, 1);
+    if (state.effectIdx >= state.pending.length) state.effectIdx = state.pending.length - 1;
+    markDirty();
+    note(state.pending.length === 0
+      ? '已删除最后一个效果 —— 效果集允许为空，此时「保存」仍可点，用于提交备注与"无效果"状态'
+      : '已删除选中的效果（工作副本），点「保存」才写回');
+    renderEffects(); renderDetail();
+  }
+
+  // ---------- 详情栏 ----------
+  function renderDetail() {
+    renderActionBar();
+    var a = selected();
+    var inBar = state.l2 === 'bar';
+    if (!a) {
+      // 未选中区域：按钮仍在，只是禁用（实机 BTN_SAVE 在 initGui 里无条件创建，enabled = has）
+      detailEl.innerHTML = '<div class="hint">点击左侧区域查看详情</div>' +
+        (inBar ? '' : '<div class="d-band">' + '<button class="d-save in-band" disabled>保存</button>' + '</div>');
+      return;
+    }
+    var w = detailEl.clientWidth || 200;
+    var e = curEffect();
+    var html;
+    var s0;
+    if (inBar) {
+      // 本栏不含任何 L2 内容，也不再自报"是什么效果"——效果列表已用选中行表明了，
+      // 这里只放该效果的参数。同一个「选中项即作用域」的规则，和左栏选中行决定本栏内容一致。
+      html = '';
+      s0 = 6;
+    } else {
+      // 对照方案（L2 仍留在栏内）：区域段（身份 + 形状 + 备注）+ 共用线；线下才是效果参数
+      html = '<div class="d-sec" style="top:6px">区域</div>' +
+        '<div class="d-id" style="left:34px;top:6px">#' + a.id + '</div>' +
+        '<div class="d-shape" style="top:20px;width:' + Math.max(20, w - 20) + 'px">' + esc(SHAPE[a.id] || '（无形状信息）') + '</div>' +
+        '<div class="d-lab" style="top:36px">备注</div>' +
+        '<input class="d-remark" id="remark" maxlength="60" value="' + esc(state.remarkDraft) + '" style="left:34px;top:34px;width:' + Math.max(16, w - 44) + 'px">' +
+        '<div class="d-div" style="top:54px"></div>';
+      s0 = 58;
+    }
+
+    if (!e) {
+      // 零效果是合法状态（AreaRequests#onSetProps：效果集已允许为空），此时只提示，保存仍在底栏可点
+      html += inBar
+        ? '<div class="hint">该区域暂无效果，点上方「添加效果」新增</div>'
+        : '<div class="hint" style="top:' + (s0 + 20) + 'px;transform:none">该区域暂无效果，点上方「添加效果」新增</div>';
+    } else {
+      html += sliderHtml('weight', s0, '权重 (越大越优先): ' + Math.round(e.weight));
+      html += rangeHtml(s0 + 72);
+      if (e.type === 'lightness') {
+        html += sliderHtml('light', s0 + 24, '目标亮度 (CIE L*): ' + Math.round(e.lightness));
+        html += sliderHtml('duration', s0 + 48, '过渡时长 (秒): ' + fmt1(e.duration));
+      }
+    }
+    if (!inBar) html += '<div class="d-band">' + dirtyMark() + saveBtn('in-band') + '</div>';
+    detailEl.innerHTML = html;
+    bindRemark();
+    paintSliders();
+    setDirtyUI(state.dirty);
+  }
+
+  function sliderHtml(k, top, label) {
+    return '<div class="fslider" data-k="' + k + '" style="left:10px;right:10px;top:' + top + 'px">' +
+      '<div class="fill"></div><div class="thumb"></div><span class="slabel">' + esc(label) + '</span></div>';
+  }
+  function rangeHtml(top) {
+    return '<div class="rslider" data-k="time" style="left:10px;right:10px;top:' + top + 'px">' +
+      '<div class="fill"></div><div class="fill fill2"></div><div class="mk mk-start"></div><div class="mk mk-end"></div>' +
+      '<span class="slabel"></span></div>';
+  }
+
+  function bindRemark() {
+    var el = document.querySelector('.d-remark, .a-remark');
+    if (!el) return;
+    el.oninput = function () {
+      state.remarkDraft = el.value;
+      var sm = areaList.querySelector('.row.on .rm');
+      if (sm) sm.textContent = el.value;
+      markDirty();
+    };
+    el.onkeydown = function (ev) { if (ev.key === 'Enter') el.blur(); };
+  }
+
+  // ---------- 滑条绘制与拖动 ----------
+  function spec(k, e) {
+    if (k === 'weight') return { min: 0, max: 100, step: 1, val: e.weight };
+    if (k === 'light') return { min: 0, max: 100, step: 1, val: e.lightness };
+    return { min: 0, max: 60, step: 0.1, val: e.duration };
+  }
+  function writeVal(k, e, v) {
+    if (k === 'weight') e.weight = v;
+    else if (k === 'light') e.lightness = v;
+    else e.duration = v;
+  }
+  function label(k, e) {
+    if (k === 'weight') return '权重 (越大越优先): ' + Math.round(e.weight);
+    if (k === 'light') return '目标亮度 (CIE L*): ' + Math.round(e.lightness);
+    return '过渡时长 (秒): ' + fmt1(e.duration);
+  }
+  function paintFlat(el) {
+    var e = curEffect();
+    if (!e) return;
+    var k = el.dataset.k, s = spec(k, e), w = el.clientWidth;
+    if (w < 40) return;
+    var track = w - 8 - THUMB_W;
+    var cx = 8 + Math.round(track * (s.val - s.min) / (s.max - s.min));
+    var f = el.querySelector('.fill'), t = el.querySelector('.thumb');
+    f.style.left = '3px';
+    f.style.width = Math.max(0, cx - 3) + 'px';
+    if (cx - THUMB_W / 2 <= 4) f.style.width = '0px';
+    t.style.left = (cx - THUMB_W / 2) + 'px';
+    el.querySelector('.slabel').textContent = label(k, e);
+  }
+  function paintRange(el) {
+    var e = curEffect();
+    if (!e) return;
+    var w = el.clientWidth;
+    if (w < 40) return;
+    var track = w - 8 - THUMB_W;
+    var timed = e.timeMode !== 0;
+    function cx(h) { return 8 + Math.round(track * h / 24); }
+    var sc = cx(e.start), ec = cx(e.end);
+    var f = el.querySelector('.fill'), f2 = el.querySelector('.fill2');
+    var ms = el.querySelector('.mk-start'), me = el.querySelector('.mk-end');
+    if (!timed) {
+      f.style.left = '3px';
+      f.style.width = Math.max(0, w - 6) + 'px';
+      f2.style.display = 'none';
+      ms.style.display = 'none'; me.style.display = 'none';
+    } else {
+      ms.style.display = ''; me.style.display = '';
+      ms.style.left = (sc - 4) + 'px';
+      me.style.left = (ec - 4) + 'px';
+      if (e.start <= e.end) {
+        f2.style.display = 'none';
+        f.style.left = sc + 'px';
+        f.style.width = Math.max(0, ec - sc) + 'px';
+      } else {
+        f.style.left = sc + 'px';
+        f.style.width = Math.max(0, w - 3 - sc) + 'px';
+        f2.style.display = '';
+        f2.style.left = '3px';
+        f2.style.width = Math.max(0, ec - 3) + 'px';
+      }
+    }
+    // 文案压缩：「生效时段: 游戏时间  06:00 → 18:00」实测 186px，会把详情栏的宽度下限锁在 46%；
+    // 压到「时段 游戏  06:00→18:00」约 121px，详情栏才可能收到 40% 以下（模式全名只留在提示语里）。
+    el.querySelector('.slabel').textContent = '时段 ' + modeShort(e.timeMode) +
+      (timed ? '  ' + clock(e.start) + '→' + clock(e.end) : '');
+  }
+  function paintSliders() {
+    Array.prototype.forEach.call(detailEl.querySelectorAll('.fslider'), paintFlat);
+    Array.prototype.forEach.call(detailEl.querySelectorAll('.rslider'), paintRange);
+  }
+
+  function localX(el, clientX) {
+    var r = el.getBoundingClientRect();
+    return (clientX - r.left) / state.zoom;
+  }
+
+  detailEl.addEventListener('pointerdown', function (ev) {
+    var e = curEffect();
+    if (!e) return;
+    var el = ev.target.closest ? ev.target.closest('.fslider,.rslider') : null;
+    if (!el) return;
+    var k = el.dataset.k, x = localX(el, ev.clientX), w = el.clientWidth;
+    el.setPointerCapture(ev.pointerId);
+    if (k !== 'time') {
+      var s = spec(k, e);
+      var track = w - 8 - THUMB_W;
+      var v = clamp((x - 8) / track, 0, 1);
+      var raw = s.min + v * (s.max - s.min);
+      raw = s.step > 0 ? Math.round(raw / s.step) * s.step : raw;
+      writeVal(k, e, clamp(raw, s.min, s.max));
+      el.classList.add('hot');
+      state.dragging = { el: el, k: k };
+      paintSliders();
+      markDirty();
+      note('拖动中：' + label(k, e));
+      return;
+    }
+    if (e.timeMode === 0) { cycleMode(); return; }
+    var track2 = w - 8 - THUMB_W;
+    function cx(h) { return 8 + Math.round(track2 * h / 24); }
+    if (Math.abs(x - cx(e.start)) <= GRAB) state.dragging = { el: el, k: 'start' };
+    else if (Math.abs(x - cx(e.end)) <= GRAB) state.dragging = { el: el, k: 'end' };
+    else { cycleMode(); return; }
+    el.classList.add('hot');
+    dragTime(x);
+    paintSliders();
+    markDirty();
+  });
+
+  detailEl.addEventListener('pointermove', function (ev) {
+    if (!state.dragging) return;
+    var el = state.dragging.el, k = state.dragging.k;
+    var x = localX(el, ev.clientX), w = el.clientWidth;
+    if (k === 'start' || k === 'end') { dragTime(x); }
+    else {
+      var e = curEffect(), s = spec(k, e);
+      var v = clamp((x - 8) / (w - 8 - THUMB_W), 0, 1);
+      var raw = s.min + v * (s.max - s.min);
+      raw = s.step > 0 ? Math.round(raw / s.step) * s.step : raw;
+      writeVal(k, e, clamp(raw, s.min, s.max));
+    }
+    paintSliders();
+    markDirty();
+  });
+
+  function dragTime(x) {
+    var e = curEffect(), el = detailEl.querySelector('.rslider');
+    var w = el.clientWidth, track = w - 8 - THUMB_W;
+    var raw = clamp((x - 8) / track, 0, 1) * 24;
+    var snap = Math.round(raw * 60) / 60;
+    if (state.dragging.k === 'start') e.start = snap; else e.end = snap;
+  }
+
+  function endDrag() {
+    if (!state.dragging) return;
+    var k = state.dragging.k;
+    state.dragging.el.classList.remove('hot');
+    state.dragging = null;
+    var e = curEffect();
+    var msg = k === 'start' || k === 'end'
+      ? '时段改为 ' + clock(e.start) + ' → ' + clock(e.end) + (e.start > e.end ? '（跨午夜）' : e.start === e.end ? '（整天）' : '')
+      : label(k, e);
+    note(msg);
+  }
+  ['pointerup', 'pointercancel'].forEach(function (t) { detailEl.addEventListener(t, endDrag); });
+
+  function cycleMode() {
+    var e = curEffect();
+    if (!e) return;
+    e.timeMode = (e.timeMode + 1) % 3;
+    markDirty();
+    note('时段模式轮切为「' + modeName(e.timeMode) + '」');
+    paintSliders();
+    renderDetail();
+  }
+
+  function save() {
+    var a = selected();
+    if (!a) return;
+    a.remark = state.remarkDraft;
+    a.effects = state.pending.map(function (e) { return JSON.parse(JSON.stringify(e)); });
+    var msg = '已保存 #' + a.id + '：备注 + ' + a.effects.length + ' 个效果';
+    if (a.effects.length === 0) msg += '（零效果合法：区域仍在，形状/备注/线框/传送都保留，只是不再参与亮度渲染）';
+    note(msg);
+    clearDirty();
+    renderAreas(); renderEffects(); renderDetail();
+  }
+
+  // ---------- 选中与层级切换 ----------
+  function selectDim(i) {
+    state.dimIdx = i;
+    state.selectedId = null;
+    state.pending = null;
+    state.effectIdx = -1;
+    state.remarkDraft = '';
+    state.scroll = 0;
+    clearDirty();
+    note('切到 维度 ' + DIMS[i].id + '，已清空选择与预览覆盖');
+    renderTabs(); renderAreas(); renderEffects(); renderDetail();
+    layoutTabs();
+  }
+  function selectArea(a) {
+    if (state.selectedId === a.id) return;
+    state.selectedId = a.id;
+    state.pending = a.effects.map(function (e) { return JSON.parse(JSON.stringify(e)); });
+    state.effectIdx = state.pending.length ? 0 : -1;
+    state.remarkDraft = a.remark;
+    clearDirty();
+    note('选中 #' + a.id + '，效果复制成工作副本（改动不污染共享数据）');
+    renderAreas(); renderEffects(); renderDetail();
+  }
+  function doAreaAction(act) {
+    if (act === 'save') { save(); return; }   // 保存自带门控（未选中区域时 save() 直接返回）
+    var a = selected();
+    if (!a) return;
+    if (act === 'tp') note('已发送传送请求：#' + a.id);
+    else if (act === 'sel') {
+      a.wire = a.wire === false;
+      note('#' + a.id + ' 线框显示 ' + (a.wire === false ? '关' : '开'));
+      renderAreas();
+      renderActionBar();
+    } else {
+      var d = areas();
+      d.splice(d.indexOf(a), 1);
+      state.selectedId = null; state.pending = null; state.effectIdx = -1; state.remarkDraft = '';
+      clearDirty();
+      note('已发送删除请求：# ' + a.id + '（服务端广播后从列表移除）');
+      renderAreas(); renderEffects(); renderDetail();
+    }
+  }
+
+  // ---------- 启动 ----------
+  $('w').oninput = function () {
+    state.width = parseInt(this.value, 10);
+    applySize();
+    refreshLayout();
+  };
+  Array.prototype.forEach.call($('zoom').children, function (b) {
+    b.onclick = function () {
+      Array.prototype.forEach.call($('zoom').children, function (x) { x.classList.remove('on'); });
+      b.classList.add('on');
+      state.zoom = parseFloat(b.dataset.z);
+      applySize();
+      updateRatioLabels();
+    };
+  });
+  [0, 1, 2].forEach(function (i) {
+    $('r' + i).oninput = function () {
+      state.ratio[i] = parseInt(this.value, 10);
+      applyRatio();
+      refreshLayout();
+    };
+  });
+  function setRatio(arr) {
+    state.ratio = arr.slice();
+    for (var i = 0; i < 3; i++) $('r' + i).value = state.ratio[i];
+    applyRatio();
+    refreshLayout();
+  }
+  $('resetRatio').onclick = function () { setRatio(DEFAULT_RATIO); };
+  $('oldRatio').onclick = function () { setRatio(OLD_RATIO); };
+  // 保存按钮会在栏内三处 / 窗口底栏之间搬动，用事件委托统一接管，避免每次搬动都要重绑
+  screenEl.addEventListener('click', function (ev) {
+    var t = ev.target.closest ? ev.target.closest('#save') : null;
+    if (t && !t.disabled) save();
+  });
+  Array.prototype.forEach.call($('l2Mode').children, function (b) {
+    b.onclick = function () {
+      Array.prototype.forEach.call($('l2Mode').children, function (x) { x.classList.remove('on'); });
+      b.classList.add('on');
+      state.l2 = b.dataset.l2;
+      note('区域级操作的落点：' + b.textContent);
+      renderAreas();
+      renderDetail();
+    };
+  });
+
+  applySize();
+  applyRatio();
+  renderTabs();
+  renderAreas();
+  renderEffects();
+  renderDetail();
+  selectArea(areas()[0]);
+  layoutTabs();
+  window.addEventListener('resize', function () { refreshLayout(); });
+  setTimeout(function () { layoutTabs(); updateRatioLabels(); }, 0);
+})();
+</script>
+</body>
+</html>
