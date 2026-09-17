@@ -17,9 +17,10 @@ import java.util.List;
 public final class EffectTypes {
 
     public static final String TYPE_LIGHTNESS = "lightness";
+    public static final String TYPE_FOG = "fog";
 
     /** 可添加的效果类型全集（面板"添加效果"按钮遍历此表）。 */
-    public static final List<String> ALL = Collections.unmodifiableList(Arrays.asList(TYPE_LIGHTNESS));
+    public static final List<String> ALL = Collections.unmodifiableList(Arrays.asList(TYPE_LIGHTNESS, TYPE_FOG));
 
     private EffectTypes() {
     }
@@ -30,6 +31,9 @@ public final class EffectTypes {
             case TYPE_LIGHTNESS:
                 // 亮度效果默认：亮度 100、过渡 1 秒（权重由 AreaEffect 默认为 0）
                 return new LightnessEffect(100.0F, 1.0F);
+            case TYPE_FOG:
+                // 雾效果默认：浅雾色、浓度 0.5、无尘粒、过渡 1 秒
+                return new FogEffect(0.5F, 40, 80, 50, 0, 1.0F);
             default:
                 return null;
         }
@@ -43,6 +47,8 @@ public final class EffectTypes {
         switch (type) {
             case TYPE_LIGHTNESS:
                 return readLightnessNbt(tag);
+            case TYPE_FOG:
+                return readFogNbt(tag);
             default:
                 return null;
         }
@@ -56,6 +62,8 @@ public final class EffectTypes {
         switch (type) {
             case TYPE_LIGHTNESS:
                 return readLightnessBuf(buf);
+            case TYPE_FOG:
+                return readFogBuf(buf);
             default:
                 return null;
         }
@@ -84,7 +92,6 @@ public final class EffectTypes {
         LightnessEffect effect = new LightnessEffect();
         effect.readNbtFields(tag);
         effect.setLightness(tag.getFloat("lightness"));
-        effect.setDuration(tag.getFloat("duration"));
         return effect;
     }
 
@@ -92,7 +99,28 @@ public final class EffectTypes {
         LightnessEffect effect = new LightnessEffect();
         effect.readBufFields(buf);
         effect.setLightness(buf.readFloat());
-        effect.setDuration(buf.readFloat());
+        return effect;
+    }
+
+    private static FogEffect readFogNbt(NBTTagCompound tag) {
+        FogEffect effect = new FogEffect();
+        effect.readNbtFields(tag);
+        effect.setDensity(tag.getFloat("density"));
+        effect.setRed(tag.getInteger("red"));
+        effect.setGreen(tag.getInteger("green"));
+        effect.setBlue(tag.getInteger("blue"));
+        effect.setDust(tag.getInteger("dust"));
+        return effect;
+    }
+
+    private static FogEffect readFogBuf(ByteBuf buf) {
+        FogEffect effect = new FogEffect();
+        effect.readBufFields(buf);
+        effect.setDensity(buf.readFloat());
+        effect.setRed(buf.readInt());
+        effect.setGreen(buf.readInt());
+        effect.setBlue(buf.readInt());
+        effect.setDust(buf.readInt());
         return effect;
     }
 }

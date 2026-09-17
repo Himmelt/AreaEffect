@@ -26,11 +26,26 @@ public abstract class AreaEffect {
     public static final float MAX_HOUR = 24.0F;
 
     /**
+     * 过渡时长下限（秒）：闭区间 [0,60] 的下界。<b>0 表示不过渡、效果瞬间到位</b>。
+     * 与 README/GUI 滑条一致，为所有需要过渡的效果（亮度/雾/天空等）的公共参数。
+     */
+    public static final float MIN_DURATION = 0.0F;
+    /** 过渡时长上限（秒）。 */
+    public static final float MAX_DURATION = 60.0F;
+
+    /**
      * 效果权重：重叠区域内同种效果按权重选最高者显示，权重相同则取较大 id 的区域
      * （即后创建者，见 ClientProxy#updateClientLight 的决胜规则）。
      * 仅在"一区域内每种效果至多一个实例"的前提下定义，故权重归属到单个效果实例即可。
      */
     private float weight = 0.0F;
+
+    /**
+     * 过渡时长（秒）：进入/离开区域与参数变更时的平滑过渡耗时，闭区间
+     * [{@link #MIN_DURATION}, {@link #MAX_DURATION}] = [0,60]。
+     * 0 表示瞬间到位。作为公共字段，供亮度/雾/天空等所有需要过渡的效果复用。
+     */
+    private float duration = 1.0F;
 
     /** 时间段模式，见 {@link #TIME_ALWAYS}/{@link #TIME_GAME}/{@link #TIME_REAL}。 */
     private int timeMode = TIME_ALWAYS;
@@ -116,6 +131,7 @@ public abstract class AreaEffect {
      */
     public void sanitize() {
         weight = clampWeight(weight);
+        duration = clampDuration(duration);
         timeMode = timeMode < TIME_ALWAYS ? TIME_ALWAYS : (Math.min(timeMode, TIME_REAL));
         startHour = clampHour(startHour);
         endHour = clampHour(endHour);
@@ -129,9 +145,26 @@ public abstract class AreaEffect {
         this.weight = clampWeight(weight);
     }
 
+    public float getDuration() {
+        return duration;
+    }
+
+    public void setDuration(float duration) {
+        this.duration = clampDuration(duration);
+    }
+
     private static float clampWeight(float weight) {
         return Float.isNaN(weight) ? 0.0F
                 : (weight < 0.0F ? 0.0F : (Math.min(weight, MAX_WEIGHT)));
+    }
+
+    /**
+     * 时长边界处理：NaN 回落默认 1 秒，其余收窄到闭区间
+     * [{@link #MIN_DURATION}, {@link #MAX_DURATION}] = [0,60]（负数夹到 0，+∞ 夹到 60）。
+     * 下限 0 是合法值，表示"不过渡、瞬间到位"，故不像旧版那样把 ≤0 一律回落成 1 秒。
+     */
+    private static float clampDuration(float duration) {
+        return Float.isNaN(duration) ? 1.0F : Math.max(MIN_DURATION, Math.min(MAX_DURATION, duration));
     }
 
     /** 写入公共字段（权重与时间段）到 NBT。子类在 writeToNbt 里、类型专用字段<b>之前</b>先调用本方法。 */
@@ -140,6 +173,7 @@ public abstract class AreaEffect {
         tag.setByte("timeMode", (byte) timeMode);
         tag.setFloat("startHour", startHour);
         tag.setFloat("endHour", endHour);
+        tag.setFloat("duration", duration);
     }
 
     /** 从 NBT 读回公共字段（权重与时间段）。与 {@link #writeNbtFields} 的字段顺序保持一致。 */
@@ -148,27 +182,31 @@ public abstract class AreaEffect {
         setTimeMode(tag.getByte("timeMode"));
         setStartHour(tag.getFloat("startHour"));
         setEndHour(tag.getFloat("endHour"));
+        setDuration(tag.getFloat("duration"));
     }
 
-    /** 写入公共字段（权重与时间段）到网络缓冲。子类在 writeToBuf 里、类型专用字段<b>之前</b>先调用。 */
+    /** 写入公共字段（权重、过渡时长与时间段）到网络缓冲。子类在 writeToBuf 里、类型专用字段<b>之前</b>先调用。 */
     public void writeBufFields(ByteBuf buf) {
         buf.writeFloat(weight);
         buf.writeByte(timeMode);
         buf.writeFloat(startHour);
         buf.writeFloat(endHour);
+        buf.writeFloat(duration);
     }
 
-    /** 从网络缓冲读回公共字段（权重与时间段）。与 {@link #writeBufFields} 的元素顺序保持一致。 */
+    /** 从网络缓冲读回公共字段（权重、过渡时长与时间段）。与 {@link #writeBufFields} 的元素顺序保持一致。 */
     public void readBufFields(ByteBuf buf) {
         setWeight(buf.readFloat());
         setTimeMode(buf.readByte());
         setStartHour(buf.readFloat());
         setEndHour(buf.readFloat());
+        setDuration(buf.readFloat());
     }
 
-    /** 把公共字段（权重与时间段）复制到另一实例；子类 {@link #copy()} 构造新实例后调用。 */
+    /** 把公共字段（权重、过渡时长与时间段）复制到另一实例；子类 {@link #copy()} 构造新实例后调用。 */
     protected void copyCommonTo(AreaEffect target) {
         target.weight = weight;
+        target.duration = duration;
         target.timeMode = timeMode;
         target.startHour = startHour;
         target.endHour = endHour;

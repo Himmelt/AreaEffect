@@ -18,6 +18,7 @@ import org.soraworld.areaeffect.client.effect.EffectRenderer;
 import org.soraworld.areaeffect.client.gui.GuiAreas;
 import org.soraworld.areaeffect.client.handler.AreaClientHandler;
 import org.soraworld.areaeffect.client.handler.ClientSelectionHandler;
+import org.soraworld.areaeffect.client.handler.FogRenderHandler;
 import org.soraworld.areaeffect.client.handler.LightmapHook;
 import org.soraworld.areaeffect.client.handler.SelectionRenderHandler;
 import org.soraworld.areaeffect.common.CommonProxy;
@@ -57,9 +58,12 @@ public class ClientProxy extends CommonProxy {
     /** 各维度中已开启线框显示的区域 id 集合（客户端本地设置）。 */
     private final Map<Integer, Set<Integer>> visibleAreas = new ConcurrentHashMap<>();
 
-    /** 编辑预览亮度/时长覆盖：dim → id → {lightness, duration}。
-     *  独立于客户端镜像 {@link #clientAreas}、从不写回区域对象，故镜像始终等于服务端同步值、未保存的编辑不外泄。 */
-    private final Map<Integer, Map<Integer, float[]>> previewLd = new ConcurrentHashMap<>();
+    /**
+     * 编辑预览的效果列表覆盖：dim → id → 工作副本（每种效果各拷一份）。
+     * 独立于客户端镜像 {@link #clientAreas}、从不写回区域对象，故镜像始终等于服务端同步值、未保存的编辑不外泄。
+     * 按效果泛化：亮度/雾/天空的滑条编辑都能经 {@link #effectiveArea} 实时预览（原有单亮度覆盖并入此模型）。
+     */
+    private final Map<Integer, Map<Integer, List<AreaEffect>>> previewEffects = new ConcurrentHashMap<>();
     /** 编辑预览备注覆盖：dim → id → String（同样不入共享对象）。 */
     private final Map<Integer, Map<Integer, String>> previewRemarks = new ConcurrentHashMap<>();
 
@@ -98,6 +102,7 @@ public class ClientProxy extends CommonProxy {
         FMLCommonHandler.instance().bus().register(handler);
         MinecraftForge.EVENT_BUS.register(new SelectionRenderHandler(this));
         MinecraftForge.EVENT_BUS.register(new ClientSelectionHandler(this));
+        MinecraftForge.EVENT_BUS.register(new FogRenderHandler());
         ClientRegistry.registerKeyBinding(KEY_LIST);
         ClientRegistry.registerKeyBinding(KEY_SEL_RENDER);
     }
@@ -325,12 +330,19 @@ public class ClientProxy extends CommonProxy {
     }
 
     /**
-     * 编辑界面实时预览：把亮度/时长写入独立覆盖表（不修改共享 Area）。
+     * 编辑界面实时预览：把工作副本 {@code effects}（各效果已拷过）写入覆盖表（不修改共享 Area）。
      * 渲染器通过 {@link #effectiveArea} 读取覆盖，下一帧即生效；
      * 未保存退出/切换时用 {@link #clearPreview} 移除覆盖即可还原原值。
+     * 写入前对每个效果再拷一份，保证覆盖表与调用方可变列表相互独立。
      */
-    public void previewAreaProps(int dim, int id, float lightness, float duration) {
-        previewLd.computeIfAbsent(dim, d -> new ConcurrentHashMap<>()).put(id, new float[]{lightness, duration});
+    public void previewAreaEffects(int dim, int id, List<AreaEffect> effects) {
+        List<AreaEffect> copy = new ArrayList<>(effects.size());
+        for (AreaEffect effect : effects) {
+            if (effect != null) {
+                copy.add(effect.copy());
+            }
+        }
+        previewEffects.computeIfAbsent(dim, d -> new ConcurrentHashMap<>()).put(id, copy);
     }
 
     /** 本地立即写回备注到覆盖表（列表即时显示；服务端广播到达后共享数据保持一致）。 */
@@ -344,32 +356,17 @@ public class ClientProxy extends CommonProxy {
         if (area == null) {
             return null;
         }
-        Map<Integer, float[]> m = previewLd.get(dim);
+        Map<Integer, List<AreaEffect>> m = previewEffects.get(dim);
         if (m == null) {
             return area;
         }
-        float[] ld = m.get(area.id);
-        if (ld == null) {
+        List<AreaEffect> override = m.get(area.id);
+        if (override == null) {
             return area;
         }
-        // 覆盖值与共享一致时直接复用共享对象，避免每帧构造临时对象
-        if (ld[0] == area.getLightness() && ld[1] == area.getDuration()) {
-            return area;
-        }
-        Area tmp = new Area(area.shape(), ld[0], ld[1]);
+        Area tmp = new Area(area.shape());
         tmp.id = area.id;
-        // 预览只覆盖亮度/时长：其它类型的效果原样带过来，别被 new Area(...) 里那条单例
-        // 亮度效果挤掉（效果列表的设计是"一个区域可挂多种效果"）
-        List<AreaEffect> keep = new ArrayList<>();
-        for (AreaEffect effect : area.getEffects()) {
-            if (!(effect instanceof LightnessEffect)) {
-                keep.add(effect);
-            }
-        }
-        if (!keep.isEmpty()) {
-            keep.add(new LightnessEffect(ld[0], ld[1]));
-            tmp.setEffects(keep);
-        }
+        tmp.setEffects(override);
         return tmp;
     }
 
@@ -390,7 +387,7 @@ public class ClientProxy extends CommonProxy {
 
     /** 清除指定区域的预览覆盖（未保存退出/切换/保存成功后调用），恢复以共享原值为准。 */
     public void clearPreview(int dim, int id) {
-        Map<Integer, float[]> m = previewLd.get(dim);
+        Map<Integer, List<AreaEffect>> m = previewEffects.get(dim);
         if (m != null) {
             m.remove(id);
         }
@@ -490,7 +487,7 @@ public class ClientProxy extends CommonProxy {
         overlayShape = null;
         overlayLastAction = 0L;
         visibleAreas.clear();
-        previewLd.clear();
+        previewEffects.clear();
         previewRemarks.clear();
         lastWinAreaByType.clear();
         renderers = new EffectRenderers();

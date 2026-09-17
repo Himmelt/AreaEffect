@@ -12,6 +12,7 @@ import org.lwjgl.opengl.GL11;
 import org.soraworld.areaeffect.client.ClientProxy;
 import org.soraworld.areaeffect.common.effect.AreaEffect;
 import org.soraworld.areaeffect.common.effect.EffectTypes;
+import org.soraworld.areaeffect.common.effect.FogEffect;
 import org.soraworld.areaeffect.common.effect.LightnessEffect;
 import org.soraworld.areaeffect.common.network.Area;
 
@@ -139,6 +140,12 @@ public class GuiAreas extends GuiScreen {
     private FlatSlider lightSlider;
     private FlatSlider durationSlider;
     private RangeSlider timeRangeSlider;
+    /** 颜色三通道 + 雾专属（浓度/尘粒）：按效果类型显隐，与 lightSlider 复用同一段行位。 */
+    private FlatSlider redSlider;
+    private FlatSlider greenSlider;
+    private FlatSlider blueSlider;
+    private FlatSlider densitySlider;
+    private FlatSlider dustSlider;
     /** 底栏：备注输入框（区域级）。 */
     private GuiTextField remarkField;
     /** 底栏：线框开关按钮，需要按该区域当前是否显示线框切换字形。 */
@@ -502,17 +509,33 @@ public class GuiAreas extends GuiScreen {
                 translate("gui.areaeffect.edit.weight"), 0.0F, AreaEffect.MAX_WEIGHT, 0.0F, 1.0F);
         durationSlider = new FlatSlider(detX1 + 10, bodyY1 + SLIDER_TOP + SLIDER_PITCH, sw, SLIDER_H,
                 translate("gui.areaeffect.edit.duration"),
-                LightnessEffect.MIN_DURATION, LightnessEffect.MAX_DURATION, 1.0F, 0.1F);
+                AreaEffect.MIN_DURATION, AreaEffect.MAX_DURATION, 1.0F, 0.1F);
         // 时段三合一控件：拖游标改区间、点非游标区域轮切模式（始终→游戏→现实），步进 1 分钟、显示 HH:mm
         timeRangeSlider = new RangeSlider(detX1 + 10, bodyY1 + SLIDER_TOP + SLIDER_PITCH * 2, sw, SLIDER_H,
                 0.0F, 24.0F, 6.0F, 18.0F, HOUR_STEP);
         timeRangeSlider.setOnModeToggle(this::cycleTimeMode);
         lightSlider = new FlatSlider(detX1 + 10, bodyY1 + SLIDER_TOP + SLIDER_PITCH * 3, sw, SLIDER_H,
                 translate("gui.areaeffect.edit.lightness"), 0.0F, 100.0F, 100.0F, 1.0F);
+        // 颜色三通道（雾/天空共用）与雾专属浓度/尘粒：与 lightSlider 复用 3..7 行位，按类型显隐
+        redSlider = new FlatSlider(detX1 + 10, bodyY1 + SLIDER_TOP + SLIDER_PITCH * 3, sw, SLIDER_H,
+                translate("gui.areaeffect.edit.color.red"), 0.0F, 255.0F, 128.0F, 1.0F);
+        greenSlider = new FlatSlider(detX1 + 10, bodyY1 + SLIDER_TOP + SLIDER_PITCH * 4, sw, SLIDER_H,
+                translate("gui.areaeffect.edit.color.green"), 0.0F, 255.0F, 128.0F, 1.0F);
+        blueSlider = new FlatSlider(detX1 + 10, bodyY1 + SLIDER_TOP + SLIDER_PITCH * 5, sw, SLIDER_H,
+                translate("gui.areaeffect.edit.color.blue"), 0.0F, 255.0F, 128.0F, 1.0F);
+        densitySlider = new FlatSlider(detX1 + 10, bodyY1 + SLIDER_TOP + SLIDER_PITCH * 6, sw, SLIDER_H,
+                translate("gui.areaeffect.edit.fog.density"), 0.0F, 1.0F, 0.5F, 0.01F);
+        dustSlider = new FlatSlider(detX1 + 10, bodyY1 + SLIDER_TOP + SLIDER_PITCH * 7, sw, SLIDER_H,
+                translate("gui.areaeffect.edit.fog.dust"), 0.0F, FogEffect.MAX_DUST, 0.0F, 1.0F);
         buttonList.add(weightSlider);
         buttonList.add(lightSlider);
         buttonList.add(durationSlider);
         buttonList.add(timeRangeSlider);
+        buttonList.add(redSlider);
+        buttonList.add(greenSlider);
+        buttonList.add(blueSlider);
+        buttonList.add(densitySlider);
+        buttonList.add(dustSlider);
 
         // 两列滚动条：贴各自栏的右侧内边界（维度列表已改为 tab 条，不再需要滚动条）
         areaCol.x = areaX2 - ScrollColumn.BAR_W - 1;
@@ -559,25 +582,42 @@ public class GuiAreas extends GuiScreen {
             int dim = currentDim();
             wireBtn.setOn(has && dim >= 0 && proxy.isAreaVisible(dim, selected.id));
         }
-        // L3 效果级：权重滑条、时段控件仅在有选中效果时可见
+        // L3 效果级：权重/过渡时长/时段是所有效果通用参数，有选中效果即可见
         AreaEffect effect = selectedEffect();
         boolean hasEffect = effect != null;
         weightSlider.visible = hasEffect;
+        durationSlider.visible = hasEffect;
         timeRangeSlider.visible = hasEffect;
         if (!hasEffect) {
             lightSlider.visible = false;
-            durationSlider.visible = false;
+            redSlider.visible = false;
+            greenSlider.visible = false;
+            blueSlider.visible = false;
+            densitySlider.visible = false;
+            dustSlider.visible = false;
             return;
         }
         weightSlider.setValueRaw(effect.getWeight());
-        // L4 子类型：亮度/过渡滑条只属于 LightnessEffect
+        durationSlider.setValueRaw(effect.getDuration());
+        // L4 子类型：光亮度（LightnessEffect 专属）、颜色三通道（雾共用）、雾专属浓度/尘粒按类型显隐
         boolean isLight = effect instanceof LightnessEffect;
         lightSlider.visible = isLight;
-        durationSlider.visible = isLight;
         if (isLight) {
-            LightnessEffect light = (LightnessEffect) effect;
-            lightSlider.setValueRaw(light.getLightness());
-            durationSlider.setValueRaw(light.getDuration());
+            lightSlider.setValueRaw(((LightnessEffect) effect).getLightness());
+        }
+        boolean isFog = effect instanceof FogEffect;
+        redSlider.visible = isFog;
+        greenSlider.visible = isFog;
+        blueSlider.visible = isFog;
+        densitySlider.visible = isFog;
+        dustSlider.visible = isFog;
+        if (isFog) {
+            FogEffect fog = (FogEffect) effect;
+            redSlider.setValueRaw(fog.getRed());
+            greenSlider.setValueRaw(fog.getGreen());
+            blueSlider.setValueRaw(fog.getBlue());
+            densitySlider.setValueRaw(fog.getDensity());
+            dustSlider.setValueRaw(fog.getDust());
         }
         // L4 模式：时段三合一控件（"始终"态 timed=false 隐藏游标、整条全天）
         timeRangeSlider.setMode(timeModeLabel(effect.getTimeMode()),
@@ -1050,7 +1090,7 @@ public class GuiAreas extends GuiScreen {
             remarkBaseline = remark;
             dirty = false;
             // 保留预览覆盖避免渲染跳变，服务端广播返回后共享即为新值；切换/关闭时统一清除
-            proxy.previewAreaProps(dim, selected.id, effectiveLightness(), effectiveDuration());
+            proxy.previewAreaEffects(dim, selected.id, pendingEffects);
             proxy.previewAreaRemark(dim, selected.id, remark);
             syncDetailWidgets();
         }
@@ -1085,7 +1125,7 @@ public class GuiAreas extends GuiScreen {
         dirty = true;
         effectCol.clamp(pendingEffects.size());
         if (dim >= 0) {
-            proxy.previewAreaProps(dim, selected.id, effectiveLightness(), effectiveDuration());
+            proxy.previewAreaEffects(dim, selected.id, pendingEffects);
         }
         syncDetailWidgets();
     }
@@ -1120,16 +1160,44 @@ public class GuiAreas extends GuiScreen {
             effect.setWeight(w);
             changed = true;
         }
+        // 过渡时长是所有效果的通用参数
+        float dv = durationSlider.getValue();
+        if (dv != effect.getDuration()) {
+            effect.setDuration(dv);
+            changed = true;
+        }
         if (effect instanceof LightnessEffect) {
             LightnessEffect light = (LightnessEffect) effect;
             float lv = lightSlider.getValue();
-            float dv = durationSlider.getValue();
             if (lv != light.getLightness()) {
                 light.setLightness(lv);
                 changed = true;
             }
-            if (dv != light.getDuration()) {
-                light.setDuration(dv);
+        } else if (effect instanceof FogEffect) {
+            FogEffect fog = (FogEffect) effect;
+            float rv = redSlider.getValue();
+            float gv = greenSlider.getValue();
+            float bv = blueSlider.getValue();
+            if (rv != fog.getRed()) {
+                fog.setRed(Math.round(rv));
+                changed = true;
+            }
+            if (gv != fog.getGreen()) {
+                fog.setGreen(Math.round(gv));
+                changed = true;
+            }
+            if (bv != fog.getBlue()) {
+                fog.setBlue(Math.round(bv));
+                changed = true;
+            }
+            float nv = densitySlider.getValue();
+            if (nv != fog.getDensity()) {
+                fog.setDensity(nv);
+                changed = true;
+            }
+            float uvv = dustSlider.getValue();
+            if (uvv != fog.getDust()) {
+                fog.setDust(Math.round(uvv));
                 changed = true;
             }
         }
@@ -1150,29 +1218,9 @@ public class GuiAreas extends GuiScreen {
             dirty = true;
             int dim = currentDim();
             if (dim >= 0) {
-                proxy.previewAreaProps(dim, selected.id, effectiveLightness(), effectiveDuration());
+                proxy.previewAreaEffects(dim, selected.id, pendingEffects);
             }
         }
-    }
-
-    /** 工作列表当前生效的亮度（无亮度效果时为 100）。 */
-    private float effectiveLightness() {
-        for (AreaEffect effect : pendingEffects) {
-            if (effect instanceof LightnessEffect) {
-                return ((LightnessEffect) effect).getLightness();
-            }
-        }
-        return 100.0F;
-    }
-
-    /** 工作列表当前生效的过渡时长（无亮度效果时为 1）。 */
-    private float effectiveDuration() {
-        for (AreaEffect effect : pendingEffects) {
-            if (effect instanceof LightnessEffect) {
-                return ((LightnessEffect) effect).getDuration();
-            }
-        }
-        return 1.0F;
     }
 
     // ===================== 小工具 =====================

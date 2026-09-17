@@ -13,8 +13,13 @@ key.areaeffect.selrender=Toggle Selection Render
 key.categories.areaeffect=AreaEffect
 
 gui.areaeffect.edit.addEffect=Add Effect
+gui.areaeffect.edit.color.blue=Blue (0-255):
+gui.areaeffect.edit.color.green=Green (0-255):
+gui.areaeffect.edit.color.red=Red (0-255):
 gui.areaeffect.edit.delEffect=Remove Effect
 gui.areaeffect.edit.duration=Transition duration (s):
+gui.areaeffect.edit.fog.density=Fog density (0-1):
+gui.areaeffect.edit.fog.dust=Dust particles:
 gui.areaeffect.edit.lightness=Target lightness (CIE L*):
 gui.areaeffect.edit.noselect=No area selected
 gui.areaeffect.edit.time=Time
@@ -23,6 +28,7 @@ gui.areaeffect.edit.time.game=Game
 gui.areaeffect.edit.time.real=Real
 gui.areaeffect.edit.weight=Weight (higher wins):
 
+gui.areaeffect.effect.fog=Fog
 gui.areaeffect.effect.lightness=Lightness
 
 gui.areaeffect.manager.dim=Dim %s
