@@ -30,6 +30,7 @@ gui.areaeffect.edit.weight=权重 (越大越优先):
 
 gui.areaeffect.effect.fog=雾
 gui.areaeffect.effect.lightness=亮度
+gui.areaeffect.effect.sky=天空
 
 gui.areaeffect.manager.dim=维度 %s
 gui.areaeffect.manager.empty=本维度暂无区域

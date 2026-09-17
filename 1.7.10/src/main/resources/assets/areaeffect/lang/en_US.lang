@@ -30,6 +30,7 @@ gui.areaeffect.edit.weight=Weight (higher wins):
 
 gui.areaeffect.effect.fog=Fog
 gui.areaeffect.effect.lightness=Lightness
+gui.areaeffect.effect.sky=Sky
 
 gui.areaeffect.manager.dim=Dim %s
 gui.areaeffect.manager.empty=No area in this dimension

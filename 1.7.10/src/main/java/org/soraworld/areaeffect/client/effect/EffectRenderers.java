@@ -17,6 +17,7 @@ public final class EffectRenderers {
     public EffectRenderers() {
         renderers.put(EffectTypes.TYPE_LIGHTNESS, new LightnessEffectRenderer());
         renderers.put(EffectTypes.TYPE_FOG, new FogEffectRenderer());
+        renderers.put(EffectTypes.TYPE_SKY, new SkyEffectRenderer());
     }
 
     public EffectRenderer get(String typeId) {

@@ -21,6 +21,7 @@ import org.soraworld.areaeffect.client.handler.ClientSelectionHandler;
 import org.soraworld.areaeffect.client.handler.FogRenderHandler;
 import org.soraworld.areaeffect.client.handler.LightmapHook;
 import org.soraworld.areaeffect.client.handler.SelectionRenderHandler;
+import org.soraworld.areaeffect.client.handler.SkyRenderHandler;
 import org.soraworld.areaeffect.common.CommonProxy;
 import org.soraworld.areaeffect.common.area.AreaTable;
 import org.soraworld.areaeffect.common.effect.AreaEffect;
@@ -103,6 +104,7 @@ public class ClientProxy extends CommonProxy {
         MinecraftForge.EVENT_BUS.register(new SelectionRenderHandler(this));
         MinecraftForge.EVENT_BUS.register(new ClientSelectionHandler(this));
         MinecraftForge.EVENT_BUS.register(new FogRenderHandler());
+        MinecraftForge.EVENT_BUS.register(new SkyRenderHandler());
         ClientRegistry.registerKeyBinding(KEY_LIST);
         ClientRegistry.registerKeyBinding(KEY_SEL_RENDER);
     }

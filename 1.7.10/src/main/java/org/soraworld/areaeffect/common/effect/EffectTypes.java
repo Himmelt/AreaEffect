@@ -18,9 +18,10 @@ public final class EffectTypes {
 
     public static final String TYPE_LIGHTNESS = "lightness";
     public static final String TYPE_FOG = "fog";
+    public static final String TYPE_SKY = "sky";
 
     /** 可添加的效果类型全集（面板"添加效果"按钮遍历此表）。 */
-    public static final List<String> ALL = Collections.unmodifiableList(Arrays.asList(TYPE_LIGHTNESS, TYPE_FOG));
+    public static final List<String> ALL = Collections.unmodifiableList(Arrays.asList(TYPE_LIGHTNESS, TYPE_FOG, TYPE_SKY));
 
     private EffectTypes() {
     }
@@ -34,6 +35,9 @@ public final class EffectTypes {
             case TYPE_FOG:
                 // 雾效果默认：浅雾色、浓度 0.5、无尘粒、过渡 1 秒
                 return new FogEffect(0.5F, 40, 80, 50, 0, 1.0F);
+            case TYPE_SKY:
+                // 天空效果默认：天蓝色、过渡 1 秒
+                return new SkyEffect(135, 206, 235, 1.0F);
             default:
                 return null;
         }
@@ -49,6 +53,8 @@ public final class EffectTypes {
                 return readLightnessNbt(tag);
             case TYPE_FOG:
                 return readFogNbt(tag);
+            case TYPE_SKY:
+                return readSkyNbt(tag);
             default:
                 return null;
         }
@@ -64,6 +70,8 @@ public final class EffectTypes {
                 return readLightnessBuf(buf);
             case TYPE_FOG:
                 return readFogBuf(buf);
+            case TYPE_SKY:
+                return readSkyBuf(buf);
             default:
                 return null;
         }
@@ -121,6 +129,24 @@ public final class EffectTypes {
         effect.setGreen(buf.readInt());
         effect.setBlue(buf.readInt());
         effect.setDust(buf.readInt());
+        return effect;
+    }
+
+    private static SkyEffect readSkyNbt(NBTTagCompound tag) {
+        SkyEffect effect = new SkyEffect();
+        effect.readNbtFields(tag);
+        effect.setRed(tag.getInteger("red"));
+        effect.setGreen(tag.getInteger("green"));
+        effect.setBlue(tag.getInteger("blue"));
+        return effect;
+    }
+
+    private static SkyEffect readSkyBuf(ByteBuf buf) {
+        SkyEffect effect = new SkyEffect();
+        effect.readBufFields(buf);
+        effect.setRed(buf.readInt());
+        effect.setGreen(buf.readInt());
+        effect.setBlue(buf.readInt());
         return effect;
     }
 }

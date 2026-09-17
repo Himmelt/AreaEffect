@@ -14,6 +14,7 @@ import org.soraworld.areaeffect.common.effect.AreaEffect;
 import org.soraworld.areaeffect.common.effect.EffectTypes;
 import org.soraworld.areaeffect.common.effect.FogEffect;
 import org.soraworld.areaeffect.common.effect.LightnessEffect;
+import org.soraworld.areaeffect.common.effect.SkyEffect;
 import org.soraworld.areaeffect.common.network.Area;
 
 import java.util.ArrayList;
@@ -606,9 +607,11 @@ public class GuiAreas extends GuiScreen {
             lightSlider.setValueRaw(((LightnessEffect) effect).getLightness());
         }
         boolean isFog = effect instanceof FogEffect;
-        redSlider.visible = isFog;
-        greenSlider.visible = isFog;
-        blueSlider.visible = isFog;
+        boolean isSky = effect instanceof SkyEffect;
+        boolean hasColor = isFog || isSky;
+        redSlider.visible = hasColor;
+        greenSlider.visible = hasColor;
+        blueSlider.visible = hasColor;
         densitySlider.visible = isFog;
         dustSlider.visible = isFog;
         if (isFog) {
@@ -618,6 +621,11 @@ public class GuiAreas extends GuiScreen {
             blueSlider.setValueRaw(fog.getBlue());
             densitySlider.setValueRaw(fog.getDensity());
             dustSlider.setValueRaw(fog.getDust());
+        } else if (isSky) {
+            SkyEffect sky = (SkyEffect) effect;
+            redSlider.setValueRaw(sky.getRed());
+            greenSlider.setValueRaw(sky.getGreen());
+            blueSlider.setValueRaw(sky.getBlue());
         }
         // L4 模式：时段三合一控件（"始终"态 timed=false 隐藏游标、整条全天）
         timeRangeSlider.setMode(timeModeLabel(effect.getTimeMode()),
@@ -1198,6 +1206,23 @@ public class GuiAreas extends GuiScreen {
             float uvv = dustSlider.getValue();
             if (uvv != fog.getDust()) {
                 fog.setDust(Math.round(uvv));
+                changed = true;
+            }
+        } else if (effect instanceof SkyEffect) {
+            SkyEffect sky = (SkyEffect) effect;
+            float rv = redSlider.getValue();
+            float gv = greenSlider.getValue();
+            float bv = blueSlider.getValue();
+            if (rv != sky.getRed()) {
+                sky.setRed(Math.round(rv));
+                changed = true;
+            }
+            if (gv != sky.getGreen()) {
+                sky.setGreen(Math.round(gv));
+                changed = true;
+            }
+            if (bv != sky.getBlue()) {
+                sky.setBlue(Math.round(bv));
                 changed = true;
             }
         }
