@@ -44,7 +44,7 @@ public class SkyRenderHandler {
     }
 
     @SubscribeEvent
-    public static void onClientTick(TickEvent.ClientTickEvent event) {
+    public void onClientTick(TickEvent.ClientTickEvent event) {
         if (event.phase != TickEvent.Phase.END || mc.theWorld == null || mc.theWorld.provider == null) {
             return;
         }

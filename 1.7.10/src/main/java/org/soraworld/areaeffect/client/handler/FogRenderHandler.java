@@ -43,7 +43,7 @@ public class FogRenderHandler {
     }
 
     @SubscribeEvent
-    public static void onFogColors(EntityViewRenderEvent.FogColors event) {
+    public void onFogColors(EntityViewRenderEvent.FogColors event) {
         if (active && density > EPSILON) {
             event.red = (float) red;
             event.green = (float) green;
@@ -52,7 +52,7 @@ public class FogRenderHandler {
     }
 
     @SubscribeEvent
-    public static void onFogDensity(EntityViewRenderEvent.FogDensity event) {
+    public void onFogDensity(EntityViewRenderEvent.FogDensity event) {
         if (active && density > EPSILON) {
             event.setCanceled(true);
             event.density = (float) density;
@@ -63,7 +63,7 @@ public class FogRenderHandler {
     }
 
     @SubscribeEvent
-    public static void onClientTick(TickEvent.ClientTickEvent event) {
+    public void onClientTick(TickEvent.ClientTickEvent event) {
         if (event.phase != TickEvent.Phase.END || !active || dust <= 0
                 || mc.theWorld == null || mc.thePlayer == null || mc.isGamePaused()) {
             return;
