@@ -47,7 +47,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class ClientProxy extends CommonProxy {
 
-    public static final KeyBinding KEY_LIST = new KeyBinding("key.areaeffect.list", Keyboard.KEY_J, "key.categories.areaeffect");
+    public static final KeyBinding KEY_LIST = new KeyBinding("key.areaeffect.manager", Keyboard.KEY_J, "key.categories.areaeffect");
     public static final KeyBinding KEY_SEL_RENDER = new KeyBinding("key.areaeffect.selrender", Keyboard.KEY_K, "key.categories.areaeffect");
 
     private float lastDuration = 1.0F;
@@ -300,15 +300,11 @@ public class ClientProxy extends CommonProxy {
         return ids != null && ids.contains(id);
     }
 
-    /** 切换指定区域的线框显示（客户端本地设置），并本地提示。 */
+    /** 切换指定区域的线框显示（客户端本地设置）。 */
     public void toggleAreaVisible(int dim, int id) {
         Set<Integer> ids = visibleAreas.computeIfAbsent(dim, d -> ConcurrentHashMap.newKeySet());
         if (!ids.remove(id)) {
             ids.add(id);
-        }
-        if (mc.thePlayer != null) {
-            mc.thePlayer.addChatMessage(new ChatComponentTranslation(
-                    isAreaVisible(dim, id) ? "chat.area.show" : "chat.area.hide", id));
         }
     }
 

@@ -342,29 +342,4 @@ public class PrismShape extends AreaShape {
     private static void line(List<Edge> result, double x1, double y1, double z1, double x2, double y2, double z2) {
         result.add(new Edge(x1, y1, z1, x2, y2, z2));
     }
-
-    @Override
-    public String describeKey() {
-        // 键与 typeId 一一对应：每个（截面 × 高度）组合各有一条 desc 文案
-        return "gui.areaeffect.desc." + typeId();
-    }
-
-    @Override
-    public Object[] describeArgs() {
-        switch (section) {
-            case RECT:
-                return height == Height.FULL
-                        ? new Object[]{bounds.minX, bounds.minZ, bounds.maxX, bounds.maxZ}
-                        : new Object[]{bounds.minX, bounds.minY, bounds.minZ, bounds.maxX, bounds.maxY, bounds.maxZ};
-            case CIRCLE:
-                return height == Height.FULL
-                        ? new Object[]{cx, cz, radius}
-                        : new Object[]{cx, cz, radius, bounds.maxY - bounds.minY + 1};
-            default:
-                // 多边形顶点数即 anchor 数；有界时附带层高
-                return height == Height.FULL
-                        ? new Object[]{anchors.size()}
-                        : new Object[]{anchors.size(), bounds.maxY - bounds.minY + 1};
-        }
-    }
 }

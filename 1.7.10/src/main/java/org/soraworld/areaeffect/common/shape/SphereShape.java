@@ -125,14 +125,4 @@ public class SphereShape extends AreaShape {
     private static void line(List<Edge> result, double x1, double y1, double z1, double x2, double y2, double z2) {
         result.add(new Edge(x1, y1, z1, x2, y2, z2));
     }
-
-    @Override
-    public String describeKey() {
-        return "gui.areaeffect.desc." + typeId();
-    }
-
-    @Override
-    public Object[] describeArgs() {
-        return new Object[]{cx, cy, cz, radius};
-    }
 }

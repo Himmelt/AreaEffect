@@ -51,14 +51,4 @@ public class DimensionShape extends AreaShape {
         // 整个维度无边界线框可画；区域列表的详情文案足以表达其范围
         return new ArrayList<>();
     }
-
-    @Override
-    public String describeKey() {
-        return "gui.areaeffect.desc." + typeId();
-    }
-
-    @Override
-    public Object[] describeArgs() {
-        return new Object[0];
-    }
 }

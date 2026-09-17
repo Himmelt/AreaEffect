@@ -626,7 +626,7 @@ public class GuiAreas extends GuiScreen {
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
         // 先铺全屏半透明底，再画标题与内容，使标题「区域管理」位于背景之上而非被其覆盖
         drawBackground();
-        drawCenteredString(fontRendererObj, translate("gui.areaeffect.list.title2"), width / 2, 8, COLOR_TEXT_HEAD);
+        drawCenteredString(fontRendererObj, translate("gui.areaeffect.manager.title"), width / 2, 8, COLOR_TEXT_HEAD);
 
         drawChrome();
         drawTabs(mouseX, mouseY);
@@ -708,7 +708,7 @@ public class GuiAreas extends GuiScreen {
     /** 区域列表：{@code #id} 右对齐成列，备注左对齐紧跟其后。 */
     private void drawAreaList(int mouseX, int mouseY) {
         if (areas.isEmpty()) {
-            drawCenteredString(fontRendererObj, translate("gui.areaeffect.list.empty"),
+            drawCenteredString(fontRendererObj, translate("gui.areaeffect.manager.empty"),
                     (areaX1 + areaX2) / 2, (bodyY1 + bodyY2) / 2 - 4, COLOR_TEXT_HINT);
             return;
         }
@@ -778,7 +778,7 @@ public class GuiAreas extends GuiScreen {
                     y + 5, COLOR_ACCENT);
         }
         if (pendingEffects.isEmpty() && selected != null) {
-            drawCenteredString(fontRendererObj, translate("gui.areaeffect.effectlist.none"),
+            drawCenteredString(fontRendererObj, translate("gui.areaeffect.manager.noeffect"),
                     (effectX1 + effectX2) / 2, (effectTop + bodyY2) / 2 - 4, COLOR_TEXT_HINT);
         }
     }
@@ -791,12 +791,12 @@ public class GuiAreas extends GuiScreen {
      */
     private void drawDetail() {
         if (selected == null) {
-            drawCenteredString(fontRendererObj, translate("gui.areaeffect.list.noselect"),
+            drawCenteredString(fontRendererObj, translate("gui.areaeffect.manager.noselect"),
                     (detX1 + detX2) / 2, (bodyY1 + bodyY2) / 2 - 4, COLOR_TEXT_HINT);
             return;
         }
         if (selectedEffect() == null) {
-            drawCenteredString(fontRendererObj, translate("gui.areaeffect.list.noeffect"),
+            drawCenteredString(fontRendererObj, translate("gui.areaeffect.manager.noeffect"),
                     (detX1 + detX2) / 2, (bodyY1 + bodyY2) / 2 - 4, COLOR_TEXT_HINT);
             return;
         }
@@ -809,7 +809,7 @@ public class GuiAreas extends GuiScreen {
      */
     private void drawActionBar(int mouseX, int mouseY) {
         Area area = selected;
-        String cid = area == null ? translate("gui.areaeffect.action.noselect")
+        String cid = area == null ? translate("gui.areaeffect.edit.noselect")
                 : "#" + area.id + " · " + shapeName(area);
         String shownCid = trim(cid, cidW - 2);
         if (!shownCid.isEmpty()) {
@@ -1205,17 +1205,17 @@ public class GuiAreas extends GuiScreen {
     private String timeModeLabel(int mode) {
         String name;
         if (mode == AreaEffect.TIME_GAME) {
-            name = translate("gui.areaeffect.edit.timeMode.short.game");
+            name = translate("gui.areaeffect.edit.time.game");
         } else if (mode == AreaEffect.TIME_REAL) {
-            name = translate("gui.areaeffect.edit.timeMode.short.real");
+            name = translate("gui.areaeffect.edit.time.real");
         } else {
-            name = translate("gui.areaeffect.edit.timeMode.short.always");
+            name = translate("gui.areaeffect.edit.time.always");
         }
-        return translate("gui.areaeffect.edit.timeModeShort") + " " + name;
+        return translate("gui.areaeffect.edit.time") + " " + name;
     }
 
     private String tabLabel(int dim) {
-        return StatCollector.translateToLocalFormatted("gui.areaeffect.list.dim", dim);
+        return StatCollector.translateToLocalFormatted("gui.areaeffect.manager.dim", dim);
     }
 
     private static String translate(String key) {

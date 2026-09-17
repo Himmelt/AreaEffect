@@ -1,56 +1,42 @@
+chat.area.notfound=不存在对应id的区域
+chat.command.usage=用法: /areaeffect pos1|pos2|create|tool (区域管理请按 J 键)
 chat.create.done=已创建新的区域
 chat.create.noselect=请先创建一个选区
-chat.tool.set=选择工具设置为 : %s
-chat.tool.get=当前选择工具为 : %s
-chat.invalid.float=参数不是有效的小数
 chat.perm.denied=你没有权限执行此操作
-chat.area.notfound=不存在对应id的区域
-chat.area.show=已开启区域 #%s 线框显示
-chat.area.hide=已关闭区域 #%s 线框显示
-chat.selection.on=已开启选区线框显示
 chat.selection.off=已关闭选区线框显示
-key.areaeffect.list=打开区域列表面板
+chat.selection.on=已开启选区线框显示
+chat.tool.get=当前选择工具为 : %s
+chat.tool.set=选择工具设置为 : %s
+
+key.areaeffect.manager=打开区域管理面板
 key.areaeffect.selrender=切换选区线框显示
 key.categories.areaeffect=AreaEffect
-gui.areaeffect.list.title2=区域管理
-gui.areaeffect.list.noselect=点击左侧区域查看详情
-gui.areaeffect.list.noeffect=暂无效果
+
 gui.areaeffect.edit.addEffect=添加效果
 gui.areaeffect.edit.delEffect=删除效果
-gui.areaeffect.effect.lightness=亮度
-gui.areaeffect.effectlist.none=暂无效果
-gui.areaeffect.edit.lightness=目标亮度 (CIE L*):
 gui.areaeffect.edit.duration=过渡时长 (秒):
+gui.areaeffect.edit.lightness=目标亮度 (CIE L*):
+gui.areaeffect.edit.noselect=未选中区域
+gui.areaeffect.edit.time=时间
+gui.areaeffect.edit.time.always=始终
+gui.areaeffect.edit.time.game=游戏
+gui.areaeffect.edit.time.real=现实
 gui.areaeffect.edit.weight=权重 (越大越优先):
-gui.areaeffect.edit.timeMode=生效时段
-gui.areaeffect.edit.timeMode.always=始终开启
-gui.areaeffect.edit.timeMode.game=游戏时间
-gui.areaeffect.edit.timeMode.real=现实时间
-gui.areaeffect.edit.timeModeShort=时段
-gui.areaeffect.edit.timeMode.short.always=始终
-gui.areaeffect.edit.timeMode.short.game=游戏
-gui.areaeffect.edit.timeMode.short.real=现实
-gui.areaeffect.action.noselect=未选中区域
-gui.areaeffect.list.empty=本维度暂无区域
-gui.areaeffect.edit.save=保存
-gui.areaeffect.edit.tp=传送
-gui.areaeffect.edit.del=删除
-gui.areaeffect.shape.now=选区模式：
+
+gui.areaeffect.effect.lightness=亮度
+
+gui.areaeffect.manager.dim=维度 %s
+gui.areaeffect.manager.empty=本维度暂无区域
+gui.areaeffect.manager.noeffect=暂无效果
+gui.areaeffect.manager.noselect=点击区域查看详情
+gui.areaeffect.manager.title=区域管理
+
 gui.areaeffect.shape.box=长方体
-gui.areaeffect.shape.square_pillar=全高方柱
 gui.areaeffect.shape.cylinder=圆柱
-gui.areaeffect.shape.round_pillar=全高圆柱
-gui.areaeffect.shape.sphere=球体
+gui.areaeffect.shape.dimension=整个维度
+gui.areaeffect.shape.now=选区模式：
 gui.areaeffect.shape.polygon=多边形柱
 gui.areaeffect.shape.polygon_pillar=全高多边形柱
-gui.areaeffect.shape.dimension=整个维度
-chat.command.usage=用法: /areaeffect pos1|pos2|create|tool（区域管理请按 J 键）
-gui.areaeffect.list.dim=维度 %s
-gui.areaeffect.desc.box=(%s,%s,%s) ~ (%s,%s,%s)
-gui.areaeffect.desc.square_pillar=(%s,%s) ~ (%s,%s) 全高
-gui.areaeffect.desc.cylinder=圆心(%s,%s) R=%s 高=%s
-gui.areaeffect.desc.round_pillar=圆心(%s,%s) R=%s 全高
-gui.areaeffect.desc.polygon=多边形 顶点=%s 高=%s
-gui.areaeffect.desc.polygon_pillar=多边形 顶点=%s 全高
-gui.areaeffect.desc.sphere=球心(%s,%s,%s) R=%s
-gui.areaeffect.desc.dimension=整个维度
+gui.areaeffect.shape.round_pillar=全高圆柱
+gui.areaeffect.shape.sphere=球体
+gui.areaeffect.shape.square_pillar=全高方柱

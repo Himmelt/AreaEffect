@@ -97,21 +97,6 @@ public abstract class AreaShape {
     /** 各形状实际的线段构造；由 {@link #edges()} 缓存，不要直接调用。 */
     protected abstract List<Edge> computeEdges();
 
-    /**
-     * 详情页展示文案的本地化键（形如 {@code gui.areaeffect.desc.<typeId>}）。
-     * 具体文案由客户端经 StatCollector 组装，形状层不硬编码界面语言。
-     */
-    public abstract String describeKey();
-
-    /** {@link #describeKey()} 对应的参数，顺序与语言文件中的占位符一致。 */
-    public abstract Object[] describeArgs();
-
-    /**
-     * 冲突几何判定（conflict/boundsOverlap/exactConflict/采样预算/Section/existsShared）随
-     * "放开区域重叠"一并移除：区域允许任意重叠后，形状间冲突检测不再有调用方。
-     * 玩家所在区域查询已改用 {@link #boundsContains} 粗筛 + {@link #contains} 精确判定。
-     */
-
     public Vec3d center() {
         return new Vec3d((bounds.minX + bounds.maxX + 1.0D) / 2.0D,
                 (bounds.minY + bounds.maxY + 1.0D) / 2.0D,
