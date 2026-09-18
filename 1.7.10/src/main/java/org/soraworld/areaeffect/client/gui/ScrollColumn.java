@@ -16,7 +16,7 @@ final class ScrollColumn {
     static final int BAR_W = 6;
 
     /** 列表区上下内边距，与列表绘制时的首行偏移保持一致。 */
-    private static final int PAD = 4;
+    static final int PAD = 4;
 
     /** 滚动条最小长度，保证仍可抓取。 */
     private static final int MIN_BAR_H = 14;

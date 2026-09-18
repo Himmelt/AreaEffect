@@ -51,7 +51,10 @@ import static org.soraworld.areaeffect.client.gui.GuiTheme.argb;
  *       保存之所以也在底栏：它的门控是 L2（只要选中区域即可用），而一次提交覆盖备注与整份效果
  *       工作副本，本质是栏级动作，放进任何一栏内部都会被误读成"只保存这一段"。</li>
  *   <li><b>L3/L4 效果</b>：中右栏列表（顶部工具条增删效果）+ 右栏参数。右栏<b>只服务效果</b>：
- *       不含任何 L2 内容，也不再自报"是什么效果"（效果列表的选中行已表明），就是该效果的参数。</li>
+ *       不含任何 L2 内容，也不再自报"是什么效果"（效果列表的选中行已表明），就是该效果的参数。
+ *       参数行数随类型变化（亮度 4 行、天空 6 行、雾 9 行），窗口不够高时右栏<b>可滚动</b>
+ *       （滚轮或拖动右侧滚动条），滚出可视区的滑条临时隐藏 —— GuiScreen 画按钮不裁剪，
+ *       不隐藏就会盖住 tab 条与底栏。</li>
  * </ul>
  *
  * <p>层级模型：每层的控件只按<b>本层及其以上</b>的状态门控，切勿跨层错配 —— L1 维度 {@link #dimIdx}；
@@ -154,6 +157,17 @@ public class GuiAreas extends GuiScreen {
     private FlatSlider rampSlider;
     private FlatSlider startDistanceSlider;
     private FlatSlider dustSlider;
+
+    /**
+     * 详情栏的滚动状态：滑条行数随效果类型变化（亮度 4 行、天空 6 行、雾 9 行），
+     * 窗口高度不够时靠它滚动，避免参数行压到底栏甚至画出屏幕。
+     */
+    private final ScrollColumn detailCol = new ScrollColumn(SLIDER_PITCH);
+    /** 详情栏控件（滑条 + 时段区间控件，顺序即行位顺序）；{@link #detailBaseY} 是它们"零滚动"时的 y。 */
+    private GuiButton[] detailWidgets;
+    private int[] detailBaseY;
+    /** 各控件"按效果类型是否应显示"（由 {@link #syncDetailWidgets()} 快照），实际可见性还要过可视区过滤。 */
+    private boolean[] detailWanted;
     /** 底栏：备注输入框（区域级）。 */
     private GuiTextField remarkField;
     /** 底栏：线框开关按钮，需要按该区域当前是否显示线框切换字形。 */
@@ -605,7 +619,7 @@ public class GuiAreas extends GuiScreen {
         timeRangeSlider.setOnModeToggle(this::cycleTimeMode);
         lightSlider = new FlatSlider(detX1 + 10, bodyY1 + SLIDER_TOP + SLIDER_PITCH * 3, sw, SLIDER_H,
                 translate("gui.areaeffect.edit.lightness"), 0.0F, 100.0F, 100.0F, 1.0F);
-        // 颜色三通道（雾/天空共用）与雾专属浓度/尘粒：与 lightSlider 复用 3..7 行位，按类型显隐
+        // 颜色三通道（雾/天空共用）与雾专属过渡距离/起雾距离/尘粒：与 lightSlider 复用 3..8 行位，按类型显隐
         redSlider = new FlatSlider(detX1 + 10, bodyY1 + SLIDER_TOP + SLIDER_PITCH * 3, sw, SLIDER_H,
                 translate("gui.areaeffect.edit.color.red"), 0.0F, 255.0F, 128.0F, 1.0F);
         greenSlider = new FlatSlider(detX1 + 10, bodyY1 + SLIDER_TOP + SLIDER_PITCH * 4, sw, SLIDER_H,
@@ -641,6 +655,21 @@ public class GuiAreas extends GuiScreen {
         effectCol.x = effectX2 - ScrollColumn.BAR_W - 1;
         effectCol.top = effectTop;
         effectCol.bottom = bodyY2;
+
+        // 详情栏滚动：滑条顺序即行位顺序，基准 y 取上面构造期给定的那套。
+        // 可见性由 syncDetailScroll 按「类型策略 + 是否落在可视区」重算 —— GuiScreen 画按钮不做裁剪，
+        // 滚出可视区的滑条必须隐藏，否则会盖住 tab 条与底栏。
+        detailWidgets = new GuiButton[]{weightSlider, durationSlider, timeRangeSlider, lightSlider,
+                redSlider, greenSlider, blueSlider, rampSlider, startDistanceSlider, dustSlider};
+        detailBaseY = new int[detailWidgets.length];
+        detailWanted = new boolean[detailWidgets.length];
+        for (int i = 0; i < detailWidgets.length; i++) {
+            detailBaseY[i] = detailWidgets[i].yPosition;
+        }
+        detailCol.x = detX2 - ScrollColumn.BAR_W - 1;
+        // top 取「首行基准 y − PAD」：ScrollColumn#rowY 会把 PAD 加回来，正好还原成 bodyY1 + SLIDER_TOP
+        detailCol.top = bodyY1 + SLIDER_TOP - ScrollColumn.PAD;
+        detailCol.bottom = bodyY2;
 
         layoutTabs();
         syncDetailWidgets();
@@ -697,6 +726,7 @@ public class GuiAreas extends GuiScreen {
             rampSlider.visible = false;
             startDistanceSlider.visible = false;
             dustSlider.visible = false;
+            syncDetailScroll();
             return;
         }
         weightSlider.setValueRaw(effect.getWeight());
@@ -734,6 +764,65 @@ public class GuiAreas extends GuiScreen {
         timeRangeSlider.setMode(timeModeLabel(effect.getTimeMode()),
                 effect.getTimeMode() != AreaEffect.TIME_ALWAYS);
         timeRangeSlider.setRangeRaw(effect.getStartHour(), effect.getEndHour());
+        syncDetailScroll();
+    }
+
+    // ===================== 详情栏滚动 =====================
+
+    /**
+     * 详情栏行数随效果类型变化（亮度 4 行、天空 6 行、雾 9 行）：先快照「按类型的可见性」，
+     * 再把滚动量收进合法范围，最后按新滚动量重排滑条。
+     *
+     * <p>必须在 {@link #syncDetailWidgets()} 的末尾调用 —— 快照取的就是那一刻各滑条的 {@code visible}。
+     */
+    private void syncDetailScroll() {
+        if (detailWidgets == null) {
+            return;
+        }
+        for (int i = 0; i < detailWidgets.length; i++) {
+            detailWanted[i] = detailWidgets[i].visible;
+        }
+        detailCol.clamp(detailRowCount());
+        layoutDetailSliders();
+    }
+
+    /** 详情栏内容占用的行数（按行距向上取整），供滚动量收敛与滚动条长度使用。 */
+    private int detailRowCount() {
+        if (detailWidgets == null) {
+            return 0;
+        }
+        int top = bodyY1 + SLIDER_TOP;
+        int content = 0;
+        for (int i = 0; i < detailWidgets.length; i++) {
+            if (detailWanted[i]) {
+                content = Math.max(content, detailBaseY[i] - top + SLIDER_H);
+            }
+        }
+        return (content + SLIDER_PITCH - 1) / SLIDER_PITCH;
+    }
+
+    /**
+     * 按当前滚动量重排滑条：纵向位置 = 基准 y − 滚动量；完全滚出可视区的滑条临时隐藏。
+     *
+     * <p>隐藏是必需的：{@code GuiScreen} 绘制按钮不做裁剪，滚出去的滑条会盖住 tab 条与底栏。
+     * 「按类型是否应显示」由 {@link #detailWanted} 保存，不受本次临时隐藏影响（否则会一藏不回）。
+     */
+    private void layoutDetailSliders() {
+        if (detailWidgets == null) {
+            return;
+        }
+        int offset = detailCol.scroll();
+        for (int i = 0; i < detailWidgets.length; i++) {
+            int y = detailBaseY[i] - offset;
+            detailWidgets[i].yPosition = y;
+            detailWidgets[i].visible = detailWanted[i] && y >= bodyY1 && y + SLIDER_H <= bodyY2;
+        }
+    }
+
+    /** 详情栏滚轮：按住左键（正在拖滑条）时不响应，否则滑条会从指针底下移走。 */
+    private void scrollDetail(int rows) {
+        detailCol.wheel(rows, detailRowCount());
+        layoutDetailSliders();
     }
 
     /** 翻动按钮只在 tab 总宽超出可见宽度时出现；到两端时转灰不可点。 */
@@ -788,6 +877,7 @@ public class GuiAreas extends GuiScreen {
 
         drawScrollBar(areaCol, areas.size());
         drawScrollBar(effectCol, pendingEffects == null ? 0 : pendingEffects.size());
+        drawScrollBar(detailCol, detailRowCount());
 
         super.drawScreen(mouseX, mouseY, partialTicks);
         // 弹出列表是浮层：画在最后，压在按钮与效果列表之上
@@ -1074,6 +1164,11 @@ public class GuiAreas extends GuiScreen {
         if (effectCol.press(mouseX, mouseY, pendingEffects == null ? 0 : pendingEffects.size())) {
             return;
         }
+        // 详情栏滚动条：滑条本身由 super 分派，滚动条在滑条右侧那条窄边上
+        if (detailCol.press(mouseX, mouseY, detailRowCount())) {
+            layoutDetailSliders();
+            return;
+        }
         // 维度 tab 条（翻动按钮由 buttonList 处理，不在这个区间内）
         if (mouseY >= tabY1 && mouseY < tabLineY) {
             if (mouseX >= tabViewX1 && mouseX < tabViewX2) {
@@ -1114,6 +1209,9 @@ public class GuiAreas extends GuiScreen {
         }
         areaCol.drag(mouseY, areas.size());
         effectCol.drag(mouseY, pendingEffects == null ? 0 : pendingEffects.size());
+        // 滚动条拖动会改变滑条位置，拖完必须重排（未处于拖拽时是一次无副作用的空转）
+        detailCol.drag(mouseY, detailRowCount());
+        layoutDetailSliders();
     }
 
     @Override
@@ -1122,6 +1220,7 @@ public class GuiAreas extends GuiScreen {
         if (state == 0) {
             areaCol.release();
             effectCol.release();
+            detailCol.release();
         }
     }
 
@@ -1147,6 +1246,9 @@ public class GuiAreas extends GuiScreen {
             areaCol.wheel(rows, areas.size());
         } else if (x >= effectX1 && x < effectX2) {
             effectCol.wheel(rows, pendingEffects == null ? 0 : pendingEffects.size());
+        } else if (x >= detX1 && x < detX2 && !Mouse.isButtonDown(0)) {
+            // 详情栏：左键按住（正在拖滑条）时不滚 —— 否则滑条会从指针底下移走
+            scrollDetail(rows);
         }
     }
 
