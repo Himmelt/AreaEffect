@@ -68,14 +68,20 @@ public abstract class AreaShape {
     public abstract boolean contains(double x, double y, double z);
 
     /**
-     * AABB 包围盒级包含粗判（保守、闭区间）：坐标落在形状的轴对齐包围盒内才可能真正命中。
+     * AABB 包围盒级包含粗判（保守）：坐标落在形状的轴对齐包围盒内才可能真正命中。
      * 用于"玩家所在区域"查询时<b>先粗筛快速排除远距离区域</b>，命中的再走精确 {@link #contains}，
      * 避免每次查询都对全部区域做昂贵的点在多边形判定。
+     *
+     * <p><b>下界闭、上界开</b>：{@code bounds} 是<b>闭区间方块坐标</b>，而 {@link #contains} 先把世界坐标
+     * {@code floor} 成方块号再比，所以方块 {@code maxX} 对应的世界坐标区间是 {@code [maxX, maxX+1)}。
+     * 上界若写成 {@code x <= maxX}（闭区间），站在最外一圈方块内的玩家就会被粗筛先排除掉 ——
+     * 区域在 +X / +Z 两侧各丢 1 格厚的外壳（顶面在脚部 y 非整数时同样丢），
+     * 单格厚/单层高的区域甚至会彻底失效。此处判据必须与 {@link #contains} 的 floor 语义对齐。
      */
     public boolean boundsContains(double x, double y, double z) {
-        return x >= bounds.minX && x <= bounds.maxX
-                && y >= bounds.minY && y <= bounds.maxY
-                && z >= bounds.minZ && z <= bounds.maxZ;
+        return x >= bounds.minX && x < bounds.maxX + 1.0D
+                && y >= bounds.minY && y < bounds.maxY + 1.0D
+                && z >= bounds.minZ && z < bounds.maxZ + 1.0D;
     }
 
     /**
