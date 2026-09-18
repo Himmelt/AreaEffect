@@ -6,6 +6,8 @@ import net.minecraft.client.renderer.OpenGlHelper;
 import net.minecraft.client.renderer.Tessellator;
 import org.lwjgl.opengl.GL11;
 
+import java.util.Locale;
+
 import static org.soraworld.areaeffect.client.gui.GuiTheme.COLOR_BORDER;
 import static org.soraworld.areaeffect.client.gui.GuiTheme.COLOR_BTN_HOVER;
 import static org.soraworld.areaeffect.client.gui.GuiTheme.COLOR_SLIDER_FILL;
@@ -108,7 +110,8 @@ class RangeSlider extends GuiButton {
     private String fmtClock(float hour) {
         int totalMin = Math.round(hour * 60.0F);
         totalMin = Math.max(0, Math.min(24 * 60, totalMin));
-        return String.format("%02d:%02d", totalMin / 60, totalMin % 60);
+        // 时钟文本与区域无关，固定 Locale.ROOT 避免部分地区出现非 ASCII 数字形态
+        return String.format(Locale.ROOT, "%02d:%02d", totalMin / 60, totalMin % 60);
     }
 
     /**

@@ -19,6 +19,7 @@ import org.soraworld.areaeffect.common.network.Area;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 import static org.soraworld.areaeffect.client.gui.GuiTheme.COLOR_ACCENT;
 import static org.soraworld.areaeffect.client.gui.GuiTheme.COLOR_BG;
@@ -1518,6 +1519,7 @@ public class GuiAreas extends GuiScreen {
     }
 
     private static String fmt(float v) {
-        return String.format("%.0f", (double) v);
+        // 固定 Locale.ROOT：否则部分地区会打出 "7,14" 这类逗号小数点
+        return String.format(Locale.ROOT, "%.0f", (double) v);
     }
 }

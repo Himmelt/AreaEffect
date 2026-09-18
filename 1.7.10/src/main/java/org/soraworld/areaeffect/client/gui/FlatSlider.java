@@ -3,6 +3,8 @@ package org.soraworld.areaeffect.client.gui;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiButton;
 
+import java.util.Locale;
+
 import static org.soraworld.areaeffect.client.gui.GuiTheme.COLOR_BORDER;
 import static org.soraworld.areaeffect.client.gui.GuiTheme.COLOR_SLIDER_FILL;
 import static org.soraworld.areaeffect.client.gui.GuiTheme.COLOR_SLIDER_TEXT;
@@ -119,9 +121,10 @@ class FlatSlider extends GuiButton {
                 return "0";
             }
             if (value < 10.0F) {
-                return String.format("%.2f", (double) value);
+                return String.format(Locale.ROOT, "%.2f", (double) value);
             }
-            return value < 100.0F ? String.format("%.1f", (double) value) : String.format("%.0f", (double) value);
+            return value < 100.0F ? String.format(Locale.ROOT, "%.1f", (double) value)
+                    : String.format(Locale.ROOT, "%.0f", (double) value);
         }
     }
 
@@ -147,8 +150,10 @@ class FlatSlider extends GuiButton {
     }
 
     private void updateDisplay() {
+        // 一律用 Locale.ROOT：否则在德语/法语等区域会打出 "7,14" 这种逗号小数点
         String shown = scale != null ? scale.format(value)
-                : (integerStep ? String.format("%.0f", (double) value) : String.format("%.1f", (double) value));
+                : (integerStep ? String.format(Locale.ROOT, "%.0f", (double) value)
+                : String.format(Locale.ROOT, "%.1f", (double) value));
         displayString = label + " " + shown;
     }
 

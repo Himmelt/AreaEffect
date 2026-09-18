@@ -55,15 +55,10 @@ public class SphereShape extends AreaShape {
     public boolean contains(double x, double y, double z) {
         // 坐标差与平方和用 double：int 平方和在大半径（三个平方相加）时会溢出 int，
         // 回绕成小数后会把球外方块误判为球内。见 computeRadius 的溢出说明。
-        double dx = (double) floor(x) - cx;
-        double dy = (double) floor(y) - cy;
-        double dz = (double) floor(z) - cz;
+        double dx = (double) Vec3i.floor(x) - cx;
+        double dy = (double) Vec3i.floor(y) - cy;
+        double dz = (double) Vec3i.floor(z) - cz;
         return dx * dx + dy * dy + dz * dz <= (double) radius * radius + 0.001D;
-    }
-
-    private static int floor(double v) {
-        int i = (int) v;
-        return v < i ? i - 1 : i;
     }
 
     @Override

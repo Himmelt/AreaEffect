@@ -1,7 +1,6 @@
 package org.soraworld.areaeffect.common.util;
 
 import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.util.MathHelper;
 
 public class Vec3i {
     public final int x, y, z;
@@ -13,8 +12,21 @@ public class Vec3i {
     }
 
     public Vec3i(EntityPlayer player) {
-        // 必须向下取整而非 (int) 强转截断：负坐标时截断会选错方块（如 -0.5 截断为 0，实际应为 -1）
-        this(MathHelper.floor_double(player.posX), MathHelper.floor_double(player.posY), MathHelper.floor_double(player.posZ));
+        this(floor(player.posX), floor(player.posY), floor(player.posZ));
+    }
+
+    /**
+     * 世界坐标 → 方块坐标（向下取整）。必须向下取整而非 {@code (int)} 强转截断：
+     * 负坐标时截断会选错方块（{@code (int) -0.5} 得 0，而 -0.5 所在的方块是 -1）。
+     * 行为与原版 {@code MathHelper.floor_double} 一致。
+     *
+     * <p>形状的点在形状内判定与选点都依赖这个语义，原先 {@code PrismShape} 与
+     * {@code SphereShape} 各写了一份私有副本，现统一到这里，避免三处实现各自漂移
+     * —— 它与 {@code AreaShape#boundsContains} 的"下界闭、上界开"约定是配套的。
+     */
+    public static int floor(double value) {
+        int i = (int) value;
+        return value < i ? i - 1 : i;
     }
 
     @Override

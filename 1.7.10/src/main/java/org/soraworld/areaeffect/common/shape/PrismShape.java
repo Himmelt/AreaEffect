@@ -72,7 +72,7 @@ public class PrismShape extends AreaShape {
         if (height == Height.BOUNDED && (y < bounds.minY || y >= bounds.maxY + 1.0D)) {
             return false;
         }
-        return sectionContains(floor(x), floor(z));
+        return sectionContains(Vec3i.floor(x), Vec3i.floor(z));
     }
 
     /** XZ 截面判定（方块坐标），与 {@link #contains} 的 XZ 判据一致。 */
@@ -90,11 +90,6 @@ public class PrismShape extends AreaShape {
             default:
                 return polygonContains(bx, bz);
         }
-    }
-
-    private static int floor(double v) {
-        int i = (int) v;
-        return v < i ? i - 1 : i;
     }
 
     /** 射线法：点 (bx,bz) 是否在顶点多边形内（边界极小容差）。直接遍历 anchors，避免采样热路径分配。 */
