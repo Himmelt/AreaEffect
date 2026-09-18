@@ -36,9 +36,7 @@ public class MessageSetProps implements IPacket {
         int count = Math.min(effects.size(), Area.EFFECT_MAX);
         buf.writeInt(count);
         for (int i = 0; i < count; i++) {
-            AreaEffect effect = effects.get(i);
-            EffectTypes.writeString(buf, effect.typeId());
-            effect.writeToBuf(buf);
+            EffectTypes.writeBuf(buf, effects.get(i));
         }
     }
 

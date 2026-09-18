@@ -61,10 +61,50 @@ public final class EffectTypes {
     }
 
     /**
-     * 从网络缓冲反序列化（前置一个 type 字符串）。
+     * 把单个效果写入缓冲：{@code type} + <b>负载长度</b> + 负载。写效果一律走这里，
+     * 不要自己拼 {@code writeString(type) + writeToBuf(...)}。
+     *
+     * <p>长度前缀是"读侧遇到未知类型也能安全跳过"的前提：效果各字段长度可变，读侧一旦
+     * 不认识 {@code typeId}，就只有这个长度能让它把该效果的字节整段跳过；否则会停在该效果
+     * 负载的中间，同包内后续元素全部错位（形状侧 {@code ShapeTypes.fromBuf} 靠"无论认不认识
+     * 都把 type/锚点/closed 读完"达到同一目的，而效果侧做不到按固定字段数读完）。
+     */
+    public static void writeBuf(ByteBuf buf, AreaEffect effect) {
+        writeString(buf, effect.typeId());
+        buf.writeInt(0); // 长度占位，负载写完回填
+        int payloadStart = buf.writerIndex();
+        effect.writeToBuf(buf);
+        buf.setInt(payloadStart - 4, buf.writerIndex() - payloadStart);
+    }
+
+    /**
+     * 从网络缓冲反序列化一个效果（与 {@link #writeBuf} 对应，前置 type 字符串与负载长度）。
+     *
+     * <p>无论能否识别类型，返回时缓冲区都停在<b>该效果的末尾</b>，即 {@code Area.fromByteBuf}
+     * 契约里要求的"元素边界"：
+     * <ul>
+     *   <li>未知 {@code typeId}：按长度字段整段跳过负载，返回 null；</li>
+     *   <li>已知类型但实际读到的长度与长度字段不一致（两端版本不一致）：以长度字段为准对齐，
+     *       于是"新端多写字段、老端少读"仍能继续解析同包内的后续元素。</li>
+     * </ul>
      */
     public static AreaEffect fromBuf(ByteBuf buf) {
         String type = readString(buf);
+        int payloadLength = buf.readInt();
+        if (payloadLength < 0 || payloadLength > buf.readableBytes()) {
+            // 长度字段自身不可信（畸形包/截断包）：无从安全跳过，抛出让调用方丢弃整包
+            throw new IllegalArgumentException("invalid effect payload length " + payloadLength);
+        }
+        int payloadEnd = buf.readerIndex() + payloadLength;
+        AreaEffect effect = readPayload(type, buf);
+        if (buf.readerIndex() != payloadEnd) {
+            buf.readerIndex(payloadEnd);
+        }
+        return effect;
+    }
+
+    /** 按 typeId 分派读取负载；未知类型返回 null 且不消费任何字节（由 {@link #fromBuf} 按长度跳过）。 */
+    private static AreaEffect readPayload(String type, ByteBuf buf) {
         switch (type) {
             case TYPE_LIGHTNESS:
                 return readLightnessBuf(buf);

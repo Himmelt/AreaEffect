@@ -125,16 +125,16 @@ public class Area {
         int count = Math.min(effects.size(), EFFECT_MAX);
         buf.writeInt(count);
         for (int i = 0; i < count; i++) {
-            AreaEffect effect = effects.get(i);
-            EffectTypes.writeString(buf, effect.typeId());
-            effect.writeToBuf(buf);
+            EffectTypes.writeBuf(buf, effects.get(i));
         }
     }
 
     /**
-     * 从缓冲读回区域。无论形状能否识别，remark 与 effects 都会被完整读走再返回：
-     * 这样返回 null 时也停在元素边界上，调用方（{@code MessageAreaUpdate} 等按元素连续读取的
-     * 消息）不会因一次解析失败就让后续元素从错误偏移开始解析（表现为缺项 / 乱码 / 整包丢弃）。
+     * 从缓冲读回区域。无论形状与各效果能否识别，remark 与 effects 都会被完整读走再返回：
+     * 这样返回 null（或跳过未知效果）时也停在元素边界上，调用方（{@code MessageAreaUpdate} 等
+     * 按元素连续读取的消息）不会因一次解析失败就让后续元素从错误偏移开始解析
+     * （表现为缺项 / 乱码 / 整包丢弃）。形状侧靠 {@code ShapeTypes.fromBuf} 读完固定字段实现，
+     * 效果侧字段长度可变，靠 {@code EffectTypes.writeBuf} 写的负载长度前缀实现。
      * 写侧的条数上限见 {@link #EFFECT_MAX}，与读侧同源。
      */
     public static Area fromByteBuf(ByteBuf buf) {
