@@ -72,7 +72,9 @@ public abstract class AreaEffect {
      * <p>{@code gameHour} 为当前游戏时钟小时（0..24，换算见 {@code ClientProxy#gameHourOf}：
      * 原版一天自 <b>06:00</b> 起算，故钟点需在 {@code worldTime / 1000} 的基础上偏移 6 小时），
      * {@code realHour} 为当前现实时钟小时（0..24）；两者按 {@link #timeMode} 取其一。
-     * {@link #TIME_ALWAYS} 恒开启；{@code start==end} 视为整天开启；{@code start<end} 为普通区间
+     * {@link #TIME_ALWAYS} 恒开启；{@code start==end} 视为<b>空窗口，恒不开启</b>
+     * （时段控件允许把两个游标拉到重合，那语义上就是长度为 0 的区间 —— 想要整天生效请用
+     * {@link #TIME_ALWAYS}，不再让这两种状态互相等效却看不出区别）；{@code start<end} 为普通区间
      * {@code [start,end)}；{@code start>end} 表示跨午夜（如 22:00-6:00），两端任一段命中即开启。
      *
      * <p>供客户端决胜循环在每帧选获胜效果时调用：窗口关闭的效果按「不存在」处理（不参与权重决胜）。
@@ -83,7 +85,10 @@ public abstract class AreaEffect {
         }
         float now = timeMode == TIME_GAME ? gameHour : realHour;
         if (startHour == endHour) {
-            return true;
+            // 空窗口：半开区间 [h,h) 不含任何时刻。时段控件允许两游标重合，若把它当成
+            // "整天开启"，就与 TIME_ALWAYS 等效却在外观上看不出区别了 —— 故按最直白的
+            // "长度为 0 的区间"解释：恒不开启。
+            return false;
         }
         if (startHour < endHour) {
             return now >= startHour && now < endHour;

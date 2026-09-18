@@ -22,7 +22,8 @@ import static org.soraworld.areaeffect.client.gui.GuiTheme.argb;
  * <ul>
  *   <li><b>拖拽游标</b>修改生效时段——起点为三角 ▲、终点为方块 ■，两游标各自独立可越界，
  *       因此可表示 {@link AreaEffect} 支持的<b>任意时段</b>：{@code start<end} 普通区间；
- *       {@code start==end} 整天；{@code start>end} 跨午夜（填充首尾两段 {@code [start,max]∪[min,end]}）。</li>
+ *       {@code start==end} 空窗口（长度为 0，恒不开启，填充也随之收成零宽）；
+ *       {@code start>end} 跨午夜（填充首尾两段 {@code [start,max]∪[min,end]}）。</li>
  *   <li><b>点击非游标区域</b>（轨道/文字）轮切时段模式，经 {@link #setOnModeToggle} 回调交给外部处理
  *       （始终→游戏→现实→始终）。</li>
  * </ul>
