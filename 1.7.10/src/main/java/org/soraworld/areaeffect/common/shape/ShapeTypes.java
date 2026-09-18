@@ -89,7 +89,11 @@ public final class ShapeTypes {
     /**
      * 形状的唯一构造入口：type + 锚点 + closed → 形状实例。
      * 选区、NBT、网络三条读取路径都经此处，新增形状只需在此接一条分支。
-     * 锚点不足等畸形输入返回 null（调用方须保证已完整消费输入）。
+     *
+     * <p><b>锚点不足一律返回 null</b>（契约与 {@link #canBuild} 一致）：调用方须保证已完整消费输入。
+     * 不能指望各形状的构造器兜底 —— 它们对锚点不足只是退化成"包围盒全 0 的空形状"
+     * （如 {@code PrismShape} 的三处 {@code list.size() &lt; n} 分支），那会造出一个
+     * 落在世界原点、判定只可能命中 (0,0,0) 一格的幽灵区域，比直接拒绝更糟。
      */
     private static AreaShape create(String type, List<Vec3i> anchors, boolean closed) {
         if (type == null || anchors == null) {
@@ -97,9 +101,11 @@ public final class ShapeTypes {
         }
         switch (type) {
             case TYPE_BOX:
-                return new PrismShape(PrismShape.Section.RECT, PrismShape.Height.BOUNDED, anchors, false);
+                return anchors.size() >= 2
+                        ? new PrismShape(PrismShape.Section.RECT, PrismShape.Height.BOUNDED, anchors, false) : null;
             case TYPE_SQUARE_PILLAR:
-                return new PrismShape(PrismShape.Section.RECT, PrismShape.Height.FULL, anchors, false);
+                return anchors.size() >= 2
+                        ? new PrismShape(PrismShape.Section.RECT, PrismShape.Height.FULL, anchors, false) : null;
             case TYPE_CYLINDER:
                 return anchors.size() >= 2 ? new PrismShape(PrismShape.Section.CIRCLE, PrismShape.Height.BOUNDED, anchors, false) : null;
             case TYPE_ROUND_PILLAR:
@@ -107,9 +113,11 @@ public final class ShapeTypes {
             case TYPE_SPHERE:
                 return anchors.size() >= 2 ? new SphereShape(anchors.get(0), anchors.get(1)) : null;
             case TYPE_POLYGON:
-                return new PrismShape(PrismShape.Section.POLYGON, PrismShape.Height.BOUNDED, anchors, closed);
+                return anchors.size() >= 3
+                        ? new PrismShape(PrismShape.Section.POLYGON, PrismShape.Height.BOUNDED, anchors, closed) : null;
             case TYPE_POLYGON_PILLAR:
-                return new PrismShape(PrismShape.Section.POLYGON, PrismShape.Height.FULL, anchors, closed);
+                return anchors.size() >= 3
+                        ? new PrismShape(PrismShape.Section.POLYGON, PrismShape.Height.FULL, anchors, closed) : null;
             case TYPE_DIMENSION:
                 // 维度形状不消费锚点，忽略传入的 closed
                 return new DimensionShape();

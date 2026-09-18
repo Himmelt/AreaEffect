@@ -78,16 +78,27 @@ public class AreaStore {
         dirty = true;
     }
 
-    /** 若有未落盘的改动则写盘（配置 + 区域 NBT）；无改动直接返回。 */
+    /**
+     * 若有未落盘的改动则写盘（配置 + 区域 NBT）；无改动直接返回。
+     *
+     * <p>脏标记只在<b>写盘成功之后</b>才清：写盘失败（磁盘满、文件被占用、权限不足等）时保留标记，
+     * 由服务端每 tick 的 {@code flushStore} 与关服兜底继续重试 —— 否则这次改动会被静默丢掉，
+     * 得等到下一次变更才可能落盘，连关服那次兜底 flush 都会因为"不脏"而直接返回。
+     */
     public void flush(AreaTable table) {
         if (!dirty) {
             return;
         }
-        dirty = false;
-        config.save();
-        if (file != null) {
-            writeAreasNbt(table, file);
+        try {
+            config.save();
+            if (file != null && !writeAreasNbt(table, file)) {
+                return; // 写失败：保留脏标记等下次重试
+            }
+        } catch (Throwable t) {
+            LOGGER.warn("写入模组配置失败，保留脏标记待重试", t);
+            return;
         }
+        dirty = false;
     }
 
     /**
@@ -142,8 +153,10 @@ public class AreaStore {
 
     /**
      * 把区域以 NBT 原子写入随世界文件：先写临时文件再替换，避免崩溃损坏。
+     *
+     * @return 是否写入成功；失败时由 {@link #flush(AreaTable)} 保留脏标记以便重试
      */
-    private void writeAreasNbt(AreaTable table, File file) {
+    private boolean writeAreasNbt(AreaTable table, File file) {
         NBTTagCompound root = new NBTTagCompound();
         NBTTagList areas = new NBTTagList();
         table.byDim().forEach((dim, dimAreas) -> dimAreas.values().forEach(area -> {
@@ -174,8 +187,10 @@ public class AreaStore {
                 java.nio.file.Files.copy(tmp.toPath(), file.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
                 tmp.delete();
             }
+            return true;
         } catch (Throwable t) {
             LOGGER.warn("写入区域存档失败: {}", file, t);
+            return false;
         }
     }
 }

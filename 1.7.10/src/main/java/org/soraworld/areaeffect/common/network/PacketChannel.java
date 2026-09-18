@@ -175,13 +175,32 @@ public final class PacketChannel {
             IPacket packet = type.newInstance();
             packet.fromBytes(buf);
             if (serverSide) {
-                // 服务端方向：投递到服务端主线程，与主线程业务串行化
-                SERVER_TASKS.add(() -> handler.accept(packet, player));
+                // 服务端方向：投递到服务端主线程，与主线程业务串行化。
+                // 解码到执行之间隔着若干 tick，玩家可能已断线，故执行前再确认一次连接有效。
+                SERVER_TASKS.add(() -> {
+                    if (!isConnected(player)) {
+                        return;
+                    }
+                    handler.accept(packet, player);
+                });
             } else {
                 handler.accept(packet, player);
             }
         } catch (Throwable t) {
             LOGGER.error("Error handling packet on channel " + AreaEffectMod.MOD_ID, t);
         }
+    }
+
+    /**
+     * 玩家连接是否仍然有效。
+     *
+     * <p>入站包在 netty 线程解码、投递到服务端主线程执行，这中间玩家可能已经断线；此时继续跑
+     * 业务只有坏处：回执与广播都发不出去，而 {@code NetworkManager#scheduleOutboundPacket}
+     * 对已关闭的 channel 并非丢弃而是<b>塞进出站队列</b>，只是白占内存。
+     * 连接尚未绑定（{@code playerNetServerHandler} 为 null）同样按不可用处理。
+     */
+    private static boolean isConnected(EntityPlayerMP player) {
+        return player != null && player.playerNetServerHandler != null
+                && player.playerNetServerHandler.netManager.isChannelOpen();
     }
 }
