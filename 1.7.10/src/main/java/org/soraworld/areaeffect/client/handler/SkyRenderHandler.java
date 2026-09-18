@@ -24,6 +24,7 @@ import java.util.Random;
  *
  * <p>{@link AreaSkyRenderer} 复刻 {@code RenderGlobal.renderSky} 的表面分支：天空顶盖
  *（平铺平面）、日出日落霞光带、太阳、月亮、星空均保留，仅把天空颜色换为效果目标色。
+ * 非地表维度（下界 / 末地）原版本就不画天空，本渲染器同样直接返回、不接管。
  *
  * <p>另外每 tick 采样一份「原版天空色」（见 {@link #sampleAtmosphere()}），供
  * {@code SkyEffectRenderer} 在离开区域时当过渡终点用 —— 与雾效果的大气色采样同构。
@@ -128,6 +129,14 @@ public class SkyRenderHandler {
 
         @Override
         public void render(float partialTicks, WorldClient world, Minecraft mcw) {
+            // 原版 RenderGlobal#renderSky 是"有自定义渲染器就调用并 return"，其后的分派为：
+            // dimensionId == 1（末地）画方形天空 → isSurfaceWorld() 画穹顶 → 其余维度什么都不画。
+            // 自定义渲染器整块接管了这三条分支，所以必须自己把"非地表维度不画"补回来，
+            // 否则末地的方形天空会被主世界式穹顶顶替、下界基岩层之上也会凭空多出一块穹顶。
+            // 不接管时直接返回、不碰任何 GL 状态，渲染表现与"没有自定义渲染器"一致。
+            if (!world.provider.isSurfaceWorld()) {
+                return;
+            }
             Tessellator tessellator = Tessellator.instance;
             GL11.glDisable(GL11.GL_TEXTURE_2D);
             GL11.glDepthMask(false);
