@@ -451,8 +451,9 @@ public class ClientProxy extends CommonProxy {
         List<Area> containing = clientAreas.findAt(dim, pos);
 
         // 当前游戏/现实时间（小时，0..24），供时间段过滤
-        float gameHour = (player.worldObj.getWorldTime() % 24000L) / 1000.0F;
-        float realHour = LocalTime.now().getHour() + LocalTime.now().getMinute() / 60.0F;
+        float gameHour = gameHourOf(player.worldObj.getWorldTime());
+        LocalTime now = LocalTime.now();
+        float realHour = now.getHour() + now.getMinute() / 60.0F;
 
         for (String typeId : renderers.typeIds()) {
             EffectRenderer renderer = renderers.get(typeId);
@@ -488,6 +489,23 @@ public class ClientProxy extends CommonProxy {
             renderer.onFrame(areaChanged, renderEffect,
                     lastDurationByType.getOrDefault(typeId, DEFAULT_DURATION));
         }
+    }
+
+    /**
+     * 世界时间 → 游戏时钟小时（0..24），供「生效时段 = 游戏」过滤用。
+     *
+     * <p>原版的一天从 <b>06:00</b> 起算：{@code worldTime % 24000 == 0} 是日出（06:00）、
+     * {@code 6000} 正午、{@code 12000} 日落（18:00）、{@code 18000} 午夜。因此钟点要在
+     * {@code worldTime / 1000} 的基础上偏移 6 小时；漏掉这个偏移会让 GUI 上写的
+     * 「游戏 06:00→18:00」实际生效于游戏内 12:00→24:00（一半落在夜里）。
+     */
+    private static float gameHourOf(long worldTime) {
+        long dayTime = worldTime % 24000L;
+        if (dayTime < 0L) {
+            // 正常游戏时钟不为负，但存档可被手工改成负值；先归一到 [0, 24000) 再换算
+            dayTime += 24000L;
+        }
+        return (dayTime / 1000.0F + 6.0F) % 24.0F;
     }
 
     public void clientReset() {

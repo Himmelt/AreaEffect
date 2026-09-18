@@ -69,8 +69,9 @@ public abstract class AreaEffect {
     /**
      * 当前时段是否开启。
      *
-     * <p>{@code gameHour} 为当前游戏时钟小时（0..24，由 {@code world.getWorldTime() % 24000 / 1000}（映射到译者）
-     * 得出），{@code realHour} 为当前现实时钟小时（0..24）。只被「是否为 {timeMode} 生效」取其一：
+     * <p>{@code gameHour} 为当前游戏时钟小时（0..24，换算见 {@code ClientProxy#gameHourOf}：
+     * 原版一天自 <b>06:00</b> 起算，故钟点需在 {@code worldTime / 1000} 的基础上偏移 6 小时），
+     * {@code realHour} 为当前现实时钟小时（0..24）；两者按 {@link #timeMode} 取其一。
      * {@link #TIME_ALWAYS} 恒开启；{@code start==end} 视为整天开启；{@code start<end} 为普通区间
      * {@code [start,end)}；{@code start>end} 表示跨午夜（如 22:00-6:00），两端任一段命中即开启。
      *
