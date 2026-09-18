@@ -7,8 +7,10 @@ import net.minecraft.client.multiplayer.WorldClient;
 import net.minecraft.client.renderer.OpenGlHelper;
 import net.minecraft.client.renderer.RenderHelper;
 import net.minecraft.client.renderer.Tessellator;
+import net.minecraft.entity.Entity;
 import net.minecraft.util.MathHelper;
 import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.Vec3;
 import net.minecraft.world.WorldProvider;
 import net.minecraftforge.client.IRenderHandler;
 import org.lwjgl.opengl.GL11;
@@ -22,6 +24,9 @@ import java.util.Random;
  *
  * <p>{@link AreaSkyRenderer} 复刻 {@code RenderGlobal.renderSky} 的表面分支：天空顶盖
  *（平铺平面）、日出日落霞光带、太阳、月亮、星空均保留，仅把天空颜色换为效果目标色。
+ *
+ * <p>另外每 tick 采样一份「原版天空色」（见 {@link #sampleAtmosphere()}），供
+ * {@code SkyEffectRenderer} 在离开区域时当过渡终点用 —— 与雾效果的大气色采样同构。
  */
 public class SkyRenderHandler {
 
@@ -33,7 +38,33 @@ public class SkyRenderHandler {
     private static volatile float green = 0.81F;
     private static volatile float blue = 0.92F;
 
+    /**
+     * 最近采样到的<b>原版天空色</b>（0..1）：不接管天空时画面上该有的那个色。
+     *
+     * <p>由 {@link #sampleAtmosphere()} 每客户端 tick 刷新。{@code SkyEffectRenderer} 拿它当
+     * 「离开区域」时的过渡终点 —— 1.7.10 没有天空色事件，若不主动取，就只能淡向一个硬编码的
+     * 白昼蓝，夜里离开天空区域会表现为突兀的假天亮（雾效果的大气色采样是同一思路）。
+     */
+    private static volatile float atmRed = 0.53F;
+    private static volatile float atmGreen = 0.81F;
+    private static volatile float atmBlue = 0.92F;
+
     public SkyRenderHandler() {
+    }
+
+    /** 见 {@link #atmRed}。 */
+    public static double atmosphereRed() {
+        return atmRed;
+    }
+
+    /** 见 {@link #atmRed}。 */
+    public static double atmosphereGreen() {
+        return atmGreen;
+    }
+
+    /** 见 {@link #atmRed}。 */
+    public static double atmosphereBlue() {
+        return atmBlue;
     }
 
     /** 由 {@code SkyEffectRenderer} 每帧写入当前天空色（0..1）。 */
@@ -49,6 +80,7 @@ public class SkyRenderHandler {
         if (event.phase != TickEvent.Phase.END || mc.theWorld == null || mc.theWorld.provider == null) {
             return;
         }
+        sampleAtmosphere();
         WorldProvider provider = mc.theWorld.provider;
         IRenderHandler current = provider.getSkyRenderer();
         if (active && current != AREA_SKY) {
@@ -56,6 +88,30 @@ public class SkyRenderHandler {
         } else if (!active && current == AREA_SKY) {
             provider.setSkyRenderer(null);
         }
+    }
+
+    /**
+     * 采样"此刻的原版天空色"，供离开区域时作过渡终点。
+     *
+     * <p>取的是 {@code World#getSkyColor} —— 原版 {@code RenderGlobal#renderSky} 正是用它给穹顶上色
+     * （已含日月位置、生物群系温度与降雨的影响），因此它就是"不接管天空时该有的色"。
+     *
+     * <p>{@code partialTicks} 传 0：取"本 tick 的准确值"。1.7.10 的 {@code Minecraft#timer} 是私有
+     * 字段，拿不到 {@code renderPartialTicks}；而天空色随日月位置变化极慢（游戏内一整天 20 分钟），
+     * 半个 tick 的相位差在观感上不可见。
+     */
+    private static void sampleAtmosphere() {
+        Entity view = mc.renderViewEntity;
+        if (view == null) {
+            return;
+        }
+        Vec3 color = mc.theWorld.getSkyColor(view, 0.0F);
+        if (color == null) {
+            return;
+        }
+        atmRed = (float) color.xCoord;
+        atmGreen = (float) color.yCoord;
+        atmBlue = (float) color.zCoord;
     }
 
     /**
