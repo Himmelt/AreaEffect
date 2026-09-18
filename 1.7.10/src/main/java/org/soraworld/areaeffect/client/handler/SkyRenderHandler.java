@@ -7,6 +7,7 @@ import net.minecraft.client.multiplayer.WorldClient;
 import net.minecraft.client.renderer.OpenGlHelper;
 import net.minecraft.client.renderer.RenderHelper;
 import net.minecraft.client.renderer.Tessellator;
+import net.minecraft.util.MathHelper;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.world.WorldProvider;
 import net.minecraftforge.client.IRenderHandler;
@@ -20,7 +21,7 @@ import java.util.Random;
  * 激活时安装自定义渲染器、恢复时卸载交还原版。
  *
  * <p>{@link AreaSkyRenderer} 复刻 {@code RenderGlobal.renderSky} 的表面分支：天空顶盖
- *（平铺平面）、太阳、月亮、星空均保留，仅把天空颜色换为效果目标色。
+ *（平铺平面）、日出日落霞光带、太阳、月亮、星空均保留，仅把天空颜色换为效果目标色。
  */
 public class SkyRenderHandler {
 
@@ -83,6 +84,10 @@ public class SkyRenderHandler {
             OpenGlHelper.glBlendFunc(770, 771, 1, 0);
             RenderHelper.disableStandardItemLighting();
 
+            // 日出/日落霞光带：原版这层来自 WorldProvider#calcSunriseSunsetColors（地平线一圈的放射渐变），
+            // 不画的话换色后的天空会比原版"平"，日落时尤其明显。顶点与配色完全照抄原版 renderSky。
+            drawSunriseSunset(tessellator, world, mcw, partialTicks);
+
             GL11.glEnable(GL11.GL_TEXTURE_2D);
             OpenGlHelper.glBlendFunc(770, 1, 1, 0);
             GL11.glPushMatrix();
@@ -125,6 +130,49 @@ public class SkyRenderHandler {
                     tessellator.draw();
                 }
             }
+        }
+
+        /**
+         * 日出/日落霞光带：与原版 {@code RenderGlobal.renderSky} 同款 —— 三角形扇 + 顶点色插值，
+         * 中心点用 {@code colors[3]} 作 alpha、外圈 alpha 为 0，形成向地平线外淡出的放射渐变。
+         */
+        private static void drawSunriseSunset(Tessellator tessellator, WorldClient world, Minecraft mcw, float partialTicks) {
+            float[] colors = world.provider.calcSunriseSunsetColors(world.getCelestialAngle(partialTicks), partialTicks);
+            if (colors == null) {
+                return;
+            }
+            GL11.glDisable(GL11.GL_TEXTURE_2D);
+            GL11.glShadeModel(GL11.GL_SMOOTH);
+            GL11.glPushMatrix();
+            GL11.glRotatef(90.0F, 0.0F, 1.0F, 0.0F);
+            GL11.glRotatef(MathHelper.sin(world.getCelestialAngleRadians(partialTicks)) < 0.0F ? 180.0F : 0.0F,
+                    0.0F, 0.0F, 1.0F);
+            GL11.glRotatef(90.0F, 0.0F, 0.0F, 1.0F);
+            float red = colors[0];
+            float green = colors[1];
+            float blue = colors[2];
+            if (mcw.gameSettings.anaglyph) {
+                float r = (red * 30.0F + green * 59.0F + blue * 11.0F) / 100.0F;
+                float g = (red * 30.0F + green * 70.0F) / 100.0F;
+                float b = (red * 30.0F + blue * 70.0F) / 100.0F;
+                red = r;
+                green = g;
+                blue = b;
+            }
+            tessellator.startDrawing(6);
+            tessellator.setColorRGBA_F(red, green, blue, colors[3]);
+            tessellator.addVertex(0.0D, 100.0D, 0.0D);
+            tessellator.setColorRGBA_F(colors[0], colors[1], colors[2], 0.0F);
+            for (int i = 0; i <= 16; ++i) {
+                float angle = (float) i * (float) Math.PI * 2.0F / 16.0F;
+                float sin = MathHelper.sin(angle);
+                float cos = MathHelper.cos(angle);
+                tessellator.addVertex((double) (sin * 120.0F), (double) (cos * 120.0F),
+                        (double) (-cos * 40.0F * colors[3]));
+            }
+            tessellator.draw();
+            GL11.glPopMatrix();
+            GL11.glShadeModel(GL11.GL_FLAT);
         }
 
         private static void drawSun(Tessellator tessellator, Minecraft mcw) {

@@ -9,6 +9,7 @@ import org.soraworld.areaeffect.common.util.GammaCurve;
  * 天空效果运行时：把目标天空色平滑过渡，并写到 {@link SkyRenderHandler} 供自定义天空渲染器使用。
  *
  * <p>进入区域时颜色向目标过渡；离开时向「默认天蓝」过渡，过渡完成后关闭（移除自定义天空渲染器、交还原版）。
+ * 颜色在两端的取值之间按<b>线性光空间</b>混合（见 {@code GammaCurve#mix}），中段不会偏暗偏灰。
  * {@code duration<=0} 瞬间到位。因为仅覆盖天空穹顶，离开/进入都以该渲染器的启停为界。
  */
 public class SkyEffectRenderer implements EffectRenderer {
@@ -76,9 +77,10 @@ public class SkyEffectRenderer implements EffectRenderer {
             anim = false;
         } else {
             double e = GammaCurve.ease(p);
-            curR = fromR + (targetR - fromR) * e;
-            curG = fromG + (targetG - fromG) * e;
-            curB = fromB + (targetB - fromB) * e;
+            // 颜色在线性光空间混合：码值直接插值的中段会偏暗偏灰
+            curR = GammaCurve.mix(fromR, targetR, e);
+            curG = GammaCurve.mix(fromG, targetG, e);
+            curB = GammaCurve.mix(fromB, targetB, e);
         }
     }
 }

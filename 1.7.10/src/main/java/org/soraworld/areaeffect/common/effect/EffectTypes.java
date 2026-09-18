@@ -33,8 +33,8 @@ public final class EffectTypes {
                 // 亮度效果默认：亮度 100、过渡 1 秒（权重由 AreaEffect 默认为 0）
                 return new LightnessEffect(100.0F, 1.0F);
             case TYPE_FOG:
-                // 雾效果默认：浅雾色、浓度 0.5、无尘粒、过渡 1 秒
-                return new FogEffect(0.5F, 40, 80, 50, 0, 1.0F);
+                // 雾效果默认：浅雾色、16 米起雾、再过 7 米全白、无尘粒、过渡 1 秒
+                return new FogEffect(7.0F, 16.0F, 40, 80, 50, 0, 1.0F);
             case TYPE_SKY:
                 // 天空效果默认：天蓝色、过渡 1 秒
                 return new SkyEffect(135, 206, 235, 1.0F);
@@ -113,7 +113,12 @@ public final class EffectTypes {
     private static FogEffect readFogNbt(NBTTagCompound tag) {
         FogEffect effect = new FogEffect();
         effect.readNbtFields(tag);
-        effect.setDensity(tag.getFloat("density"));
+        // 缺键时 getFloat 返回 0 —— 而这两个字段的 0 都是"极端值"（过渡距离 0 = 硬边全雾、
+        // 起雾距离 0 = 从脚下起雾），旧存档没有这些键时不该被解读成极端值，故缺键回落到默认值。
+        effect.setRampLength(tag.hasKey("rampLength") ? tag.getFloat("rampLength")
+                : FogEffect.DEFAULT_RAMP_LENGTH);
+        effect.setStartDistance(tag.hasKey("startDistance") ? tag.getFloat("startDistance")
+                : FogEffect.DEFAULT_START_DISTANCE);
         effect.setRed(tag.getInteger("red"));
         effect.setGreen(tag.getInteger("green"));
         effect.setBlue(tag.getInteger("blue"));
@@ -124,7 +129,8 @@ public final class EffectTypes {
     private static FogEffect readFogBuf(ByteBuf buf) {
         FogEffect effect = new FogEffect();
         effect.readBufFields(buf);
-        effect.setDensity(buf.readFloat());
+        effect.setRampLength(buf.readFloat());
+        effect.setStartDistance(buf.readFloat());
         effect.setRed(buf.readInt());
         effect.setGreen(buf.readInt());
         effect.setBlue(buf.readInt());

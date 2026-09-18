@@ -23,6 +23,7 @@ import java.util.List;
 import static org.soraworld.areaeffect.client.gui.GuiTheme.COLOR_ACCENT;
 import static org.soraworld.areaeffect.client.gui.GuiTheme.COLOR_BG;
 import static org.soraworld.areaeffect.client.gui.GuiTheme.COLOR_BORDER;
+import static org.soraworld.areaeffect.client.gui.GuiTheme.COLOR_BTN_BG;
 import static org.soraworld.areaeffect.client.gui.GuiTheme.COLOR_DANGER;
 import static org.soraworld.areaeffect.client.gui.GuiTheme.COLOR_HOVER_ROW;
 import static org.soraworld.areaeffect.client.gui.GuiTheme.COLOR_SCROLL_THUMB;
@@ -30,6 +31,7 @@ import static org.soraworld.areaeffect.client.gui.GuiTheme.COLOR_SCROLL_TRACK;
 import static org.soraworld.areaeffect.client.gui.GuiTheme.COLOR_SELECTED;
 import static org.soraworld.areaeffect.client.gui.GuiTheme.COLOR_SLIDER_THUMB_HOT;
 import static org.soraworld.areaeffect.client.gui.GuiTheme.COLOR_TEXT_BODY;
+import static org.soraworld.areaeffect.client.gui.GuiTheme.COLOR_TEXT_DISABLED;
 import static org.soraworld.areaeffect.client.gui.GuiTheme.COLOR_TEXT_HEAD;
 import static org.soraworld.areaeffect.client.gui.GuiTheme.COLOR_TEXT_HINT;
 import static org.soraworld.areaeffect.client.gui.GuiTheme.argb;
@@ -80,6 +82,8 @@ public class GuiAreas extends GuiScreen {
     private static final int ACTION_H = 22;
     /** 效果栏顶部「添加/删除」按钮行的高度。 */
     private static final int TOOLBAR_H = 16;
+    /** 「添加效果」弹出类型列表的单行高度。 */
+    private static final int MENU_ROW_H = 16;
     /** 底栏图标按钮边长、图标间距，以及删除后额外留出的空档。 */
     private static final int ICON_S = 18;
     private static final int ICON_GAP = 3;
@@ -96,7 +100,7 @@ public class GuiAreas extends GuiScreen {
     private static final float HOUR_STEP = 1.0F / 60.0F;
     /**
      * 三栏宽度权重：区域 : 效果 : 详情。按内容实际需要定，不是把原四栏等比放大 ——
-     * 区域栏每行都要放 {@code #id} + 备注（信息密度最高），详情栏只有 4 条滑条（够放最长文案即可），
+     * 区域栏每行都要放 {@code #id} + 备注（信息密度最高），详情栏只有几排滑条（够放最长文案即可），
      * 效果栏够放「名称 + W 值」即可。权重只有相对意义，不必凑满 100。
      */
     private static final int AREA_G = 26;
@@ -133,6 +137,8 @@ public class GuiAreas extends GuiScreen {
     private int effectIdx = -1;
     /** 存在未保存编辑（效果参数或备注），用于底栏的未保存指示。 */
     private boolean dirty = false;
+    /** L3：「添加效果」弹出类型列表是否展开（点工具条按钮切换；选择一项、点面板外或按 Esc 收起）。 */
+    private boolean addMenuOpen = false;
     /** 备注基线：加载/保存时的已提交值；当前文本与之不同即视为有未保存编辑。 */
     private String remarkBaseline = "";
 
@@ -141,11 +147,12 @@ public class GuiAreas extends GuiScreen {
     private FlatSlider lightSlider;
     private FlatSlider durationSlider;
     private RangeSlider timeRangeSlider;
-    /** 颜色三通道 + 雾专属（浓度/尘粒）：按效果类型显隐，与 lightSlider 复用同一段行位。 */
+    /** 颜色三通道 + 雾专属（过渡距离/起雾距离/尘粒）：按效果类型显隐，与 lightSlider 复用同一段行位。 */
     private FlatSlider redSlider;
     private FlatSlider greenSlider;
     private FlatSlider blueSlider;
-    private FlatSlider densitySlider;
+    private FlatSlider rampSlider;
+    private FlatSlider startDistanceSlider;
     private FlatSlider dustSlider;
     /** 底栏：备注输入框（区域级）。 */
     private GuiTextField remarkField;
@@ -322,6 +329,7 @@ public class GuiAreas extends GuiScreen {
 
     /** 清空选中并清除该区域的预览覆盖（用变更前的 {@link #currentDim()} 定位旧区域所属维度）。 */
     private void clearSelection() {
+        addMenuOpen = false;
         if (selected != null) {
             int dim = currentDim();
             if (dim >= 0) {
@@ -342,6 +350,7 @@ public class GuiAreas extends GuiScreen {
 
     /** 切换到某区域：清旧区域预览，重挂工作副本。 */
     private void selectArea(Area area) {
+        addMenuOpen = false;
         if (selected != null) {
             int dim = currentDim();
             if (dim >= 0) {
@@ -402,6 +411,85 @@ public class GuiAreas extends GuiScreen {
             }
         }
         return true;
+    }
+
+    // ===================== 「添加效果」弹出列表 =====================
+
+    /** 弹出列表上边界：紧贴工具条下方（工具条高 {@link #TOOLBAR_H}）。 */
+    private int addMenuY1() {
+        return bodyY1 + TOOLBAR_H;
+    }
+
+    /** 弹出列表下边界：每个可添加类型占一行 {@link #MENU_ROW_H}。 */
+    private int addMenuY2() {
+        return addMenuY1() + EffectTypes.ALL.size() * MENU_ROW_H;
+    }
+
+    /** 弹出列表内命中的行下标；未展开或未命中面板返回 -1。 */
+    private int addMenuIndexAt(int mouseX, int mouseY) {
+        if (!addMenuOpen || mouseX < effectX1 || mouseX >= effectX2) {
+            return -1;
+        }
+        int y = addMenuY1();
+        return mouseY >= y && mouseY < addMenuY2() ? (mouseY - y) / MENU_ROW_H : -1;
+    }
+
+    /** 点是否落在「添加效果」按钮上：展开时点它应当收起列表，不该被面板吞掉。 */
+    private boolean overAddButton(int mouseX, int mouseY) {
+        for (Object b : buttonList) {
+            GuiButton btn = (GuiButton) b;
+            if (btn.id == BTN_ADD_EFFECT) {
+                return mouseX >= btn.xPosition && mouseX < btn.xPosition + btn.width
+                        && mouseY >= btn.yPosition && mouseY < btn.yPosition + btn.height;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 绘制弹出列表：在 {@code super.drawScreen} 之后调用，浮在效果列表之上。
+     * 逐行列出可添加类型（{@link EffectTypes#ALL} 的固定顺序），已挂在工作列表里的置灰不可点。
+     */
+    private void drawAddMenu(int mouseX, int mouseY) {
+        if (!addMenuOpen) {
+            return;
+        }
+        int y1 = addMenuY1();
+        int y2 = addMenuY2();
+        drawRect(effectX1, y1, effectX2, y2, argb(COLOR_BTN_BG));
+        drawRect(effectX1, y1, effectX2, y1 + 1, argb(COLOR_BORDER));
+        drawRect(effectX1, y2 - 1, effectX2, y2, argb(COLOR_BORDER));
+        drawRect(effectX1, y1, effectX1 + 1, y2, argb(COLOR_BORDER));
+        drawRect(effectX2 - 1, y1, effectX2, y2, argb(COLOR_BORDER));
+        int hit = addMenuIndexAt(mouseX, mouseY);
+        for (int i = 0; i < EffectTypes.ALL.size(); i++) {
+            String typeId = EffectTypes.ALL.get(i);
+            boolean exists = pendingEffects != null && containsType(pendingEffects, typeId);
+            int ry = y1 + i * MENU_ROW_H;
+            if (!exists && i == hit) {
+                drawRect(effectX1 + 1, ry, effectX2 - 1, ry + MENU_ROW_H, argb(COLOR_HOVER_ROW));
+            }
+            fontRendererObj.drawStringWithShadow(translate("gui.areaeffect.effect." + typeId),
+                    effectX1 + 6, ry + 4, exists ? COLOR_TEXT_DISABLED : COLOR_TEXT_BODY);
+            if (i < EffectTypes.ALL.size() - 1) {
+                drawRect(effectX1 + 1, ry + MENU_ROW_H - 1, effectX2 - 1, ry + MENU_ROW_H,
+                        argb(COLOR_SCROLL_TRACK));
+            }
+        }
+    }
+
+    /** 把指定类型的默认效果挂到工作列表并选中它（右栏立刻可编辑），随后走统一的增删收尾。 */
+    private void addEffectOfType(String typeId, int dim) {
+        if (pendingEffects == null || containsType(pendingEffects, typeId)) {
+            return;
+        }
+        AreaEffect added = EffectTypes.newDefault(typeId);
+        if (added == null) {
+            return;
+        }
+        pendingEffects.add(added);
+        effectIdx = pendingEffects.size() - 1;
+        afterEffectStructuralChange(dim);
     }
 
     // ===================== 几何 =====================
@@ -503,8 +591,8 @@ public class GuiAreas extends GuiScreen {
                 Math.max(40, remarkX2 - remarkX1), 16);
         remarkField.setMaxStringLength(Area.REMARK_MAX);
 
-        // 详情栏四条滑条：权重 / 过渡时长 / 生效时段 是所有效果通用参数在前，亮度（LightnessEffect 专属）在后；
-        // 本栏只服务效果（没有标题/备注/保存），直接从顶部起排
+        // 详情栏滑条：权重 / 过渡时长 / 生效时段 是所有效果通用参数在前，各效果专属参数（亮度、颜色、
+        // 雾的过渡距离/起雾距离/尘粒）在后，按类型显隐，因此同一行位可被不同子类型复用
         int sw = detailW - 20;
         weightSlider = new FlatSlider(detX1 + 10, bodyY1 + SLIDER_TOP, sw, SLIDER_H,
                 translate("gui.areaeffect.edit.weight"), 0.0F, AreaEffect.MAX_WEIGHT, 0.0F, 1.0F);
@@ -524,9 +612,16 @@ public class GuiAreas extends GuiScreen {
                 translate("gui.areaeffect.edit.color.green"), 0.0F, 255.0F, 128.0F, 1.0F);
         blueSlider = new FlatSlider(detX1 + 10, bodyY1 + SLIDER_TOP + SLIDER_PITCH * 5, sw, SLIDER_H,
                 translate("gui.areaeffect.edit.color.blue"), 0.0F, 255.0F, 128.0F, 1.0F);
-        densitySlider = new FlatSlider(detX1 + 10, bodyY1 + SLIDER_TOP + SLIDER_PITCH * 6, sw, SLIDER_H,
-                translate("gui.areaeffect.edit.fog.density"), 0.0F, 1.0F, 0.5F, 0.01F);
-        dustSlider = new FlatSlider(detX1 + 10, bodyY1 + SLIDER_TOP + SLIDER_PITCH * 7, sw, SLIDER_H,
+        // 过渡距离：0 = 无过渡（跨过起雾距离即全白），其余为"起雾距离之外再过多远全白"。
+        // 它跨 0.2~256 米两个多数量级，用等比刻度，滑条等距移动对应等比值变化。
+        rampSlider = new FlatSlider(detX1 + 10, bodyY1 + SLIDER_TOP + SLIDER_PITCH * 6, sw, SLIDER_H,
+                translate("gui.areaeffect.edit.fog.ramp"), 0.0F, FogEffect.MAX_RAMP_LENGTH,
+                FogEffect.DEFAULT_RAMP_LENGTH, 0.0F,
+                FlatSlider.logarithmic(FogEffect.MIN_RAMP_LENGTH, FogEffect.MAX_RAMP_LENGTH));
+        // 起雾距离：这一档之内完全无雾
+        startDistanceSlider = new FlatSlider(detX1 + 10, bodyY1 + SLIDER_TOP + SLIDER_PITCH * 7, sw, SLIDER_H,
+                translate("gui.areaeffect.edit.fog.start"), 0.0F, FogEffect.MAX_START_DISTANCE, 16.0F, 1.0F);
+        dustSlider = new FlatSlider(detX1 + 10, bodyY1 + SLIDER_TOP + SLIDER_PITCH * 8, sw, SLIDER_H,
                 translate("gui.areaeffect.edit.fog.dust"), 0.0F, FogEffect.MAX_DUST, 0.0F, 1.0F);
         buttonList.add(weightSlider);
         buttonList.add(lightSlider);
@@ -535,7 +630,8 @@ public class GuiAreas extends GuiScreen {
         buttonList.add(redSlider);
         buttonList.add(greenSlider);
         buttonList.add(blueSlider);
-        buttonList.add(densitySlider);
+        buttonList.add(rampSlider);
+        buttonList.add(startDistanceSlider);
         buttonList.add(dustSlider);
 
         // 两列滚动条：贴各自栏的右侧内边界（维度列表已改为 tab 条，不再需要滚动条）
@@ -566,6 +662,10 @@ public class GuiAreas extends GuiScreen {
                 btn.enabled = has;
             } else if (id == BTN_ADD_EFFECT) {
                 btn.enabled = has && !hasAllEffectTypes();
+                if (!btn.enabled) {
+                    // 未选中区域、或类型已加满：列表留着也点不动，直接收起
+                    addMenuOpen = false;
+                }
             } else if (id == BTN_DEL_EFFECT) {
                 btn.enabled = has && effectIdx >= 0;
             }
@@ -573,7 +673,7 @@ public class GuiAreas extends GuiScreen {
         syncTabNav();
         // 防御：initGui 若中途异常被吞，控件可能为 null；此时清空选中走空界面分支，避免 NPE 连锁
         if (weightSlider == null || lightSlider == null || durationSlider == null
-                || timeRangeSlider == null || remarkField == null) {
+                || timeRangeSlider == null || startDistanceSlider == null || remarkField == null) {
             selected = null;
             return;
         }
@@ -594,13 +694,14 @@ public class GuiAreas extends GuiScreen {
             redSlider.visible = false;
             greenSlider.visible = false;
             blueSlider.visible = false;
-            densitySlider.visible = false;
+            rampSlider.visible = false;
+            startDistanceSlider.visible = false;
             dustSlider.visible = false;
             return;
         }
         weightSlider.setValueRaw(effect.getWeight());
         durationSlider.setValueRaw(effect.getDuration());
-        // L4 子类型：光亮度（LightnessEffect 专属）、颜色三通道（雾共用）、雾专属浓度/尘粒按类型显隐
+        // L4 子类型：光亮度（LightnessEffect 专属）、颜色三通道（雾/天空共用）、雾专属过渡距离/起雾距离/尘粒按类型显隐
         boolean isLight = effect instanceof LightnessEffect;
         lightSlider.visible = isLight;
         if (isLight) {
@@ -612,14 +713,16 @@ public class GuiAreas extends GuiScreen {
         redSlider.visible = hasColor;
         greenSlider.visible = hasColor;
         blueSlider.visible = hasColor;
-        densitySlider.visible = isFog;
+        rampSlider.visible = isFog;
+        startDistanceSlider.visible = isFog;
         dustSlider.visible = isFog;
         if (isFog) {
             FogEffect fog = (FogEffect) effect;
             redSlider.setValueRaw(fog.getRed());
             greenSlider.setValueRaw(fog.getGreen());
             blueSlider.setValueRaw(fog.getBlue());
-            densitySlider.setValueRaw(fog.getDensity());
+            rampSlider.setValueRaw(fog.getRampLength());
+            startDistanceSlider.setValueRaw(fog.getStartDistance());
             dustSlider.setValueRaw(fog.getDust());
         } else if (isSky) {
             SkyEffect sky = (SkyEffect) effect;
@@ -687,6 +790,8 @@ public class GuiAreas extends GuiScreen {
         drawScrollBar(effectCol, pendingEffects == null ? 0 : pendingEffects.size());
 
         super.drawScreen(mouseX, mouseY, partialTicks);
+        // 弹出列表是浮层：画在最后，压在按钮与效果列表之上
+        drawAddMenu(mouseX, mouseY);
     }
 
     /**
@@ -834,7 +939,7 @@ public class GuiAreas extends GuiScreen {
     /**
      * 详情栏：只服务效果（L3/L4）。栏内不含任何区域级内容，也不再自报"是什么效果"——
      * 效果列表的选中行已表明它是什么效果，作用的区域则由左栏选中行 + 底栏 {@code #id} 指示。
-     * 因此这里只剩空态提示要画，四条滑条由 GuiScreen#drawScreen 统一绘制；
+     * 因此这里只剩空态提示要画，各条滑条由 GuiScreen#drawScreen 统一绘制；
      * 滑条编辑的提交也在这里触发（1.7.10 的滑条靠 drawButton 自驱，没有独立变更回调）。
      */
     private void drawDetail() {
@@ -917,6 +1022,11 @@ public class GuiAreas extends GuiScreen {
     @Override
     protected void keyTyped(char typedChar, int keyCode) {
         if (keyCode == Keyboard.KEY_ESCAPE) {
+            // 弹出列表展开时 Esc 只收起列表，不关界面
+            if (addMenuOpen) {
+                addMenuOpen = false;
+                return;
+            }
             mc.displayGuiScreen(null);
             return;
         }
@@ -931,6 +1041,24 @@ public class GuiAreas extends GuiScreen {
 
     @Override
     protected void mouseClicked(int mouseX, int mouseY, int mouseButton) {
+        // 「添加效果」弹出列表展开时先消费点击：命中可用行 = 加入并收起；命中已添加行 = 吞掉；
+        // 面板外 = 收起后继续走常规处理。落在「添加效果」按钮上的情况刻意不吞 —— 交给按钮逻辑
+        // （actionPerformed 里会收起列表），这样点按钮能开也能关。
+        if (addMenuOpen && mouseButton == 0 && pendingEffects != null && !overAddButton(mouseX, mouseY)) {
+            int hit = addMenuIndexAt(mouseX, mouseY);
+            if (hit >= 0) {
+                String typeId = EffectTypes.ALL.get(hit);
+                if (!containsType(pendingEffects, typeId)) {
+                    addEffectOfType(typeId, currentDim());
+                    addMenuOpen = false;
+                }
+                return;
+            }
+            if (mouseX >= effectX1 && mouseX < effectX2 && mouseY >= addMenuY1() && mouseY < addMenuY2()) {
+                return;
+            }
+            addMenuOpen = false;
+        }
         super.mouseClicked(mouseX, mouseY, mouseButton);
         // 备注框只在选中区域时接受点击：GuiTextField 自身不看 enabled，必须在这里把关
         if (mouseButton == 0 && selected != null) {
@@ -1058,21 +1186,8 @@ public class GuiAreas extends GuiScreen {
             if (selected == null || pendingEffects == null) {
                 return;
             }
-            // 依次遍历可添加类型，取第一个还没挂到该区域的类型。
-            // 目前只有亮度一种，因此有亮度即不可再点（按钮已禁用，这里是防御）。
-            for (String typeId : EffectTypes.ALL) {
-                if (!containsType(pendingEffects, typeId)) {
-                    AreaEffect added = EffectTypes.newDefault(typeId);
-                    if (added != null) {
-                        pendingEffects.add(added);
-                        if (effectIdx < 0) {
-                            effectIdx = 0;
-                        }
-                        afterEffectStructuralChange(dim);
-                    }
-                    return;
-                }
-            }
+            // 展开/收起类型列表，由用户自己点要加的那一个（原先只能按 EffectTypes.ALL 的顺序依次补）
+            addMenuOpen = !addMenuOpen;
             return;
         }
         if (button.id == BTN_DEL_EFFECT) {
@@ -1198,9 +1313,14 @@ public class GuiAreas extends GuiScreen {
                 fog.setBlue(Math.round(bv));
                 changed = true;
             }
-            float nv = densitySlider.getValue();
-            if (nv != fog.getDensity()) {
-                fog.setDensity(nv);
+            float rampValue = rampSlider.getValue();
+            if (rampValue != fog.getRampLength()) {
+                fog.setRampLength(rampValue);
+                changed = true;
+            }
+            float sv = startDistanceSlider.getValue();
+            if (sv != fog.getStartDistance()) {
+                fog.setStartDistance(sv);
                 changed = true;
             }
             float uvv = dustSlider.getValue();

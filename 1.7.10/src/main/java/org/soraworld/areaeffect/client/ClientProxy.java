@@ -25,7 +25,6 @@ import org.soraworld.areaeffect.client.handler.SkyRenderHandler;
 import org.soraworld.areaeffect.common.CommonProxy;
 import org.soraworld.areaeffect.common.area.AreaTable;
 import org.soraworld.areaeffect.common.effect.AreaEffect;
-import org.soraworld.areaeffect.common.effect.LightnessEffect;
 import org.soraworld.areaeffect.common.network.Area;
 import org.soraworld.areaeffect.common.network.MessageAreaDelete;
 import org.soraworld.areaeffect.common.network.MessageAreaUpdate;
@@ -52,7 +51,15 @@ public class ClientProxy extends CommonProxy {
     public static final KeyBinding KEY_LIST = new KeyBinding("key.areaeffect.manager", Keyboard.KEY_J, "key.categories.areaeffect");
     public static final KeyBinding KEY_SEL_RENDER = new KeyBinding("key.areaeffect.selrender", Keyboard.KEY_K, "key.categories.areaeffect");
 
-    private float lastDuration = 1.0F;
+    /** 该类型尚无记录时的淡出时长（秒）。 */
+    private static final float DEFAULT_DURATION = 1.0F;
+
+    /**
+     * 「离开所有区域」时用于淡出的过渡时长（秒），<b>按效果类型各记一份</b>最近生效值。
+     * 分开记的原因：玩家离开区域时区域已不可见，运行时只能靠这份记录决定淡出速度；
+     * 若全局共用一份，雾/天空的淡出速度就会被亮度效果（或任意最后写入者）的时长顶替。
+     */
+    private final Map<String, Float> lastDurationByType = new HashMap<>();
 
     private Selection selSelection = null;
     private boolean showSelection = true;
@@ -103,8 +110,13 @@ public class ClientProxy extends CommonProxy {
         FMLCommonHandler.instance().bus().register(handler);
         MinecraftForge.EVENT_BUS.register(new SelectionRenderHandler(this));
         MinecraftForge.EVENT_BUS.register(new ClientSelectionHandler(this));
-        MinecraftForge.EVENT_BUS.register(new FogRenderHandler());
-        MinecraftForge.EVENT_BUS.register(new SkyRenderHandler());
+        // 1.7.10 有两条互不转发的事件总线：EntityViewRenderEvent（FogColors/FogDensity）在 Forge 总线，
+        // 而 TickEvent 系列只由 FML 总线派发（见 FMLCommonHandler#onPostClientTick 的 bus().post）。
+        // 挂错总线 = 回调静默不触发，故按事件类型分别注册；同一实例可同时挂两条总线，事件类型不重叠。
+        FogRenderHandler fogHandler = new FogRenderHandler();
+        MinecraftForge.EVENT_BUS.register(fogHandler);            // FogColors / FogDensity
+        FMLCommonHandler.instance().bus().register(fogHandler);   // ClientTick：雾尘粒
+        FMLCommonHandler.instance().bus().register(new SkyRenderHandler()); // ClientTick：装卸自定义天空渲染器
         ClientRegistry.registerKeyBinding(KEY_LIST);
         ClientRegistry.registerKeyBinding(KEY_SEL_RENDER);
     }
@@ -469,18 +481,18 @@ public class ClientProxy extends CommonProxy {
             AreaEffect renderEffect = null;
             if (winnerArea != null) {
                 renderEffect = effectOf(effectiveArea(dim, winnerArea), typeId);
-                // 保留最近一次亮度效果的时长，作为"离开所有区域"淡出的速度
-                if (winner instanceof LightnessEffect) {
-                    lastDuration = ((LightnessEffect) winner).getDuration();
-                }
+                // 记下该类型最近一次的过渡时长：离开所有区域时该运行时用它做淡出速度（按类型各记一份）
+                lastDurationByType.put(typeId,
+                        (renderEffect != null ? renderEffect : winner).getDuration());
             }
-            renderer.onFrame(areaChanged, renderEffect, lastDuration);
+            renderer.onFrame(areaChanged, renderEffect,
+                    lastDurationByType.getOrDefault(typeId, DEFAULT_DURATION));
         }
     }
 
     public void clientReset() {
         clientTool = Items.wooden_axe;
-        lastDuration = 1.0F;
+        lastDurationByType.clear();
         // 清客户端镜像：它与集成服务端的权威 areas 已是不同实例，清它不会动到世界数据；
         // 权威表的落盘由 AreaStore 负责（服务端侧），镜像则在下次 onServerConnected 清空并经登录全量同步重建。
         clientAreas.clear();
