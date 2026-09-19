@@ -1,49 +1,46 @@
 package org.soraworld.areaeffect.common.shape;
 
+import io.netty.buffer.ByteBuf;
+import net.minecraft.nbt.NBTTagCompound;
 import org.soraworld.areaeffect.common.util.Vec3i;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 球体形状：球心 + 球面点，半径 = 3D 距离。
+ * 球体形状：X/Y/Z 三轴都取方块中心。球心 = 中心锚点方块中心，半径 = 球心到球面点方块中心的连续三维距离
+ * （不做 {@code (int)} 截断；球面点方块中心恰在球面上，判定 `{@code <=}` ⇒ 判入）。
+ * 判定点即玩家脚下碰撞箱底部中心，直接喂三维连续几何。
  */
 public class SphereShape extends AreaShape {
 
     public static final int RING_SEGMENTS = 24;
 
-    private final int cx;
-    private final int cy;
-    private final int cz;
-    private final int radius;
+    private final double cx, cy, cz;
+    private final double r;
 
+    /** 由方块锚点归一化构造（选区 create 入口）。 */
     public SphereShape(Vec3i center, Vec3i surface) {
-        super(java.util.Arrays.asList(center, surface), false, computeBounds(center, surface));
-        this.cx = center.x;
-        this.cy = center.y;
-        this.cz = center.z;
-        this.radius = computeRadius(center, surface);
+        super(new Bounds(Math.min(center.x, surface.x) - 1.0D, Math.min(center.y, surface.y) - 1.0D,
+                Math.min(center.z, surface.z) - 1.0D, Math.max(center.x, surface.x) + 1.0D,
+                Math.max(center.y, surface.y) + 1.0D, Math.max(center.z, surface.z) + 1.0D));
+        this.cx = center.x + 0.5D;
+        this.cy = center.y + 0.5D;
+        this.cz = center.z + 0.5D;
+        this.r = Math.sqrt(sq(surface.x - center.x) + sq(surface.y - center.y) + sq(surface.z - center.z));
     }
 
-    private static Bounds computeBounds(Vec3i center, Vec3i surface) {
-        int r = computeRadius(center, surface);
-        return new Bounds(center.x - r, center.y - r, center.z - r,
-                center.x + r, center.y + r, center.z + r);
+    /** 由连续几何参数反序列化构造（NBT / Buf 入口）。 */
+    private SphereShape(Bounds bounds, double cx, double cy, double cz, double r) {
+        super(bounds);
+        this.cx = cx;
+        this.cy = cy;
+        this.cz = cz;
+        this.r = r;
     }
 
-    /**
-     * 由球心/球面点求整数半径。坐标差与平方和一律用 {@code double}：
-     * int 相乘在单轴跨度超过 ~46340 格时就会溢出（{@code dx*dx} 回绕甚至变负，
-     * {@code Math.sqrt(负数)=NaN}、{@code (int)NaN=0}），而 {@code /aef pos1}…{@code pos2}
-     * 的锚点是玩家坐标，大服务器上很容易相差数万格。用 double 计算不会溢出，
-     * 结果再收窄到 int 上限（正常世界坐标远达不到该上限）。
-     */
-    private static int computeRadius(Vec3i center, Vec3i surface) {
-        double dx = (double) surface.x - center.x;
-        double dy = (double) surface.y - center.y;
-        double dz = (double) surface.z - center.z;
-        double r = Math.sqrt(dx * dx + dy * dy + dz * dz);
-        return r >= Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) r;
+    private static double sq(double v) {
+        return v * v;
     }
 
     @Override
@@ -53,29 +50,22 @@ public class SphereShape extends AreaShape {
 
     @Override
     public boolean contains(double x, double y, double z) {
-        // 坐标差与平方和用 double：int 平方和在大半径（三个平方相加）时会溢出 int，
-        // 回绕成小数后会把球外方块误判为球内。见 computeRadius 的溢出说明。
-        double dx = (double) Vec3i.floor(x) - cx;
-        double dy = (double) Vec3i.floor(y) - cy;
-        double dz = (double) Vec3i.floor(z) - cz;
-        return dx * dx + dy * dy + dz * dz <= (double) radius * radius + 0.001D;
+        double dx = x - cx;
+        double dy = y - cy;
+        double dz = z - cz;
+        return dx * dx + dy * dy + dz * dz <= r * r;
     }
 
     @Override
     protected List<Edge> computeEdges() {
         List<Edge> result = new ArrayList<>();
-        double xc = cx + 0.5D;
-        double yc = cy + 0.5D;
-        double zc = cz + 0.5D;
-        // 纬线圈：赤道 + ±30°、±60° 纬度（高度 = R*sin，环半径 = sqrt(R²-h²)）
-        ring(result, xc, yc, zc, radius);
+        ring(result, cx, cy, cz, r);
         double halfSqrt3 = Math.sqrt(3.0D) / 2.0D;
         for (double sinLat : new double[]{0.5D, -0.5D, halfSqrt3, -halfSqrt3}) {
-            double h = radius * sinLat;
-            double rr = Math.sqrt((double) radius * radius - h * h);
-            ring(result, xc, yc + h, zc, rr);
+            double h = r * sinLat;
+            double rr = Math.sqrt(r * r - h * h);
+            ring(result, cx, cy + h, cz, rr);
         }
-        // 经线圈：垂直大圆每 30° 一个（含原 XY/ZY 平面），共 6 个圆 = 12 条经线
         for (int m = 0; m < 6; m++) {
             double theta = Math.PI * m / 6.0D;
             double cosT = Math.cos(theta);
@@ -85,11 +75,11 @@ public class SphereShape extends AreaShape {
             double prevZ = 0.0D;
             for (int i = 0; i <= RING_SEGMENTS; i++) {
                 double angle = 2.0D * Math.PI * i / RING_SEGMENTS;
-                double ca = Math.cos(angle) * radius;
-                double sa = Math.sin(angle) * radius;
-                double x = xc + ca * cosT;
-                double z = zc + ca * sinT;
-                double y = yc + sa;
+                double ca = Math.cos(angle) * r;
+                double sa = Math.sin(angle) * r;
+                double x = cx + ca * cosT;
+                double z = cz + ca * sinT;
+                double y = cy + sa;
                 if (i > 0) {
                     line(result, prevX, prevY, prevZ, x, y, z);
                 }
@@ -101,16 +91,15 @@ public class SphereShape extends AreaShape {
         return result;
     }
 
-    /** 在高度 y 处绕 XZ 平面画一圈水平环。 */
-    private static void ring(List<Edge> result, double xc, double y, double zc, double r) {
+    private static void ring(List<Edge> result, double cx, double cy, double cz, double r) {
         double prevX = 0.0D;
         double prevZ = 0.0D;
         for (int i = 0; i <= RING_SEGMENTS; i++) {
             double angle = 2.0D * Math.PI * i / RING_SEGMENTS;
-            double x = xc + r * Math.cos(angle);
-            double z = zc + r * Math.sin(angle);
+            double x = cx + r * Math.cos(angle);
+            double z = cz + r * Math.sin(angle);
             if (i > 0) {
-                line(result, prevX, y, prevZ, x, y, z);
+                line(result, prevX, cy, prevZ, x, cy, z);
             }
             prevX = x;
             prevZ = z;
@@ -119,5 +108,53 @@ public class SphereShape extends AreaShape {
 
     private static void line(List<Edge> result, double x1, double y1, double z1, double x2, double y2, double z2) {
         result.add(new Edge(x1, y1, z1, x2, y2, z2));
+    }
+
+    // ===================== 序列化 =====================
+
+    @Override
+    public void writeToNbt(NBTTagCompound tag) {
+        tag.setDouble("cx", cx);
+        tag.setDouble("cy", cy);
+        tag.setDouble("cz", cz);
+        tag.setDouble("r", r);
+    }
+
+    @Override
+    public void writeToBuf(ByteBuf buf) {
+        buf.writeDouble(cx);
+        buf.writeDouble(cy);
+        buf.writeDouble(cz);
+        buf.writeDouble(r);
+    }
+
+    /** NBT 反序列化（type 键由 {@link ShapeTypes} 分派）。 */
+    public static SphereShape fromNbt(NBTTagCompound tag) {
+        return from(bb(tag), tag.getDouble("cx"), tag.getDouble("cy"), tag.getDouble("cz"), tag.getDouble("r"));
+    }
+
+    /** Buf 反序列化（type 键由 {@link ShapeTypes} 分派）。 */
+    public static SphereShape fromBuf(ByteBuf buf) {
+        double cx = buf.readDouble();
+        double cy = buf.readDouble();
+        double cz = buf.readDouble();
+        double r = buf.readDouble();
+        return from(new Bounds(cx - r - 1, cy - r - 1, cz - r - 1, cx + r + 1, cy + r + 1, cz + r + 1),
+                cx, cy, cz, r);
+    }
+
+    private static Bounds bb(NBTTagCompound tag) {
+        double cx = tag.getDouble("cx");
+        double cy = tag.getDouble("cy");
+        double cz = tag.getDouble("cz");
+        double r = tag.getDouble("r");
+        return new Bounds(cx - r - 1, cy - r - 1, cz - r - 1, cx + r + 1, cy + r + 1, cz + r + 1);
+    }
+
+    private static SphereShape from(Bounds b, double cx, double cy, double cz, double r) {
+        if (r < 0) {
+            return null;
+        }
+        return new SphereShape(b, cx, cy, cz, r);
     }
 }

@@ -2,25 +2,35 @@ package org.soraworld.areaeffect.common.shape;
 
 import io.netty.buffer.ByteBuf;
 import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.nbt.NBTTagList;
 import org.soraworld.areaeffect.common.util.Vec3d;
-import org.soraworld.areaeffect.common.util.Vec3i;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
 /**
- * 区域形状抽象基类。所有选区形状（柱状体族 / 球体）共用锚点列表语义：
- * 形状由构造时传入的锚点决定，渲染用 {@link #edges()}，判定用 {@link #contains}。
+ * 区域形状抽象基类。
+ *
+ * <p>几何模型：形状以 <b>double 连续坐标</b>存储，判定与线框都直接作用于连续空间，
+ * 不再依赖"方块号 → floor → 方块代表点"的离散化。玩家判定点取脚下碰撞箱底部中心
+ * （{@code Vec3d(Entity)}），三个轴的归属规则如下：
+ * <ul>
+ *   <li>矩形族（box / square_pillar）：三轴一律取<b>完整包围体</b>，范围 {@code [min, max)}（max 已有 +1 包络）；</li>
+ *   <li>圆柱 / 多边形柱族：X-Z 取<b>方块中心点</b>坐标即圆心/顶点，Y 取<b>外包络</b> {@code [minY, maxY)}；</li>
+ *   <li>球：X/Y/Z 全部取方块中心（球心 + 三维半径）。</li>
+ * </ul>
+ *
+ * <p>因此连续几何是唯一真源：判定、线框、网络/NBT 序列化全部写到同一份 double 参数上，
+ * 外力（如手工改 NBT）可以把它改成任意实数，判定与线框都会随之一致地反映。
+ * 方块锚点（{@code Vec3i}）只在选区与 {@code create} 归一化时出现，不进入本层。
  */
 public abstract class AreaShape {
 
-    /** 闭区间方块坐标包围盒。通天柱 FULL 高度下 minY=0、maxY=255。 */
+    /** 连续坐标的半开包围体 {@code [min, max)}。max 已含"包围体外沿 +1"或"半径外沿"。 */
     public static final class Bounds {
-        public final int minX, minY, minZ, maxX, maxY, maxZ;
+        public final double minX, minY, minZ, maxX, maxY, maxZ;
 
-        public Bounds(int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {
+        public Bounds(double minX, double minY, double minZ, double maxX, double maxY, double maxZ) {
             this.minX = minX;
             this.minY = minY;
             this.minZ = minZ;
@@ -30,7 +40,7 @@ public abstract class AreaShape {
         }
     }
 
-    /** 渲染线段（世界绝对坐标，线框外沿已 +1）。 */
+    /** 渲染线段（世界绝对坐标，即判定边界的连续曲线本身）。 */
     public static final class Edge {
         public final double x1, y1, z1, x2, y2, z2;
 
@@ -44,11 +54,9 @@ public abstract class AreaShape {
         }
     }
 
-    /** 柱状体全高模式下的世界高度上界（闭区间）。 */
+    /** 世界建筑高度上界（方块号闭区间最大 255，连续范围为 [0,256)）。 */
     public static final int FULL_MAX_Y = 255;
 
-    protected final List<Vec3i> anchors;
-    protected final boolean closed;
     protected final Bounds bounds;
 
     /**
@@ -57,35 +65,28 @@ public abstract class AreaShape {
      */
     private volatile List<Edge> cachedEdges = null;
 
-    protected AreaShape(List<Vec3i> anchors, boolean closed, Bounds bounds) {
-        this.anchors = anchors == null ? new ArrayList<>() : new ArrayList<>(anchors);
-        this.closed = closed;
+    protected AreaShape(Bounds bounds) {
         this.bounds = bounds;
     }
 
     public abstract String typeId();
 
+    /** 点是否在区域内。判定点即玩家脚下碰撞箱底部中心，走连续几何。 */
     public abstract boolean contains(double x, double y, double z);
 
     /**
-     * AABB 包围盒级包含粗判（保守）：坐标落在形状的轴对齐包围盒内才可能真正命中。
-     * 用于"玩家所在区域"查询时<b>先粗筛快速排除远距离区域</b>，命中的再走精确 {@link #contains}，
-     * 避免每次查询都对全部区域做昂贵的点在多边形判定。
-     *
-     * <p><b>下界闭、上界开</b>：{@code bounds} 是<b>闭区间方块坐标</b>，而 {@link #contains} 先把世界坐标
-     * {@code floor} 成方块号再比，所以方块 {@code maxX} 对应的世界坐标区间是 {@code [maxX, maxX+1)}。
-     * 上界若写成 {@code x <= maxX}（闭区间），站在最外一圈方块内的玩家就会被粗筛先排除掉 ——
-     * 区域在 +X / +Z 两侧各丢 1 格厚的外壳（顶面在脚部 y 非整数时同样丢），
-     * 单格厚/单层高的区域甚至会彻底失效。此处判据必须与 {@link #contains} 的 floor 语义对齐。
+     * AABB 包围盒级包含粗判（保守）：坐标落在形状的轴对齐包围体内才可能真正命中。
+     * 用于"玩家所在区域"查询时<b>先粗筛快速排除远距离区域</b>，命中的再走精确 {@link #contains}。
+     * <b>下界闭、上界开</b>：与 {@code contains} 的连续语义对齐，保证粗筛是精确判定的超集。
      */
     public boolean boundsContains(double x, double y, double z) {
-        return x >= bounds.minX && x < bounds.maxX + 1.0D
-                && y >= bounds.minY && y < bounds.maxY + 1.0D
-                && z >= bounds.minZ && z < bounds.maxZ + 1.0D;
+        return x >= bounds.minX && x < bounds.maxX
+                && y >= bounds.minY && y < bounds.maxY
+                && z >= bounds.minZ && z < bounds.maxZ;
     }
 
     /**
-     * 渲染线段（世界绝对坐标，线框外沿已 +1）。
+     * 渲染线段（世界绝对坐标，即判定边界曲线本身）。
      *
      * <p>形状不可变，因此结果只计算一次并缓存：线框是<b>每帧</b>绘制的，而一次
      * {@link #computeEdges()} 会新建几百个 {@link Edge}（球体约 269 条、64 顶点多边形柱
@@ -103,74 +104,16 @@ public abstract class AreaShape {
     /** 各形状实际的线段构造；由 {@link #edges()} 缓存，不要直接调用。 */
     protected abstract List<Edge> computeEdges();
 
+    /** 区域中心（包围体中心），用于传送。 */
     public Vec3d center() {
-        return new Vec3d((bounds.minX + bounds.maxX + 1.0D) / 2.0D,
-                (bounds.minY + bounds.maxY + 1.0D) / 2.0D,
-                (bounds.minZ + bounds.maxZ + 1.0D) / 2.0D);
+        return new Vec3d((bounds.minX + bounds.maxX) / 2.0D,
+                (bounds.minY + bounds.maxY) / 2.0D,
+                (bounds.minZ + bounds.maxZ) / 2.0D);
     }
 
-    /**
-     * 序列化到 NBT：写 "anchors" 列表 + "closed"（type 键由 {@link ShapeTypes} 写入）。
-     */
-    public void writeToNbt(NBTTagCompound tag) {
-        NBTTagList list = new NBTTagList();
-        for (Vec3i anchor : anchors) {
-            NBTTagCompound anchorTag = new NBTTagCompound();
-            anchorTag.setInteger("x", anchor.x);
-            anchorTag.setInteger("y", anchor.y);
-            anchorTag.setInteger("z", anchor.z);
-            list.appendTag(anchorTag);
-        }
-        tag.setTag("anchors", list);
-        tag.setBoolean("closed", closed);
-    }
+    /** 序列化到 NBT：写入本形状的连续几何参数（type 键由 {@link ShapeTypes} 写入）。 */
+    public abstract void writeToNbt(NBTTagCompound tag);
 
-    /**
-     * 序列化到网络缓冲：写锚点数 + 各锚点坐标 + closed（type 键由 {@link ShapeTypes} 写入）。
-     *
-     * <p>写出的条数<b>必须</b>与 {@link #readAnchorsBuf} 能读回的条数同源（同样受
-     * {@link Selection#MAX_ANCHORS} 约束）：否则同一元素在收发两端的字节长度不一致，
-     * 包内后续元素会整体错位 —— 那正是上一轮 P0-3 修掉的失败模式。
-     */
-    public void writeToBuf(ByteBuf buf) {
-        int size = Math.min(anchors.size(), Selection.MAX_ANCHORS);
-        buf.writeInt(size);
-        for (int i = 0; i < size; i++) {
-            Vec3i anchor = anchors.get(i);
-            buf.writeInt(anchor.x);
-            buf.writeInt(anchor.y);
-            buf.writeInt(anchor.z);
-        }
-        buf.writeBoolean(closed);
-    }
-
-    /**
-     * 从 NBT 读回锚点列表（type 键由调用方 {@link ShapeTypes} 分派）。
-     * 与 buf 路径同源地收窄到 {@link Selection#MAX_ANCHORS}：正常选区不可能超过该值，
-     * 超限只可能来自被手工编辑或异版本的存档，截断好过让它在网络上被静默截断。
-     */
-    protected static List<Vec3i> readAnchorsNbt(NBTTagCompound tag) {
-        List<Vec3i> anchors = new ArrayList<>();
-        NBTTagList list = tag.getTagList("anchors", 10);
-        int count = Math.min(list.tagCount(), Selection.MAX_ANCHORS);
-        for (int i = 0; i < count; i++) {
-            NBTTagCompound anchorTag = list.getCompoundTagAt(i);
-            anchors.add(new Vec3i(anchorTag.getInteger("x"), anchorTag.getInteger("y"), anchorTag.getInteger("z")));
-        }
-        return anchors;
-    }
-
-    /**
-     * 从网络缓冲读回锚点列表（type 键由调用方 {@link ShapeTypes} 分派）。
-     * 锚点数量上限与选区一致（{@link Selection#MAX_ANCHORS}），防恶意包撑爆包体与内存。
-     * 注意：无论能否构成有效形状，本方法都会读完声明的锚点，保持元素边界对齐。
-     */
-    protected static List<Vec3i> readAnchorsBuf(ByteBuf buf) {
-        int size = Math.min(Math.max(buf.readInt(), 0), Selection.MAX_ANCHORS);
-        List<Vec3i> anchors = new ArrayList<>();
-        for (int i = 0; i < size; i++) {
-            anchors.add(new Vec3i(buf.readInt(), buf.readInt(), buf.readInt()));
-        }
-        return anchors;
-    }
+    /** 序列化到网络缓冲：写入本形状的连续几何参数（type 键由 {@link ShapeTypes#writeBuf} 写入）。 */
+    public abstract void writeToBuf(ByteBuf buf);
 }

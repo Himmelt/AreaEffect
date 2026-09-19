@@ -1,6 +1,7 @@
 package org.soraworld.areaeffect.common.shape;
 
-import org.soraworld.areaeffect.common.util.Vec3i;
+import io.netty.buffer.ByteBuf;
+import net.minecraft.nbt.NBTTagCompound;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -27,8 +28,7 @@ public class DimensionShape extends AreaShape {
     public static final int WORLD_LIMIT = 30_000_000;
 
     public DimensionShape() {
-        super(new ArrayList<Vec3i>(), false,
-                new Bounds(-WORLD_LIMIT, 0, -WORLD_LIMIT, WORLD_LIMIT, FULL_MAX_Y, WORLD_LIMIT));
+        super(new Bounds(-WORLD_LIMIT, 0, -WORLD_LIMIT, WORLD_LIMIT, FULL_MAX_Y + 1.0D, WORLD_LIMIT));
     }
 
     @Override
@@ -50,5 +50,15 @@ public class DimensionShape extends AreaShape {
     protected List<Edge> computeEdges() {
         // 整个维度无边界线框可画；区域列表的详情文案足以表达其范围
         return new ArrayList<>();
+    }
+
+    @Override
+    public void writeToNbt(NBTTagCompound tag) {
+        // 维度形状无几何参数，type 键已足以还原
+    }
+
+    @Override
+    public void writeToBuf(ByteBuf buf) {
+        // 维度形状无几何参数
     }
 }

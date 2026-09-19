@@ -1,5 +1,8 @@
 package org.soraworld.areaeffect.common.shape;
 
+import io.netty.buffer.ByteBuf;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.nbt.NBTTagList;
 import org.soraworld.areaeffect.common.util.Vec3i;
 
 import java.util.ArrayList;
@@ -15,12 +18,17 @@ import java.util.List;
  *   <li>POLYGON+BOUNDED → polygon 有界多边形柱</li>
  *   <li>POLYGON+FULL → polygon_pillar 通天多边形柱</li>
  * </ul>
- * 锚点约定（选点顺序）：
+ *
+ * <p>归一化语义（锚点为方块，创建时转成连续几何）：
  * <ul>
- *   <li>RECT：anchors[0]、anchors[1] 为两点；XZ 取 min/max；BOUNDED 时 Y 取两锚点 min/max，FULL 时 0..255</li>
- *   <li>CIRCLE：anchors[0] 为圆心，anchors[1] 为半径点；半径 = 水平距离；BOUNDED 时 Y 取两锚点 min/max</li>
- *   <li>POLYGON：全部锚点为 XZ 顶点；有界高度 = 全部顶点 Y 的 min/max（通天则忽略 Y）</li>
+ *   <li>RECT：X/Z/Y 三轴都取<b>方块包络</b> {@code [min, max)}（max = 方块号 + 1）；</li>
+ *   <li>CIRCLE：圆心 = 中心锚点方块中心 {@code (a0.x+0.5, a0.z+0.5)}，半径 = 圆心到半径点中心在 X-Z 的连续距离
+ *       （不做 {@code (int)} 截断；半径点方块中心恰在圆周上，判定 `{@code <=}` ⇒ 判入，修掉旧的半径点出局）；</li>
+ *   <li>POLYGON：顶点 = 各锚点方块中心，X-Z 判定走点在多边形内（含顶点区块中心，均在边界上判入）；</li>
+ *   <li>BOUNDED 时 Y 取外包络 {@code [minY, maxY)}，FULL 时 Y 不参与。</li>
  * </ul>
+ * 即"X-Z 中心 + Y 外包络"适用于圆柱/多边形柱，RECT 则三轴包络。判定点即玩家脚下碰撞箱底部中心
+ * （{@code contains(x,y,z)}），直接喂连续几何。
  */
 public class PrismShape extends AreaShape {
 
@@ -31,80 +39,120 @@ public class PrismShape extends AreaShape {
     public static final int RING_SEGMENTS = 24;
 
     private final Section section;
-    private final Height height;
-    private final int cx;
-    private final int cz;
-    private final int radius;
+    private final boolean full;
 
+    // 连续几何字段：RECT 用 minX..maxZ（包围体）；CIRCLE 用 cx/cz/r + Y 区间；POLYGON 用 xs/zs + Y 区间。
+    private final double minX, maxX, minY, maxY, minZ, maxZ;
+    private final double cx, cz, r;
+    private final double[] xs, zs;
+
+    /** 由方块锚点归一化构造（选区 create 入口）。锚点不足时取防御值，但不判 null（调用方已用 canBuild 把关）。 */
     public PrismShape(Section section, Height height, List<Vec3i> anchors, boolean closed) {
-        super(anchors, closed, computeBounds(section, height, anchors, closed));
+        super(computeBounds(section, height, anchors));
         this.section = section;
-        this.height = height;
-        // 防御：CIRCLE 依赖 anchors[0] 圆心与 anchors[1] 半径点，锚点不足时退化为无效零圆，
-        // 避免畸形存档/网络包在反序列化时直接越界抛错
-        this.cx = section == Section.CIRCLE && this.anchors.size() > 0 ? this.anchors.get(0).x : 0;
-        this.cz = section == Section.CIRCLE && this.anchors.size() > 0 ? this.anchors.get(0).z : 0;
-        this.radius = section == Section.CIRCLE && this.anchors.size() > 1
-                ? circleRadius(this.anchors.get(0), this.anchors.get(1))
-                : 0;
+        this.full = height == Height.FULL;
+        List<Vec3i> list = anchors == null ? new ArrayList<Vec3i>() : new ArrayList<>(anchors);
+        this.minX = bounds.minX;
+        this.maxX = bounds.maxX;
+        this.minY = bounds.minY;
+        this.maxY = bounds.maxY;
+        this.minZ = bounds.minZ;
+        this.maxZ = bounds.maxZ;
+        this.cx = !list.isEmpty() ? list.get(0).x + 0.5D : 0.0D;
+        this.cz = !list.isEmpty() ? list.get(0).z + 0.5D : 0.0D;
+        this.r = list.size() > 1 ? Math.hypot((double) list.get(1).x - list.get(0).x,
+                (double) list.get(1).z - list.get(0).z) : 0.0D;
+        this.xs = toCentersX(list);
+        this.zs = toCentersZ(list);
     }
 
-    /** 多边形顶点（全部锚点即顶点，XZ 取方块最小角；有界高度 = 顶点 Y 区间）。 */
-    public List<Vec3i> polygonVertices() {
-        return new ArrayList<>(anchors);
+    /** 由连续几何参数反序列化构造（NBT / Buf 入口）。 */
+    private PrismShape(Section section, boolean full, Bounds bounds,
+                       double cx, double cz, double r, double[] xs, double[] zs) {
+        super(bounds);
+        this.section = section;
+        this.full = full;
+        this.minX = bounds.minX;
+        this.maxX = bounds.maxX;
+        this.minY = bounds.minY;
+        this.maxY = bounds.maxY;
+        this.minZ = bounds.minZ;
+        this.maxZ = bounds.maxZ;
+        this.cx = cx;
+        this.cz = cz;
+        this.r = r;
+        this.xs = xs;
+        this.zs = zs;
+    }
+
+    private static double[] toCentersX(List<Vec3i> list) {
+        double[] a = new double[list.size()];
+        for (int i = 0; i < list.size(); i++) {
+            a[i] = list.get(i).x + 0.5D;
+        }
+        return a;
+    }
+
+    private static double[] toCentersZ(List<Vec3i> list) {
+        double[] a = new double[list.size()];
+        for (int i = 0; i < list.size(); i++) {
+            a[i] = list.get(i).z + 0.5D;
+        }
+        return a;
     }
 
     @Override
     public String typeId() {
         switch (section) {
             case RECT:
-                return height == Height.BOUNDED ? ShapeTypes.TYPE_BOX : ShapeTypes.TYPE_SQUARE_PILLAR;
+                return full ? ShapeTypes.TYPE_SQUARE_PILLAR : ShapeTypes.TYPE_BOX;
             case CIRCLE:
-                return height == Height.BOUNDED ? ShapeTypes.TYPE_CYLINDER : ShapeTypes.TYPE_ROUND_PILLAR;
+                return full ? ShapeTypes.TYPE_ROUND_PILLAR : ShapeTypes.TYPE_CYLINDER;
             default:
-                return height == Height.BOUNDED ? ShapeTypes.TYPE_POLYGON : ShapeTypes.TYPE_POLYGON_PILLAR;
+                return full ? ShapeTypes.TYPE_POLYGON_PILLAR : ShapeTypes.TYPE_POLYGON;
         }
     }
 
     @Override
     public boolean contains(double x, double y, double z) {
-        // 通天柱无视高度：Y 不参与判断
-        if (height == Height.BOUNDED && (y < bounds.minY || y >= bounds.maxY + 1.0D)) {
-            return false;
-        }
-        return sectionContains(Vec3i.floor(x), Vec3i.floor(z));
-    }
-
-    /** XZ 截面判定（方块坐标），与 {@link #contains} 的 XZ 判据一致。 */
-    boolean sectionContains(int bx, int bz) {
         switch (section) {
             case RECT:
-                return bx >= bounds.minX && bx <= bounds.maxX
-                        && bz >= bounds.minZ && bz <= bounds.maxZ;
+                if (x < minX || x >= maxX || z < minZ || z >= maxZ) {
+                    return false;
+                }
+                return full || (y >= minY && y < maxY);
             case CIRCLE: {
-                // double 计算，避免 int 平方和在大半径时溢出（见 circleRadius 注释）
-                double dx = (double) bx - cx;
-                double dz = (double) bz - cz;
-                return dx * dx + dz * dz <= (double) radius * radius + 0.001D;
+                double dx = x - cx;
+                double dz = z - cz;
+                if (dx * dx + dz * dz > r * r) {
+                    return false;
+                }
+                return full || (y >= minY && y < maxY);
             }
             default:
-                return polygonContains(bx, bz);
+                if (!full && (y < minY || y >= maxY)) {
+                    return false;
+                }
+                return polygonContains(x, z, xs, zs);
         }
     }
 
-    /** 射线法：点 (bx,bz) 是否在顶点多边形内（边界极小容差）。直接遍历 anchors，避免采样热路径分配。 */
-    private boolean polygonContains(int bx, int bz) {
-        int n = anchors.size();
+    /** 点 (px,pz) 是否在顶点中心多边形内（含边界，顶点方块中心即顶点必入）。偶数-奇数射线法。 */
+    private static boolean polygonContains(double px, double pz, double[] xs, double[] zs) {
+        int n = xs.length;
         if (n < 3) {
             return false;
         }
+        if (onAnyEdge(px, pz, xs, zs, 1.0e-9D)) {
+            return true;
+        }
         boolean inside = false;
         for (int i = 0, j = n - 1; i < n; j = i++) {
-            Vec3i vi = anchors.get(i);
-            Vec3i vj = anchors.get(j);
-            if ((vi.z > bz) != (vj.z > bz)) {
-                double cx = (double) (vj.x - vi.x) * (bz - vi.z) / (double) (vj.z - vi.z) + vi.x;
-                if (bx < cx) {
+            double xi = xs[i], zi = zs[i];
+            double xj = xs[j], zj = zs[j];
+            if ((zi > pz) != (zj > pz)) {
+                double intersect = (xj - xi) * (pz - zi) / (zj - zi) + xi;
+                if (px < intersect) {
                     inside = !inside;
                 }
             }
@@ -112,17 +160,34 @@ public class PrismShape extends AreaShape {
         return inside;
     }
 
-    private static int circleRadius(Vec3i center, Vec3i surface) {
-        // 坐标差与平方和用 double：int 相乘在单轴跨度超过 ~46340 格时溢出，
-        // 会把半径算成 0（sqrt(负)=NaN、(int)NaN=0）或错误值。见 SphereShape.computeRadius。
-        double dx = (double) surface.x - center.x;
-        double dz = (double) surface.z - center.z;
-        double r = Math.sqrt(dx * dx + dz * dz);
-        return r >= Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) r;
+    private static boolean onAnyEdge(double px, double pz, double[] xs, double[] zs, double eps) {
+        int n = xs.length;
+        for (int i = 0, j = n - 1; i < n; j = i++) {
+            double ax = xs[i], az = zs[i];
+            double bx = xs[j], bz = zs[j];
+            double ex = bx - ax, ez = bz - az;
+            double len2 = ex * ex + ez * ez;
+            if (len2 < 1.0e-12D) {
+                continue;
+            }
+            double t = ((px - ax) * ex + (pz - az) * ez) / len2;
+            if (t < 0.0D) {
+                t = 0.0D;
+            } else if (t > 1.0D) {
+                t = 1.0D;
+            }
+            double ddx = px - (ax + ex * t);
+            double ddz = pz - (az + ez * t);
+            if (ddx * ddx + ddz * ddz <= eps * eps) {
+                return true;
+            }
+        }
+        return false;
     }
 
-    private static Bounds computeBounds(Section section, Height height, List<Vec3i> anchors, boolean closed) {
-        List<Vec3i> list = anchors == null ? new ArrayList<>() : new ArrayList<>(anchors);
+    /** 由锚点求包围体（连续半开范围）。CIRCLE/POLYGON 的 X-Z 含边界且取半径/顶点 ±1 的保守超集（粗筛用）。 */
+    private static Bounds computeBounds(Section section, Height height, List<Vec3i> anchors) {
+        List<Vec3i> list = anchors == null ? new ArrayList<Vec3i>() : new ArrayList<>(anchors);
         switch (section) {
             case RECT:
                 return rectBounds(height, list);
@@ -135,206 +200,401 @@ public class PrismShape extends AreaShape {
 
     private static Bounds rectBounds(Height height, List<Vec3i> list) {
         if (list.size() < 2) {
-            return new Bounds(0, 0, 0, 0, 0, 0);
+            return new Bounds(0, 0, 0, 1, 1, 1);
         }
         Vec3i a = list.get(0);
         Vec3i b = list.get(1);
-        int minX = Math.min(a.x, b.x);
-        int minZ = Math.min(a.z, b.z);
-        int maxX = Math.max(a.x, b.x);
-        int maxZ = Math.max(a.z, b.z);
+        double minX = Math.min(a.x, b.x);
+        double maxX = Math.max(a.x, b.x) + 1.0D;
+        double minZ = Math.min(a.z, b.z);
+        double maxZ = Math.max(a.z, b.z) + 1.0D;
         if (height == Height.FULL) {
-            return new Bounds(minX, 0, minZ, maxX, FULL_MAX_Y, maxZ);
+            return new Bounds(minX, 0, minZ, maxX, FULL_MAX_Y + 1.0D, maxZ);
         }
-        int minY = Math.min(a.y, b.y);
-        int maxY = Math.max(a.y, b.y);
+        double minY = Math.min(a.y, b.y);
+        double maxY = Math.max(a.y, b.y) + 1.0D;
         return new Bounds(minX, minY, minZ, maxX, maxY, maxZ);
     }
 
     private static Bounds circleBounds(Height height, List<Vec3i> list) {
         if (list.size() < 2) {
-            return new Bounds(0, 0, 0, 0, 0, 0);
+            return new Bounds(0, 0, 0, 1, 1, 1);
         }
-        Vec3i center = list.get(0);
-        Vec3i surface = list.get(1);
-        int r = circleRadius(center, surface);
-        int minX = center.x - r;
-        int maxX = center.x + r;
-        int minZ = center.z - r;
-        int maxZ = center.z + r;
+        Vec3i a0 = list.get(0);
+        Vec3i a1 = list.get(1);
+        double cx = a0.x + 0.5D;
+        double cz = a0.z + 0.5D;
+        double r = Math.hypot((double) a1.x - a0.x, (double) a1.z - a0.z);
         if (height == Height.FULL) {
-            return new Bounds(minX, 0, minZ, maxX, FULL_MAX_Y, maxZ);
+            return new Bounds(cx - r - 1.0D, 0, cz - r - 1.0D, cx + r + 1.0D, FULL_MAX_Y + 1.0D, cz + r + 1.0D);
         }
-        int minY = Math.min(center.y, surface.y);
-        int maxY = Math.max(center.y, surface.y);
-        return new Bounds(minX, minY, minZ, maxX, maxY, maxZ);
+        double minY = Math.min(a0.y, a1.y);
+        double maxY = Math.max(a0.y, a1.y) + 1.0D;
+        return new Bounds(cx - r - 1.0D, minY, cz - r - 1.0D, cx + r + 1.0D, maxY, cz + r + 1.0D);
     }
 
     private static Bounds polygonBounds(Height height, List<Vec3i> list) {
         if (list.size() < 3) {
-            return new Bounds(0, 0, 0, 0, 0, 0);
+            return new Bounds(0, 0, 0, 1, 1, 1);
         }
-        int minX = Integer.MAX_VALUE;
-        int minZ = Integer.MAX_VALUE;
-        int maxX = Integer.MIN_VALUE;
-        int maxZ = Integer.MIN_VALUE;
-        int minY = Integer.MAX_VALUE;
-        int maxY = Integer.MIN_VALUE;
+        double lox = Double.MAX_VALUE, hix = -Double.MAX_VALUE;
+        double loz = Double.MAX_VALUE, hiz = -Double.MAX_VALUE;
+        int minY = Integer.MAX_VALUE, maxY = Integer.MIN_VALUE;
         for (Vec3i v : list) {
-            minX = Math.min(minX, v.x);
-            minZ = Math.min(minZ, v.z);
-            maxX = Math.max(maxX, v.x);
-            maxZ = Math.max(maxZ, v.z);
+            double vx = v.x + 0.5D;
+            double vz = v.z + 0.5D;
+            lox = Math.min(lox, vx);
+            hix = Math.max(hix, vx);
+            loz = Math.min(loz, vz);
+            hiz = Math.max(hiz, vz);
             minY = Math.min(minY, v.y);
             maxY = Math.max(maxY, v.y);
         }
         if (height == Height.FULL) {
-            return new Bounds(minX, 0, minZ, maxX, FULL_MAX_Y, maxZ);
+            return new Bounds(lox - 1.0D, 0, loz - 1.0D, hix + 1.0D, FULL_MAX_Y + 1.0D, hiz + 1.0D);
         }
-        return new Bounds(minX, minY, minZ, maxX, maxY, maxZ);
+        return new Bounds(lox - 1.0D, minY, loz - 1.0D, hix + 1.0D, maxY + 1.0D, hiz + 1.0D);
     }
 
     @Override
     protected List<Edge> computeEdges() {
         List<Edge> result = new ArrayList<>();
-        if (height == Height.FULL) {
-            // 通天柱：每 64 格渲染一个横向围栏 + 贯穿竖棱
-            double top = bounds.maxY + 1.0D;
-            for (int y = 0; y <= bounds.maxY + 1; y += 64) {
+        if (full) {
+            double top = FULL_MAX_Y + 1.0D;
+            for (int y = 0; y <= FULL_MAX_Y + 1; y += 64) {
                 horizontalOutline(result, y);
             }
-            verticalLines(result, top);
+            verticalLines(result, 0.0D, top);
             return result;
         }
         switch (section) {
             case RECT:
-                boxEdges(result, bounds.minX, bounds.minY, bounds.minZ,
-                        bounds.maxX + 1.0D, bounds.maxY + 1.0D, bounds.maxZ + 1.0D);
+                boxEdges(result, minX, minY, minZ, maxX, maxY, maxZ);
                 break;
             case CIRCLE:
-                circleEdges(result);
+                circleEdges(result, cx, cz, r, minY, maxY);
                 break;
             default:
-                polygonEdges(result);
+                polygonEdges(result, xs, zs, minY, maxY);
                 break;
         }
         return result;
     }
 
-    /** 通天柱：在指定 Y 高度绘制该截面的横向轮廓（围栏）。 */
     private void horizontalOutline(List<Edge> result, int y) {
         switch (section) {
             case RECT:
-                line(result, bounds.minX, y, bounds.minZ, bounds.maxX + 1.0D, y, bounds.minZ);
-                line(result, bounds.maxX + 1.0D, y, bounds.minZ, bounds.maxX + 1.0D, y, bounds.maxZ + 1.0D);
-                line(result, bounds.maxX + 1.0D, y, bounds.maxZ + 1.0D, bounds.minX, y, bounds.maxZ + 1.0D);
-                line(result, bounds.minX, y, bounds.maxZ + 1.0D, bounds.minX, y, bounds.minZ);
+                outlineRect(result, minX, maxX, minZ, maxZ, y);
                 break;
-            case CIRCLE: {
-                double xc = cx + 0.5D;
-                double zc = cz + 0.5D;
-                for (int i = 0; i < RING_SEGMENTS; i++) {
-                    double a1 = 2.0D * Math.PI * i / RING_SEGMENTS;
-                    double a2 = 2.0D * Math.PI * (i + 1) / RING_SEGMENTS;
-                    line(result, xc + radius * Math.cos(a1), y, zc + radius * Math.sin(a1),
-                            xc + radius * Math.cos(a2), y, zc + radius * Math.sin(a2));
-                }
+            case CIRCLE:
+                ring(result, cx, cz, r, y);
                 break;
-            }
-            default: {
-                List<Vec3i> verts = polygonVertices();
-                int n = verts.size();
-                for (int i = 0; i < n; i++) {
-                    Vec3i a = verts.get(i);
-                    Vec3i b = verts.get((i + 1) % n);
-                    line(result, a.x, y, a.z, b.x, y, b.z);
-                }
+            default:
+                outlinePolygon(result, xs, zs, y);
                 break;
-            }
         }
     }
 
-    /** 通天柱：贯穿全高的竖棱。 */
-    private void verticalLines(List<Edge> result, double top) {
-        double bottom = 0.0D;
+    private static void outlineRect(List<Edge> result, double minX, double maxX, double minZ, double maxZ, double y) {
+        line(result, minX, y, minZ, maxX, y, minZ);
+        line(result, maxX, y, minZ, maxX, y, maxZ);
+        line(result, maxX, y, maxZ, minX, y, maxZ);
+        line(result, minX, y, maxZ, minX, y, minZ);
+    }
+
+    private static void outlinePolygon(List<Edge> result, double[] xs, double[] zs, double y) {
+        int n = xs.length;
+        for (int i = 0; i < n; i++) {
+            int nx = (i + 1) % n;
+            line(result, xs[i], y, zs[i], xs[nx], y, zs[nx]);
+        }
+    }
+
+    private static void ring(List<Edge> result, double cx, double cz, double r, double y) {
+        for (int i = 0; i < RING_SEGMENTS; i++) {
+            double a1 = 2.0D * Math.PI * i / RING_SEGMENTS;
+            double a2 = 2.0D * Math.PI * (i + 1) / RING_SEGMENTS;
+            line(result, cx + r * Math.cos(a1), y, cz + r * Math.sin(a1),
+                    cx + r * Math.cos(a2), y, cz + r * Math.sin(a2));
+        }
+    }
+
+    private void verticalLines(List<Edge> result, double bottom, double top) {
         switch (section) {
             case RECT:
-                line(result, bounds.minX, bottom, bounds.minZ, bounds.minX, top, bounds.minZ);
-                line(result, bounds.maxX + 1.0D, bottom, bounds.minZ, bounds.maxX + 1.0D, top, bounds.minZ);
-                line(result, bounds.maxX + 1.0D, bottom, bounds.maxZ + 1.0D, bounds.maxX + 1.0D, top, bounds.maxZ + 1.0D);
-                line(result, bounds.minX, bottom, bounds.maxZ + 1.0D, bounds.minX, top, bounds.maxZ + 1.0D);
+                line(result, minX, bottom, minZ, minX, top, minZ);
+                line(result, maxX, bottom, minZ, maxX, top, minZ);
+                line(result, maxX, bottom, maxZ, maxX, top, maxZ);
+                line(result, minX, bottom, maxZ, minX, top, maxZ);
                 break;
-            case CIRCLE: {
-                double xc = cx + 0.5D;
-                double zc = cz + 0.5D;
+            case CIRCLE:
                 for (int i = 0; i < RING_SEGMENTS; i++) {
                     double a = 2.0D * Math.PI * i / RING_SEGMENTS;
-                    double x = xc + radius * Math.cos(a);
-                    double z = zc + radius * Math.sin(a);
+                    double x = cx + r * Math.cos(a);
+                    double z = cz + r * Math.sin(a);
                     line(result, x, bottom, z, x, top, z);
                 }
                 break;
-            }
             default:
-                for (Vec3i v : polygonVertices()) {
-                    line(result, v.x, bottom, v.z, v.x, top, v.z);
+                for (int i = 0; i < xs.length; i++) {
+                    line(result, xs[i], bottom, zs[i], xs[i], top, zs[i]);
                 }
                 break;
         }
     }
 
-    private void boxEdges(List<Edge> result, double x1, double y1, double z1, double x2, double y2, double z2) {
-        line(result, x1, y1, z1, x2, y1, z1);
-        line(result, x2, y1, z1, x2, y1, z2);
-        line(result, x2, y1, z2, x1, y1, z2);
-        line(result, x1, y1, z2, x1, y1, z1);
-        line(result, x1, y2, z1, x2, y2, z1);
-        line(result, x2, y2, z1, x2, y2, z2);
-        line(result, x2, y2, z2, x1, y2, z2);
-        line(result, x1, y2, z2, x1, y2, z1);
+    private static void boxEdges(List<Edge> result, double x1, double y1, double z1, double x2, double y2, double z2) {
+        outlineRect(result, x1, x2, z1, z2, y1);
+        outlineRect(result, x1, x2, z1, z2, y2);
         line(result, x1, y1, z1, x1, y2, z1);
         line(result, x2, y1, z1, x2, y2, z1);
         line(result, x2, y1, z2, x2, y2, z2);
         line(result, x1, y1, z2, x1, y2, z2);
     }
 
-    private void circleEdges(List<Edge> result) {
-        double xc = cx + 0.5D;
-        double zc = cz + 0.5D;
-        double y0 = bounds.minY;
-        double y1 = bounds.maxY + 1.0D;
-        double[] ringX = new double[RING_SEGMENTS + 1];
-        double[] ringZ = new double[RING_SEGMENTS + 1];
-        for (int i = 0; i <= RING_SEGMENTS; i++) {
-            double angle = 2.0D * Math.PI * i / RING_SEGMENTS;
-            ringX[i] = xc + radius * Math.cos(angle);
-            ringZ[i] = zc + radius * Math.sin(angle);
-        }
+    private static void circleEdges(List<Edge> result, double cx, double cz, double r, double y0, double y1) {
+        ring(result, cx, cz, r, y0);
+        ring(result, cx, cz, r, y1);
         for (int i = 0; i < RING_SEGMENTS; i++) {
-            line(result, ringX[i], y0, ringZ[i], ringX[i + 1], y0, ringZ[i + 1]);
-            line(result, ringX[i], y1, ringZ[i], ringX[i + 1], y1, ringZ[i + 1]);
-            line(result, ringX[i], y0, ringZ[i], ringX[i], y1, ringZ[i]);
+            double a = 2.0D * Math.PI * i / RING_SEGMENTS;
+            line(result, cx + r * Math.cos(a), y0, cz + r * Math.sin(a),
+                    cx + r * Math.cos(a), y1, cz + r * Math.sin(a));
         }
     }
 
-    private void polygonEdges(List<Edge> result) {
-        List<Vec3i> verts = polygonVertices();
-        if (verts.size() < 3) {
-            return;
-        }
-        double y0 = bounds.minY;
-        double y1 = bounds.maxY + 1.0D;
-        int n = verts.size();
-        for (int i = 0; i < n; i++) {
-            Vec3i a = verts.get(i);
-            Vec3i b = verts.get((i + 1) % n);
-            line(result, a.x, y0, a.z, b.x, y0, b.z);
-            line(result, a.x, y1, a.z, b.x, y1, b.z);
-            line(result, a.x, y0, a.z, a.x, y1, a.z);
+    private static void polygonEdges(List<Edge> result, double[] xs, double[] zs, double y0, double y1) {
+        outlinePolygon(result, xs, zs, y0);
+        outlinePolygon(result, xs, zs, y1);
+        for (int i = 0; i < xs.length; i++) {
+            line(result, xs[i], y0, zs[i], xs[i], y1, zs[i]);
         }
     }
 
     private static void line(List<Edge> result, double x1, double y1, double z1, double x2, double y2, double z2) {
         result.add(new Edge(x1, y1, z1, x2, y2, z2));
+    }
+
+    // ===================== 序列化 =====================
+
+    @Override
+    public void writeToNbt(NBTTagCompound tag) {
+        switch (section) {
+            case RECT:
+                tag.setDouble("minX", minX);
+                tag.setDouble("maxX", maxX);
+                tag.setDouble("minY", minY);
+                tag.setDouble("maxY", maxY);
+                tag.setDouble("minZ", minZ);
+                tag.setDouble("maxZ", maxZ);
+                break;
+            case CIRCLE:
+                tag.setDouble("cx", cx);
+                tag.setDouble("cz", cz);
+                tag.setDouble("r", r);
+                if (!full) {
+                    tag.setDouble("minY", minY);
+                    tag.setDouble("maxY", maxY);
+                }
+                break;
+            default:
+                writePolygonNbt(tag, xs, zs);
+                if (!full) {
+                    tag.setDouble("minY", minY);
+                    tag.setDouble("maxY", maxY);
+                }
+                break;
+        }
+    }
+
+    private static void writePolygonNbt(NBTTagCompound tag, double[] xs, double[] zs) {
+        NBTTagList verts = new NBTTagList();
+        int count = Math.min(xs.length, Selection.MAX_ANCHORS);
+        for (int i = 0; i < count; i++) {
+            NBTTagCompound c = new NBTTagCompound();
+            c.setDouble("x", xs[i]);
+            c.setDouble("z", zs[i]);
+            verts.appendTag(c);
+        }
+        tag.setTag("verts", verts);
+    }
+
+    @Override
+    public void writeToBuf(ByteBuf buf) {
+        switch (section) {
+            case RECT:
+                buf.writeDouble(minX);
+                buf.writeDouble(maxX);
+                buf.writeDouble(minY);
+                buf.writeDouble(maxY);
+                buf.writeDouble(minZ);
+                buf.writeDouble(maxZ);
+                break;
+            case CIRCLE:
+                buf.writeDouble(cx);
+                buf.writeDouble(cz);
+                buf.writeDouble(r);
+                if (!full) {
+                    buf.writeDouble(minY);
+                    buf.writeDouble(maxY);
+                }
+                break;
+            default:
+                writePolygonBuf(buf, xs, zs);
+                if (!full) {
+                    buf.writeDouble(minY);
+                    buf.writeDouble(maxY);
+                }
+                break;
+        }
+    }
+
+    private static void writePolygonBuf(ByteBuf buf, double[] xs, double[] zs) {
+        int count = Math.min(xs.length, Selection.MAX_ANCHORS);
+        buf.writeInt(count);
+        for (int i = 0; i < count; i++) {
+            buf.writeDouble(xs[i]);
+            buf.writeDouble(zs[i]);
+        }
+    }
+
+    /** NBT 反序列化（type 键由 {@link ShapeTypes} 分派）。 */
+    public static PrismShape fromNbt(String type, NBTTagCompound tag) {
+        Section section = sectionOf(type);
+        boolean full = fullOf(type);
+        if (section == null) {
+            return null;
+        }
+        Bounds b;
+        if (section == Section.RECT) {
+            b = new Bounds(tag.getDouble("minX"), tag.getDouble("minY"), tag.getDouble("minZ"),
+                    tag.getDouble("maxX"), tag.getDouble("maxY"), tag.getDouble("maxZ"));
+            return new PrismShape(section, full, b, 0, 0, 0, new double[0], new double[0]);
+        }
+        double cx = tag.getDouble("cx");
+        double cz = tag.getDouble("cz");
+        double r = tag.getDouble("r");
+        double minY = full ? 0 : tag.getDouble("minY");
+        double maxY = full ? FULL_MAX_Y + 1.0D : tag.getDouble("maxY");
+        double[] xs;
+        double[] zs;
+        if (section == Section.CIRCLE) {
+            xs = new double[0];
+            zs = new double[0];
+        } else {
+            double[][] v = readPolygonNbt(tag);
+            xs = v[0];
+            zs = v[1];
+            if (xs.length < 3 || xs.length != zs.length) {
+                return null;
+            }
+        }
+        b = boundsFromGeometry(section, full, cx, cz, r, xs, zs, minY, maxY);
+        return new PrismShape(section, full, b, cx, cz, r, xs, zs);
+    }
+
+    private static double[][] readPolygonNbt(NBTTagCompound tag) {
+        NBTTagList list = tag.getTagList("verts", 10);
+        int count = Math.min(list.tagCount(), Selection.MAX_ANCHORS);
+        double[] xs = new double[count];
+        double[] zs = new double[count];
+        for (int i = 0; i < count; i++) {
+            NBTTagCompound c = list.getCompoundTagAt(i);
+            xs[i] = c.getDouble("x");
+            zs[i] = c.getDouble("z");
+        }
+        return new double[][]{xs, zs};
+    }
+
+    /** Buf 反序列化（type 键由 {@link ShapeTypes} 分派）。 */
+    public static PrismShape fromBuf(String type, ByteBuf buf) {
+        Section section = sectionOf(type);
+        boolean full = fullOf(type);
+        if (section == null) {
+            return null;
+        }
+        Bounds b;
+        if (section == Section.RECT) {
+            b = new Bounds(buf.readDouble(), buf.readDouble(), buf.readDouble(),
+                    buf.readDouble(), buf.readDouble(), buf.readDouble());
+            return new PrismShape(section, full, b, 0, 0, 0, new double[0], new double[0]);
+        }
+        double cx = buf.readDouble();
+        double cz = buf.readDouble();
+        double r = buf.readDouble();
+        double minY = 0;
+        double maxY = FULL_MAX_Y + 1.0D;
+        if (!full) {
+            minY = buf.readDouble();
+            maxY = buf.readDouble();
+        }
+        double[] xs;
+        double[] zs;
+        if (section == Section.CIRCLE) {
+            xs = new double[0];
+            zs = new double[0];
+        } else {
+            xs = readDoublesBuf(buf);
+            zs = readDoublesBuf(buf);
+            if (xs.length < 3 || xs.length != zs.length) {
+                return null;
+            }
+        }
+        b = boundsFromGeometry(section, full, cx, cz, r, xs, zs, minY, maxY);
+        return new PrismShape(section, full, b, cx, cz, r, xs, zs);
+    }
+
+    private static double[] readDoublesBuf(ByteBuf buf) {
+        int count = Math.min(Math.max(buf.readInt(), 0), Selection.MAX_ANCHORS);
+        double[] a = new double[count];
+        for (int i = 0; i < count; i++) {
+            a[i] = buf.readDouble();
+        }
+        return a;
+    }
+
+    private static Bounds boundsFromGeometry(Section section, boolean full, double cx, double cz, double r,
+                                             double[] xs, double[] zs, double minY, double maxY) {
+        switch (section) {
+            case RECT:
+                throw new IllegalStateException("RECT bounds must come directly from stored 6-coords");
+            case CIRCLE:
+                if (full) {
+                    return new Bounds(cx - r - 1, 0, cz - r - 1, cx + r + 1, FULL_MAX_Y + 1.0D, cz + r + 1);
+                }
+                return new Bounds(cx - r - 1, minY, cz - r - 1, cx + r + 1, maxY, cz + r + 1);
+            default: {
+                double lox = Double.MAX_VALUE, hix = -Double.MAX_VALUE;
+                double loz = Double.MAX_VALUE, hiz = -Double.MAX_VALUE;
+                for (int i = 0; i < xs.length; i++) {
+                    lox = Math.min(lox, xs[i]);
+                    hix = Math.max(hix, xs[i]);
+                    loz = Math.min(loz, zs[i]);
+                    hiz = Math.max(hiz, zs[i]);
+                }
+                if (full) {
+                    return new Bounds(lox - 1, 0, loz - 1, hix + 1, FULL_MAX_Y + 1.0D, hiz + 1);
+                }
+                return new Bounds(lox - 1, minY, loz - 1, hix + 1, maxY, hiz + 1);
+            }
+        }
+    }
+
+    private static Section sectionOf(String type) {
+        if (ShapeTypes.TYPE_BOX.equals(type) || ShapeTypes.TYPE_SQUARE_PILLAR.equals(type)) {
+            return Section.RECT;
+        }
+        if (ShapeTypes.TYPE_CYLINDER.equals(type) || ShapeTypes.TYPE_ROUND_PILLAR.equals(type)) {
+            return Section.CIRCLE;
+        }
+        if (ShapeTypes.TYPE_POLYGON.equals(type) || ShapeTypes.TYPE_POLYGON_PILLAR.equals(type)) {
+            return Section.POLYGON;
+        }
+        return null;
+    }
+
+    private static boolean fullOf(String type) {
+        return ShapeTypes.TYPE_SQUARE_PILLAR.equals(type)
+                || ShapeTypes.TYPE_ROUND_PILLAR.equals(type)
+                || ShapeTypes.TYPE_POLYGON_PILLAR.equals(type);
     }
 }

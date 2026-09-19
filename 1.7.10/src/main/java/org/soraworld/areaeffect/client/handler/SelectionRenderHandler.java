@@ -234,9 +234,10 @@ public class SelectionRenderHandler {
 
         Tessellator tessellator = Tessellator.instance;
         if (drawSelection) {
-            // 多边形选区：选点过程中按通天柱围栏方式逐边显示，创建时自动闭合
+            // 多边形选区：选点过程中按围栏方式逐边显示，创建时自动闭合。
+            // 有界 polygon 与通天 polygon_pillar 的高度语义不同，由 sel.shapeType 区分。
             if (sel.isPolygon()) {
-                drawPolygonPartial(tessellator, sel.anchors);
+                drawPolygonPartial(tessellator, sel);
             } else {
                 AreaShape preview = ShapeTypes.build(sel);
                 if (preview != null) {
@@ -289,25 +290,43 @@ public class SelectionRenderHandler {
 
     /**
      * 多边形选点预览：每个最新点自动与第一点连线闭合，无需手动闭合动作；
-     * 按通天柱方式每 64 格画一道横向围栏，顶点画贯穿竖棱。撤回顶点后自动更新。
+     * 顶点画贯穿竖棱。高度语义与创建后一致：
+     * 有界 {@code polygon} 用全部顶点 Y 的 min/max 画上下围栏与该高度段的竖棱，
+     * 通天 {@code polygon_pillar} 才每 64 格画一圈围栏并贯穿全高。撤回顶点后自动更新。
      */
-    private void drawPolygonPartial(Tessellator tessellator, List<Vec3i> anchors) {
+    private void drawPolygonPartial(Tessellator tessellator, Selection sel) {
+        List<Vec3i> anchors = sel.anchors;
         if (anchors.size() < 2) {
             return;
+        }
+        boolean boundHigh = ShapeTypes.TYPE_POLYGON.equals(sel.shapeType);
+        int minY = 0;
+        int maxY = AreaShape.FULL_MAX_Y;
+        if (boundHigh) {
+            minY = Integer.MAX_VALUE;
+            maxY = Integer.MIN_VALUE;
+            for (Vec3i v : anchors) {
+                if (v != null) {
+                    minY = Math.min(minY, v.y);
+                    maxY = Math.max(maxY, v.y);
+                }
+            }
+            if (minY > maxY) {
+                minY = 0;
+            }
         }
         GL11.glLineWidth(2.0F);
         GL11.glColor4f(0.0F, 1.0F, 0.0F, 1.0F);
         tessellator.startDrawing(GL11.GL_LINES);
-        int levels = AreaShape.FULL_MAX_Y;
         int n = anchors.size();
-        // 相邻边
+        // 相邻边：有界时画 min/max 两道围栏，通天时每 64 格加圈
         for (int i = 0; i < n - 1; i++) {
             Vec3i a = anchors.get(i);
             Vec3i b = anchors.get(i + 1);
             if (a == null || b == null) {
                 continue;
             }
-            for (int y = 0; y <= levels; y += 64) {
+            for (int y = minY; y <= maxY; y += 64) {
                 line(tessellator, a.x, y, a.z, b.x, y, b.z);
             }
         }
@@ -316,19 +335,20 @@ public class SelectionRenderHandler {
             Vec3i a = anchors.get(n - 1);
             Vec3i b = anchors.get(0);
             if (a != null && b != null) {
-                for (int y = 0; y <= levels; y += 64) {
+                for (int y = minY; y <= maxY; y += 64) {
                     line(tessellator, a.x, y, a.z, b.x, y, b.z);
                 }
             }
         }
         tessellator.draw();
-        // 顶点竖棱贯穿全高
+        // 顶点竖棱：有界时只画 [minY, maxY+1]，通天时贯穿全高
         GL11.glLineWidth(1.5F);
         GL11.glColor4f(0.0F, 1.0F, 0.0F, 0.6F);
         tessellator.startDrawing(GL11.GL_LINES);
+        int top = maxY + 1;
         for (Vec3i v : anchors) {
             if (v != null) {
-                line(tessellator, v.x, 0.0D, v.z, v.x, levels + 1.0D, v.z);
+                line(tessellator, v.x, minY, v.z, v.x, top, v.z);
             }
         }
         tessellator.draw();
