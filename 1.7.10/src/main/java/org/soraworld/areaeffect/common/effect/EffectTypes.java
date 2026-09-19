@@ -119,9 +119,15 @@ public final class EffectTypes {
 
     /**
      * 网络缓冲中写入长度前缀 UTF-8 字符串。
+     *
+     * <p>长度前缀是 {@code short}（上限 65535 字节）。写侧先截断到上限，避免超长字符串
+     * 让 {@code writeShort} 静默截断长度字段、读侧按错误偏移解析。当前调用点不可达，仅作协议层兜底。
      */
     public static void writeString(ByteBuf buf, String value) {
         byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
+        if (bytes.length > 0xFFFF) {
+            bytes = Arrays.copyOf(bytes, 0xFFFF);
+        }
         buf.writeShort(bytes.length);
         buf.writeBytes(bytes);
     }

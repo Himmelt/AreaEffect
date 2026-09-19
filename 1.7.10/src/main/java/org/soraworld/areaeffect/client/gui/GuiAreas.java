@@ -1445,7 +1445,7 @@ public class GuiAreas extends GuiScreen {
             return;
         }
         boolean changed = false;
-        float w = weightSlider.getValue();
+        float w = integerSlider(weightSlider);
         if (w != effect.getWeight()) {
             effect.setWeight(w);
             changed = true;
@@ -1458,7 +1458,7 @@ public class GuiAreas extends GuiScreen {
         }
         if (effect instanceof LightnessEffect) {
             LightnessEffect light = (LightnessEffect) effect;
-            float lv = lightSlider.getValue();
+            float lv = integerSlider(lightSlider);
             if (lv != light.getLightness()) {
                 light.setLightness(lv);
                 changed = true;
@@ -1476,9 +1476,9 @@ public class GuiAreas extends GuiScreen {
                 fog.setStartDistance(sv);
                 changed = true;
             }
-            float uvv = dustSlider.getValue();
-            if (uvv != fog.getDust()) {
-                fog.setDust(Math.round(uvv));
+            int dust = integerSlider(dustSlider);
+            if (dust != fog.getDust()) {
+                fog.setDust(dust);
                 changed = true;
             }
         }
@@ -1502,6 +1502,20 @@ public class GuiAreas extends GuiScreen {
                 proxy.previewAreaEffects(dim, selected.id, pendingEffects);
             }
         }
+    }
+
+    /**
+     * 读取整数语义滑条（步进 ≥1）的当前值并把滑条吸附为整数位置。
+     * <p>{@link FlatSlider#setValueRaw} 不做步进，若外部直设带入非整数位置，这里会把显示吸附到最近的
+     * 整数——否则每帧 {@link #commitSliderEdits} 都以"滑条分数值 ≠ 整数字段"判定为 changed、每帧重建预览。
+     */
+    private int integerSlider(FlatSlider slider) {
+        float v = slider.getValue();
+        int snapped = Math.round(v);
+        if (v != snapped) {
+            slider.setValueRaw(snapped);
+        }
+        return snapped;
     }
 
     // ===================== 取色弹窗 =====================

@@ -142,7 +142,10 @@ public class AreaRequests {
      */
     public void onSelectShape(EntityPlayerMP player, MessageSelectShape packet) {
         if (!Players.canManage(player)) {
-            // 工具驱动的动作统一静默，见类注释的权限反馈规则（与 onClickAir 一致）
+            // 非 OP：客户端此前已本地乐观切换形状并弹出 overlay，这里回发权威选区回声，
+            // 让客户端丢弃"成功假象"（无权限时不发 chat，与 onClickAir 的静默规则一致）。若该玩家
+            // 尚无选区，sync 会发空选区，同样把乐观状态清掉。
+            selections.sync(player);
             return;
         }
         if (ShapeTypes.isValid(packet.type)) {

@@ -9,6 +9,7 @@ import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.init.Items;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
+import net.minecraft.server.MinecraftServer;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.common.config.Configuration;
 import org.soraworld.areaeffect.common.area.AreaTable;
@@ -238,11 +239,25 @@ public class CommonProxy {
         if (stack != null) {
             tool = stack.getItem();
             save();
-            // 客户端只读自有镜像 clientTool，故工具变更后必须实时推送；单机同样经此回环更新镜像
-            sendToolSync(player);
+            // 每个在线 OP 的客户端 tool 镜像（clientTool）独立，不广播则其他 OP 重登前停留在旧物品。
+            // 发送给所有在线 OP（含操作者本人），单机同样经此回环更新镜像。
+            broadcastToolSync();
             Players.chatWith(player, "chat.tool.set", tool.getUnlocalizedName(stack) + ".name");
         } else {
             Players.chatWith(player, "chat.tool.get", tool.getUnlocalizedName() + ".name");
+        }
+    }
+
+    /** 把当前选区工具同步给所有在线 OP；服务端不存在时静默返回。 */
+    private void broadcastToolSync() {
+        MinecraftServer server = MinecraftServer.getServer();
+        if (server == null) {
+            return;
+        }
+        for (Object obj : server.getConfigurationManager().playerEntityList) {
+            if (obj instanceof EntityPlayerMP && Players.canManage((EntityPlayerMP) obj)) {
+                sendToolSync((EntityPlayerMP) obj);
+            }
         }
     }
 

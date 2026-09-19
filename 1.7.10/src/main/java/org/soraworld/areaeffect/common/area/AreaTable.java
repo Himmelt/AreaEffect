@@ -60,8 +60,9 @@ public class AreaTable {
         return byDim.computeIfAbsent(dim, d -> new ConcurrentHashMap<Integer, Area>());
     }
 
-    public void put(int dim, int id, Area area) {
-        ensureDim(dim).put(id, area);
+    /** 放入区域并返回被覆盖的旧区域（不存在返回 null）；调用方可据此发现重复 id。 */
+    public Area put(int dim, int id, Area area) {
+        return ensureDim(dim).put(id, area);
     }
 
     public Area get(int dim, int id) {

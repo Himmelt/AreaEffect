@@ -91,31 +91,6 @@ public class Area {
                 : Collections.unmodifiableList(new ArrayList<>(list));
     }
 
-    /**
-     * 亮度效果的当前目标亮度（CIE L*），无亮度效果时返回默认 100。
-     */
-    public float getLightness() {
-        LightnessEffect effect = lightnessEffect();
-        return effect == null ? 100.0F : effect.getLightness();
-    }
-
-    /**
-     * 亮度效果的过渡时长（秒），无亮度效果时返回默认 1。
-     */
-    public float getDuration() {
-        LightnessEffect effect = lightnessEffect();
-        return effect == null ? 1.0F : effect.getDuration();
-    }
-
-    private LightnessEffect lightnessEffect() {
-        for (AreaEffect effect : effects) {
-            if (effect instanceof LightnessEffect) {
-                return (LightnessEffect) effect;
-            }
-        }
-        return null;
-    }
-
     /** 流式写入目标缓冲：type + 锚点 + closed + 备注 + 效果列表（与 fromByteBuf 对应）。 */
     public static void writeBuf(ByteBuf buf, Area area) {
         ShapeTypes.writeBuf(area.shape(), buf);
@@ -169,12 +144,6 @@ public class Area {
     /** AABB 包围盒级包含粗判：排在精确 {@link #contains} 之前快速排除远距离区域。 */
     public boolean boundsContains(Vec3d pos) {
         return shape.boundsContains(pos.x, pos.y, pos.z);
-    }
-
-    /** 亮度效果的权重；无亮度效果时返回默认 0。 */
-    public float getWeight() {
-        LightnessEffect effect = lightnessEffect();
-        return effect == null ? 0.0F : effect.getWeight();
     }
 
     public void center(EntityPlayer player) {

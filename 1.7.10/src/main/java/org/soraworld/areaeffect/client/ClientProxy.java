@@ -525,5 +525,8 @@ public class ClientProxy extends CommonProxy {
         renderers = new EffectRenderers();
         clientTasks.clear();
         LightmapHook.setOffset(0.0D, 0.0D);
+        // 断线重建渲染器时显式复位雾/天空的静态状态：不依赖新世界首帧驱动，避免旧的 active/颜色在首帧前短暂残留
+        FogRenderHandler.setState(false, 0.0D, 0.0D, 0.0D, 0.0D, 0.0D, 0);
+        SkyRenderHandler.setState(false, 0.0D, 0.0D, 0.0D);
     }
 }

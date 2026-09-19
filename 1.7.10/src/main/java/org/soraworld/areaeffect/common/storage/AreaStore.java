@@ -122,14 +122,24 @@ public class AreaStore {
                     }
                     area = new Area(shape);
                 } else {
-                    // 旧存档兼容：无 shape 键按 box 从 x1..z2 读取
+                    // 旧存档兼容：无 shape 键按 box 从 x1..z2 读取。
+                    // 缺坐标键时 getInteger 会返回 0，生成仅在 (0,0,0) 的单格幽灵区域 —— 检出即跳过并记录
+                    if (!tag.hasKey("x1") || !tag.hasKey("y1") || !tag.hasKey("z1")
+                            || !tag.hasKey("x2") || !tag.hasKey("y2") || !tag.hasKey("z2")) {
+                        LOGGER.warn("存档条目缺少形状或坐标键（dim={} id={}），已跳过以免产生 (0,0,0) 单格幽灵区域",
+                                dim, tag.hasKey("id") ? tag.getInteger("id") : -1);
+                        continue;
+                    }
                     area = Area.box(tag.getInteger("x1"), tag.getInteger("y1"), tag.getInteger("z1"),
                             tag.getInteger("x2"), tag.getInteger("y2"), tag.getInteger("z2"));
                 }
                 area.setRemark(tag.getString("remark"));
                 area.setEffects(readEffectsNbt(tag.getTagList("effects", 10)));
                 area.id = tag.getInteger("id");
-                table.put(dim, area.id, area);
+                Area prev = table.put(dim, area.id, area);
+                if (prev != null) {
+                    LOGGER.warn("存档中出现重复区域 id {} @维度 {}，先前条目将被覆盖", area.id, dim);
+                }
                 table.observeId(area.id);
             }
         } catch (Throwable t) {
