@@ -24,9 +24,9 @@ import java.util.Locale;
 import static org.soraworld.areaeffect.client.gui.GuiTheme.COLOR_ACCENT;
 import static org.soraworld.areaeffect.client.gui.GuiTheme.COLOR_BG;
 import static org.soraworld.areaeffect.client.gui.GuiTheme.COLOR_BORDER;
-import static org.soraworld.areaeffect.client.gui.GuiTheme.COLOR_BTN_BG;
 import static org.soraworld.areaeffect.client.gui.GuiTheme.COLOR_DANGER;
 import static org.soraworld.areaeffect.client.gui.GuiTheme.COLOR_HOVER_ROW;
+import static org.soraworld.areaeffect.client.gui.GuiTheme.COLOR_MODAL_BG;
 import static org.soraworld.areaeffect.client.gui.GuiTheme.COLOR_SCROLL_THUMB;
 import static org.soraworld.areaeffect.client.gui.GuiTheme.COLOR_SCROLL_TRACK;
 import static org.soraworld.areaeffect.client.gui.GuiTheme.COLOR_SELECTED;
@@ -53,7 +53,7 @@ import static org.soraworld.areaeffect.client.gui.GuiTheme.argb;
  *       工作副本，本质是栏级动作，放进任何一栏内部都会被误读成"只保存这一段"。</li>
  *   <li><b>L3/L4 效果</b>：中右栏列表（顶部工具条增删效果）+ 右栏参数。右栏<b>只服务效果</b>：
  *       不含任何 L2 内容，也不再自报"是什么效果"（效果列表的选中行已表明），就是该效果的参数。
- *       参数行数随类型变化（亮度 4 行、天空 6 行、雾 9 行），窗口不够高时右栏<b>可滚动</b>
+ *       参数行数随类型变化（亮度 4 行、天空 4 行、雾 7 行），窗口不够高时右栏<b>可滚动</b>
  *       （滚轮或拖动右侧滚动条），滚出可视区的滑条临时隐藏 —— GuiScreen 画按钮不裁剪，
  *       不隐藏就会盖住 tab 条与底栏。</li>
  * </ul>
@@ -119,6 +119,7 @@ public class GuiAreas extends GuiScreen {
     private static final int BTN_DEL_EFFECT = 5;
     private static final int BTN_NAV_L = 6;
     private static final int BTN_NAV_R = 7;
+    private static final int BTN_COLOR = 8;
 
     private final ClientProxy proxy;
 
@@ -151,16 +152,18 @@ public class GuiAreas extends GuiScreen {
     private FlatSlider lightSlider;
     private FlatSlider durationSlider;
     private RangeSlider timeRangeSlider;
-    /** 颜色三通道 + 雾专属（过渡距离/起雾距离/尘粒）：按效果类型显隐，与 lightSlider 复用同一段行位。 */
-    private FlatSlider redSlider;
-    private FlatSlider greenSlider;
-    private FlatSlider blueSlider;
+    /** 颜色按钮（雾/天空共用）：背景即当前色，点击弹出取色器；与 lightSlider 复用同一段行位。 */
+    private ColorButton colorButton;
+    /** 雾专属（过渡距离/起雾距离/尘粒）：按效果类型显隐。 */
     private FlatSlider rampSlider;
     private FlatSlider startDistanceSlider;
     private FlatSlider dustSlider;
+    /** 取色弹窗（模态）：非 null 即打开中；{@link #colorEffectTarget} 是它正在编辑的效果。 */
+    private ColorPicker colorPicker;
+    private AreaEffect colorEffectTarget;
 
     /**
-     * 详情栏的滚动状态：滑条行数随效果类型变化（亮度 4 行、天空 6 行、雾 9 行），
+     * 详情栏的滚动状态：滑条行数随效果类型变化（亮度 4 行、天空 4 行、雾 7 行），
      * 窗口高度不够时靠它滚动，避免参数行压到底栏甚至画出屏幕。
      */
     private final ScrollColumn detailCol = new ScrollColumn(SLIDER_PITCH);
@@ -261,7 +264,23 @@ public class GuiAreas extends GuiScreen {
             }
             syncDetailWidgets();
         } else {
+            // 重建副本会使取色器正在编辑的效果实例失效，先关掉弹窗
+            closeColorPicker();
+            // 保存/整表刷新后恢复对当前编辑效果的选中：各效果类型互斥（类型唯一），
+            // 重建前记住其类型、重建后重定位，而不是一律落到第一个效果
+            String keepType = null;
+            if (effectIdx >= 0 && effectIdx < pendingEffects.size()) {
+                keepType = pendingEffects.get(effectIdx).typeId();
+            }
             rebuildPendingEffects();
+            if (keepType != null) {
+                for (int i = 0; i < pendingEffects.size(); i++) {
+                    if (keepType.equals(pendingEffects.get(i).typeId())) {
+                        effectIdx = i;
+                        break;
+                    }
+                }
+            }
             syncDetailWidgets();
         }
     }
@@ -345,6 +364,7 @@ public class GuiAreas extends GuiScreen {
     /** 清空选中并清除该区域的预览覆盖（用变更前的 {@link #currentDim()} 定位旧区域所属维度）。 */
     private void clearSelection() {
         addMenuOpen = false;
+        closeColorPicker();
         if (selected != null) {
             int dim = currentDim();
             if (dim >= 0) {
@@ -428,28 +448,35 @@ public class GuiAreas extends GuiScreen {
         return true;
     }
 
-    // ===================== 「添加效果」弹出列表 =====================
+    // ===================== 「添加效果」弹出列表（居中模态） =====================
 
-    /** 弹出列表上边界：紧贴工具条下方（工具条高 {@link #TOOLBAR_H}）。 */
-    private int addMenuY1() {
-        return bodyY1 + TOOLBAR_H;
-    }
+    /** 弹窗面板几何（屏幕居中，打开/绘制时重算）。 */
+    private int addMenuX1, addMenuY1, addMenuX2, addMenuY2;
 
-    /** 弹出列表下边界：每个可添加类型占一行 {@link #MENU_ROW_H}。 */
-    private int addMenuY2() {
-        return addMenuY1() + EffectTypes.ALL.size() * MENU_ROW_H;
+    /** 重算弹窗几何：宽取最长行文案 + 边距，面板屏幕居中。 */
+    private void layoutAddMenu() {
+        int w = 20;
+        for (String typeId : EffectTypes.ALL) {
+            w = Math.max(w, fontRendererObj.getStringWidth(translate("gui.areaeffect.effect." + typeId)) + 24);
+        }
+        int h = EffectTypes.ALL.size() * MENU_ROW_H + 8;
+        addMenuX1 = (width - w) / 2;
+        addMenuX2 = addMenuX1 + w;
+        addMenuY1 = (height - h) / 2;
+        addMenuY2 = addMenuY1 + h;
     }
 
     /** 弹出列表内命中的行下标；未展开或未命中面板返回 -1。 */
     private int addMenuIndexAt(int mouseX, int mouseY) {
-        if (!addMenuOpen || mouseX < effectX1 || mouseX >= effectX2) {
+        if (!addMenuOpen || mouseX < addMenuX1 || mouseX >= addMenuX2
+                || mouseY < addMenuY1 || mouseY >= addMenuY2) {
             return -1;
         }
-        int y = addMenuY1();
-        return mouseY >= y && mouseY < addMenuY2() ? (mouseY - y) / MENU_ROW_H : -1;
+        int y = addMenuY1 + 4;
+        return mouseY >= y && mouseY < y + EffectTypes.ALL.size() * MENU_ROW_H ? (mouseY - y) / MENU_ROW_H : -1;
     }
 
-    /** 点是否落在「添加效果」按钮上：展开时点它应当收起列表，不该被面板吞掉。 */
+    /** 点是否落在「添加效果」按钮上：弹窗打开时点它应当收起弹窗，不该被面板吞掉。 */
     private boolean overAddButton(int mouseX, int mouseY) {
         for (Object b : buttonList) {
             GuiButton btn = (GuiButton) b;
@@ -462,32 +489,33 @@ public class GuiAreas extends GuiScreen {
     }
 
     /**
-     * 绘制弹出列表：在 {@code super.drawScreen} 之后调用，浮在效果列表之上。
-     * 逐行列出可添加类型（{@link EffectTypes#ALL} 的固定顺序），已挂在工作列表里的置灰不可点。
+     * 绘制「添加效果」弹窗（居中模态）：在 {@code super.drawScreen} 之后调用，浮在最上层。
+     * 全屏遮罩 + 不透明面板，逐行列出可添加类型（{@link EffectTypes#ALL} 的固定顺序），
+     * 已挂在工作列表里的置灰不可点。
      */
     private void drawAddMenu(int mouseX, int mouseY) {
         if (!addMenuOpen) {
             return;
         }
-        int y1 = addMenuY1();
-        int y2 = addMenuY2();
-        drawRect(effectX1, y1, effectX2, y2, argb(COLOR_BTN_BG));
-        drawRect(effectX1, y1, effectX2, y1 + 1, argb(COLOR_BORDER));
-        drawRect(effectX1, y2 - 1, effectX2, y2, argb(COLOR_BORDER));
-        drawRect(effectX1, y1, effectX1 + 1, y2, argb(COLOR_BORDER));
-        drawRect(effectX2 - 1, y1, effectX2, y2, argb(COLOR_BORDER));
+        layoutAddMenu();
+        drawRect(0, 0, width, height, 0x66000000);
+        drawRect(addMenuX1, addMenuY1, addMenuX2, addMenuY2, argb(COLOR_MODAL_BG));
+        drawRect(addMenuX1, addMenuY1, addMenuX2, addMenuY1 + 1, argb(COLOR_BORDER));
+        drawRect(addMenuX1, addMenuY2 - 1, addMenuX2, addMenuY2, argb(COLOR_BORDER));
+        drawRect(addMenuX1, addMenuY1, addMenuX1 + 1, addMenuY2, argb(COLOR_BORDER));
+        drawRect(addMenuX2 - 1, addMenuY1, addMenuX2, addMenuY2, argb(COLOR_BORDER));
         int hit = addMenuIndexAt(mouseX, mouseY);
         for (int i = 0; i < EffectTypes.ALL.size(); i++) {
             String typeId = EffectTypes.ALL.get(i);
             boolean exists = pendingEffects != null && containsType(pendingEffects, typeId);
-            int ry = y1 + i * MENU_ROW_H;
+            int ry = addMenuY1 + 4 + i * MENU_ROW_H;
             if (!exists && i == hit) {
-                drawRect(effectX1 + 1, ry, effectX2 - 1, ry + MENU_ROW_H, argb(COLOR_HOVER_ROW));
+                drawRect(addMenuX1 + 1, ry, addMenuX2 - 1, ry + MENU_ROW_H, argb(COLOR_HOVER_ROW));
             }
-            fontRendererObj.drawStringWithShadow(translate("gui.areaeffect.effect." + typeId),
-                    effectX1 + 6, ry + 4, exists ? COLOR_TEXT_DISABLED : COLOR_TEXT_BODY);
+            drawCenteredString(fontRendererObj, translate("gui.areaeffect.effect." + typeId),
+                    (addMenuX1 + addMenuX2) / 2, ry + 4, exists ? COLOR_TEXT_DISABLED : COLOR_TEXT_BODY);
             if (i < EffectTypes.ALL.size() - 1) {
-                drawRect(effectX1 + 1, ry + MENU_ROW_H - 1, effectX2 - 1, ry + MENU_ROW_H,
+                drawRect(addMenuX1 + 4, ry + MENU_ROW_H - 1, addMenuX2 - 4, ry + MENU_ROW_H,
                         argb(COLOR_SCROLL_TRACK));
             }
         }
@@ -620,31 +648,26 @@ public class GuiAreas extends GuiScreen {
         timeRangeSlider.setOnModeToggle(this::cycleTimeMode);
         lightSlider = new FlatSlider(detX1 + 10, bodyY1 + SLIDER_TOP + SLIDER_PITCH * 3, sw, SLIDER_H,
                 translate("gui.areaeffect.edit.lightness"), 0.0F, 100.0F, 100.0F, 1.0F);
-        // 颜色三通道（雾/天空共用）与雾专属过渡距离/起雾距离/尘粒：与 lightSlider 复用 3..8 行位，按类型显隐
-        redSlider = new FlatSlider(detX1 + 10, bodyY1 + SLIDER_TOP + SLIDER_PITCH * 3, sw, SLIDER_H,
-                translate("gui.areaeffect.edit.color.red"), 0.0F, 255.0F, 128.0F, 1.0F);
-        greenSlider = new FlatSlider(detX1 + 10, bodyY1 + SLIDER_TOP + SLIDER_PITCH * 4, sw, SLIDER_H,
-                translate("gui.areaeffect.edit.color.green"), 0.0F, 255.0F, 128.0F, 1.0F);
-        blueSlider = new FlatSlider(detX1 + 10, bodyY1 + SLIDER_TOP + SLIDER_PITCH * 5, sw, SLIDER_H,
-                translate("gui.areaeffect.edit.color.blue"), 0.0F, 255.0F, 128.0F, 1.0F);
+        // 颜色按钮（雾/天空共用）：与 lightSlider 复用第 4 行行位，背景即当前色，点击弹出取色器。
+        // 雾专属过渡距离/起雾距离/尘粒顺延到 5..7 行。
+        colorButton = new ColorButton(BTN_COLOR, detX1 + 10, bodyY1 + SLIDER_TOP + SLIDER_PITCH * 3, sw, SLIDER_H,
+                translate("gui.areaeffect.edit.color"), 0xFF0000FF);
         // 过渡距离：0 = 无过渡（跨过起雾距离即全白），其余为"起雾距离之外再过多远全白"。
         // 它跨 0.2~256 米两个多数量级，用等比刻度，滑条等距移动对应等比值变化。
-        rampSlider = new FlatSlider(detX1 + 10, bodyY1 + SLIDER_TOP + SLIDER_PITCH * 6, sw, SLIDER_H,
+        rampSlider = new FlatSlider(detX1 + 10, bodyY1 + SLIDER_TOP + SLIDER_PITCH * 4, sw, SLIDER_H,
                 translate("gui.areaeffect.edit.fog.ramp"), 0.0F, FogEffect.MAX_RAMP_LENGTH,
                 FogEffect.DEFAULT_RAMP_LENGTH, 0.0F,
                 FlatSlider.logarithmic(FogEffect.MIN_RAMP_LENGTH, FogEffect.MAX_RAMP_LENGTH));
         // 起雾距离：这一档之内完全无雾
-        startDistanceSlider = new FlatSlider(detX1 + 10, bodyY1 + SLIDER_TOP + SLIDER_PITCH * 7, sw, SLIDER_H,
+        startDistanceSlider = new FlatSlider(detX1 + 10, bodyY1 + SLIDER_TOP + SLIDER_PITCH * 5, sw, SLIDER_H,
                 translate("gui.areaeffect.edit.fog.start"), 0.0F, FogEffect.MAX_START_DISTANCE, 16.0F, 1.0F);
-        dustSlider = new FlatSlider(detX1 + 10, bodyY1 + SLIDER_TOP + SLIDER_PITCH * 8, sw, SLIDER_H,
+        dustSlider = new FlatSlider(detX1 + 10, bodyY1 + SLIDER_TOP + SLIDER_PITCH * 6, sw, SLIDER_H,
                 translate("gui.areaeffect.edit.fog.dust"), 0.0F, FogEffect.MAX_DUST, 0.0F, 1.0F);
         buttonList.add(weightSlider);
         buttonList.add(lightSlider);
         buttonList.add(durationSlider);
         buttonList.add(timeRangeSlider);
-        buttonList.add(redSlider);
-        buttonList.add(greenSlider);
-        buttonList.add(blueSlider);
+        buttonList.add(colorButton);
         buttonList.add(rampSlider);
         buttonList.add(startDistanceSlider);
         buttonList.add(dustSlider);
@@ -661,7 +684,7 @@ public class GuiAreas extends GuiScreen {
         // 可见性由 syncDetailScroll 按「类型策略 + 是否落在可视区」重算 —— GuiScreen 画按钮不做裁剪，
         // 滚出可视区的滑条必须隐藏，否则会盖住 tab 条与底栏。
         detailWidgets = new GuiButton[]{weightSlider, durationSlider, timeRangeSlider, lightSlider,
-                redSlider, greenSlider, blueSlider, rampSlider, startDistanceSlider, dustSlider};
+                colorButton, rampSlider, startDistanceSlider, dustSlider};
         detailBaseY = new int[detailWidgets.length];
         detailWanted = new boolean[detailWidgets.length];
         for (int i = 0; i < detailWidgets.length; i++) {
@@ -703,7 +726,7 @@ public class GuiAreas extends GuiScreen {
         syncTabNav();
         // 防御：initGui 若中途异常被吞，控件可能为 null；此时清空选中走空界面分支，避免 NPE 连锁
         if (weightSlider == null || lightSlider == null || durationSlider == null
-                || timeRangeSlider == null || startDistanceSlider == null || remarkField == null) {
+                || timeRangeSlider == null || startDistanceSlider == null || colorButton == null || remarkField == null) {
             selected = null;
             return;
         }
@@ -721,9 +744,7 @@ public class GuiAreas extends GuiScreen {
         timeRangeSlider.visible = hasEffect;
         if (!hasEffect) {
             lightSlider.visible = false;
-            redSlider.visible = false;
-            greenSlider.visible = false;
-            blueSlider.visible = false;
+            colorButton.visible = false;
             rampSlider.visible = false;
             startDistanceSlider.visible = false;
             dustSlider.visible = false;
@@ -732,7 +753,7 @@ public class GuiAreas extends GuiScreen {
         }
         weightSlider.setValueRaw(effect.getWeight());
         durationSlider.setValueRaw(effect.getDuration());
-        // L4 子类型：光亮度（LightnessEffect 专属）、颜色三通道（雾/天空共用）、雾专属过渡距离/起雾距离/尘粒按类型显隐
+        // L4 子类型：光亮度（LightnessEffect 专属）、颜色按钮（雾/天空共用）、雾专属过渡距离/起雾距离/尘粒按类型显隐
         boolean isLight = effect instanceof LightnessEffect;
         lightSlider.visible = isLight;
         if (isLight) {
@@ -741,25 +762,18 @@ public class GuiAreas extends GuiScreen {
         boolean isFog = effect instanceof FogEffect;
         boolean isSky = effect instanceof SkyEffect;
         boolean hasColor = isFog || isSky;
-        redSlider.visible = hasColor;
-        greenSlider.visible = hasColor;
-        blueSlider.visible = hasColor;
+        colorButton.visible = hasColor;
         rampSlider.visible = isFog;
         startDistanceSlider.visible = isFog;
         dustSlider.visible = isFog;
         if (isFog) {
             FogEffect fog = (FogEffect) effect;
-            redSlider.setValueRaw(fog.getRed());
-            greenSlider.setValueRaw(fog.getGreen());
-            blueSlider.setValueRaw(fog.getBlue());
+            colorButton.setColor(fog.getColor());
             rampSlider.setValueRaw(fog.getRampLength());
             startDistanceSlider.setValueRaw(fog.getStartDistance());
             dustSlider.setValueRaw(fog.getDust());
         } else if (isSky) {
-            SkyEffect sky = (SkyEffect) effect;
-            redSlider.setValueRaw(sky.getRed());
-            greenSlider.setValueRaw(sky.getGreen());
-            blueSlider.setValueRaw(sky.getBlue());
+            colorButton.setColor(((SkyEffect) effect).getColor());
         }
         // L4 模式：时段三合一控件（"始终"态 timed=false 隐藏游标、整条全天）
         timeRangeSlider.setMode(timeModeLabel(effect.getTimeMode()),
@@ -771,7 +785,7 @@ public class GuiAreas extends GuiScreen {
     // ===================== 详情栏滚动 =====================
 
     /**
-     * 详情栏行数随效果类型变化（亮度 4 行、天空 6 行、雾 9 行）：先快照「按类型的可见性」，
+     * 详情栏行数随效果类型变化（亮度 4 行、天空 4 行、雾 7 行）：先快照「按类型的可见性」，
      * 再把滚动量收进合法范围，最后按新滚动量重排滑条。
      *
      * <p>必须在 {@link #syncDetailWidgets()} 的末尾调用 —— 快照取的就是那一刻各滑条的 {@code visible}。
@@ -865,24 +879,32 @@ public class GuiAreas extends GuiScreen {
 
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
+        // 模态弹窗（添加效果 / 取色器）打开时，底层界面用无效坐标绘制，屏蔽一切悬停高亮
+        // （点击/滚轮/键盘已由各输入转发拦截，悬停是最后一条穿透路径）
+        boolean modal = addMenuOpen || (colorPicker != null && colorPicker.isOpen());
+        int hx = modal ? -1 : mouseX;
+        int hy = modal ? -1 : mouseY;
         // 先铺全屏半透明底，再画标题与内容，使标题「区域管理」位于背景之上而非被其覆盖
         drawBackground();
         drawCenteredString(fontRendererObj, translate("gui.areaeffect.manager.title"), width / 2, 8, COLOR_TEXT_HEAD);
 
         drawChrome();
-        drawTabs(mouseX, mouseY);
-        drawAreaList(mouseX, mouseY);
-        drawEffectList(mouseX, mouseY);
+        drawTabs(hx, hy);
+        drawAreaList(hx, hy);
+        drawEffectList(hx, hy);
         drawDetail();
-        drawActionBar(mouseX, mouseY);
+        drawActionBar(hx, hy);
 
         drawScrollBar(areaCol, areas.size());
         drawScrollBar(effectCol, pendingEffects == null ? 0 : pendingEffects.size());
         drawScrollBar(detailCol, detailRowCount());
 
-        super.drawScreen(mouseX, mouseY, partialTicks);
-        // 弹出列表是浮层：画在最后，压在按钮与效果列表之上
+        super.drawScreen(hx, hy, partialTicks);
+        // 弹窗浮层用真实鼠标坐标绘制（各自处理自己的悬停），压在按钮与列表之上
         drawAddMenu(mouseX, mouseY);
+        if (colorPicker != null && colorPicker.isOpen()) {
+            colorPicker.drawScreen(mc, mouseX, mouseY);
+        }
     }
 
     /**
@@ -1103,6 +1125,9 @@ public class GuiAreas extends GuiScreen {
     @Override
     public void updateScreen() {
         super.updateScreen();
+        if (colorPicker != null && colorPicker.isOpen()) {
+            colorPicker.updateScreen();
+        }
         if (remarkField != null) {
             remarkField.updateCursorCounter();
         }
@@ -1112,6 +1137,11 @@ public class GuiAreas extends GuiScreen {
 
     @Override
     protected void keyTyped(char typedChar, int keyCode) {
+        // 取色弹窗打开时是模态：所有按键交给它（Esc 取消、Enter 确认都在弹窗内处理）
+        if (colorPicker != null && colorPicker.isOpen()) {
+            colorPicker.keyTyped(typedChar, keyCode);
+            return;
+        }
         if (keyCode == Keyboard.KEY_ESCAPE) {
             // 弹出列表展开时 Esc 只收起列表，不关界面
             if (addMenuOpen) {
@@ -1132,20 +1162,25 @@ public class GuiAreas extends GuiScreen {
 
     @Override
     protected void mouseClicked(int mouseX, int mouseY, int mouseButton) {
-        // 「添加效果」弹出列表展开时先消费点击：命中可用行 = 加入并收起；命中已添加行 = 吞掉；
+        // 取色弹窗打开时是模态：所有点击交给它（面板外点击被吞掉、不取消）
+        if (colorPicker != null && colorPicker.isOpen()) {
+            colorPicker.mousePressed(mouseX, mouseY, mouseButton);
+            return;
+        }
+        // 「添加效果」弹窗（居中模态）打开时先消费点击：命中行 = 加入并收起；面板内空白 = 吞掉；
         // 面板外 = 收起后继续走常规处理。落在「添加效果」按钮上的情况刻意不吞 —— 交给按钮逻辑
-        // （actionPerformed 里会收起列表），这样点按钮能开也能关。
+        // （actionPerformed 里会收起弹窗），这样点按钮能开也能关。
         if (addMenuOpen && mouseButton == 0 && pendingEffects != null && !overAddButton(mouseX, mouseY)) {
             int hit = addMenuIndexAt(mouseX, mouseY);
             if (hit >= 0) {
                 String typeId = EffectTypes.ALL.get(hit);
                 if (!containsType(pendingEffects, typeId)) {
                     addEffectOfType(typeId, currentDim());
-                    addMenuOpen = false;
                 }
+                addMenuOpen = false;
                 return;
             }
-            if (mouseX >= effectX1 && mouseX < effectX2 && mouseY >= addMenuY1() && mouseY < addMenuY2()) {
+            if (mouseX >= addMenuX1 && mouseX < addMenuX2 && mouseY >= addMenuY1 && mouseY < addMenuY2) {
                 return;
             }
             addMenuOpen = false;
@@ -1205,6 +1240,11 @@ public class GuiAreas extends GuiScreen {
     @Override
     protected void mouseClickMove(int mouseX, int mouseY, int clickedMouseButton, long timeSinceLastClick) {
         super.mouseClickMove(mouseX, mouseY, clickedMouseButton, timeSinceLastClick);
+        if (colorPicker != null && colorPicker.isOpen()) {
+            // 取色器拖动（SV 平面 / 色相条 / 透明度条）自己驱动，滚动条与滑条都不应响应
+            colorPicker.mouseDragged(mouseX, mouseY);
+            return;
+        }
         if (clickedMouseButton != 0) {
             return;
         }
@@ -1218,6 +1258,10 @@ public class GuiAreas extends GuiScreen {
     @Override
     protected void mouseMovedOrUp(int mouseX, int mouseY, int state) {
         super.mouseMovedOrUp(mouseX, mouseY, state);
+        if (colorPicker != null && colorPicker.isOpen()) {
+            colorPicker.mouseReleased();
+            return;
+        }
         if (state == 0) {
             areaCol.release();
             effectCol.release();
@@ -1228,6 +1272,10 @@ public class GuiAreas extends GuiScreen {
     @Override
     public void handleMouseInput() {
         super.handleMouseInput();
+        // 取色弹窗打开时滚轮不作用于底层列表
+        if (colorPicker != null && colorPicker.isOpen()) {
+            return;
+        }
         int dwheel = Mouse.getDWheel();
         if (dwheel == 0) {
             return;
@@ -1289,8 +1337,11 @@ public class GuiAreas extends GuiScreen {
             if (selected == null || pendingEffects == null) {
                 return;
             }
-            // 展开/收起类型列表，由用户自己点要加的那一个（原先只能按 EffectTypes.ALL 的顺序依次补）
+            // 展开/收起居中模态类型列表，由用户自己点要加的那一个（原先只能按 EffectTypes.ALL 的顺序依次补）
             addMenuOpen = !addMenuOpen;
+            if (addMenuOpen) {
+                layoutAddMenu();
+            }
             return;
         }
         if (button.id == BTN_DEL_EFFECT) {
@@ -1302,6 +1353,13 @@ public class GuiAreas extends GuiScreen {
                     effectIdx = pendingEffects.size() - 1;
                 }
                 afterEffectStructuralChange(dim);
+            }
+            return;
+        }
+        if (button.id == BTN_COLOR) {
+            AreaEffect effect = selectedEffect();
+            if (effect instanceof FogEffect || effect instanceof SkyEffect) {
+                openColorPicker(effect);
             }
             return;
         }
@@ -1400,22 +1458,8 @@ public class GuiAreas extends GuiScreen {
                 changed = true;
             }
         } else if (effect instanceof FogEffect) {
+            // 颜色由取色器弹窗实时写回（openColorPicker 的监听器），不在此处提交
             FogEffect fog = (FogEffect) effect;
-            float rv = redSlider.getValue();
-            float gv = greenSlider.getValue();
-            float bv = blueSlider.getValue();
-            if (rv != fog.getRed()) {
-                fog.setRed(Math.round(rv));
-                changed = true;
-            }
-            if (gv != fog.getGreen()) {
-                fog.setGreen(Math.round(gv));
-                changed = true;
-            }
-            if (bv != fog.getBlue()) {
-                fog.setBlue(Math.round(bv));
-                changed = true;
-            }
             float rampValue = rampSlider.getValue();
             if (rampValue != fog.getRampLength()) {
                 fog.setRampLength(rampValue);
@@ -1429,23 +1473,6 @@ public class GuiAreas extends GuiScreen {
             float uvv = dustSlider.getValue();
             if (uvv != fog.getDust()) {
                 fog.setDust(Math.round(uvv));
-                changed = true;
-            }
-        } else if (effect instanceof SkyEffect) {
-            SkyEffect sky = (SkyEffect) effect;
-            float rv = redSlider.getValue();
-            float gv = greenSlider.getValue();
-            float bv = blueSlider.getValue();
-            if (rv != sky.getRed()) {
-                sky.setRed(Math.round(rv));
-                changed = true;
-            }
-            if (gv != sky.getGreen()) {
-                sky.setGreen(Math.round(gv));
-                changed = true;
-            }
-            if (bv != sky.getBlue()) {
-                sky.setBlue(Math.round(bv));
                 changed = true;
             }
         }
@@ -1469,6 +1496,66 @@ public class GuiAreas extends GuiScreen {
                 proxy.previewAreaEffects(dim, selected.id, pendingEffects);
             }
         }
+    }
+
+    // ===================== 取色弹窗 =====================
+
+    /**
+     * 打开取色弹窗（模态，阻塞其它交互）。目标效果为雾/天空。
+     *
+     * <p>监听器在弹窗的每次改动时触发（含取消时的还原）：把新颜色实时写回工作副本、刷新预览与颜色按钮
+     * —— 用户看到的颜色即最终效果，确认只是收尾，取消则回调初始色还原。
+     */
+    private void openColorPicker(AreaEffect effect) {
+        int rgba = effect instanceof FogEffect ? ((FogEffect) effect).getColor()
+                : ((SkyEffect) effect).getColor();
+        colorEffectTarget = effect;
+        // 取消要还原「打开前」的未保存标记：拖过又取消不该让脏标记亮起
+        final boolean dirtyBefore = dirty;
+        ColorPicker picker = new ColorPicker(new ColorPicker.Listener() {
+            @Override
+            public void onColorChanged(int color) {
+                // 实时预览：颜色已应用，确定/取消不再重复提交
+                applyColorToTarget(color);
+            }
+
+            @Override
+            public void onConfirmed(int color) {
+                closeColorPicker();
+            }
+
+            @Override
+            public void onCanceled() {
+                // 颜色已还原为打开前的值（onColorChanged 已以初始色回调过），未保存标记一并还原
+                dirty = dirtyBefore;
+                closeColorPicker();
+            }
+        });
+        colorPicker = picker;
+        picker.open(mc, width, height, rgba);
+    }
+
+    /** 把取色器回调的颜色写回目标效果：刷新预览与颜色按钮；目标失效时静默跳过。 */
+    private void applyColorToTarget(int color) {
+        if (colorEffectTarget instanceof FogEffect) {
+            ((FogEffect) colorEffectTarget).setColor(color);
+        } else if (colorEffectTarget instanceof SkyEffect) {
+            ((SkyEffect) colorEffectTarget).setColor(color);
+        } else {
+            return;
+        }
+        dirty = true;
+        int dim = currentDim();
+        if (dim >= 0) {
+            proxy.previewAreaEffects(dim, selected.id, pendingEffects);
+        }
+        colorButton.setColor(color);
+    }
+
+    /** 关闭取色弹窗并清空目标（确认/取消已由弹窗自己走完收尾）。 */
+    private void closeColorPicker() {
+        colorPicker = null;
+        colorEffectTarget = null;
     }
 
     // ===================== 小工具 =====================

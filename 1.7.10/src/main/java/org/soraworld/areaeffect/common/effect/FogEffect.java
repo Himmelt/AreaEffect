@@ -12,11 +12,17 @@ import net.minecraft.nbt.NBTTagCompound;
  * 过渡距离取 0 表示<b>没有过渡</b>：跨过起雾距离就是全雾（硬边）；渲染时按 {@link #MIN_RAMP_LENGTH}
  * 的极小斜坡处理（GL_LINEAR 的 {@code FOG_START == FOG_END} 是未定义行为，不能真写 0）。
  * 过渡时长 {@code duration} 为公共字段（见 {@link AreaEffect}）。
+ *
+ * <p><b>颜色用单个整数存储与传输</b>，格式 {@code 0xRRGGBBAA}（低字节是 AA 透明度，当前恒 FF），
+ * 与 {@link SkyEffect} 同一约定；UI 侧由三条 HSV 滑条编辑，打包成 24 位 RGB 后经 {@link #setRgb} 写回。
  */
 public class FogEffect extends AreaEffect {
 
     /** 尘粒数量上限（个/帧，围绕玩家生成）。 */
     public static final int MAX_DUST = 50;
+
+    /** 默认色（深绿雾），0xRRGGBBAA。 */
+    public static final int DEFAULT_COLOR = 0x285032FF;
 
     /** 起雾距离上限（米）。 */
     public static final float MAX_START_DISTANCE = 256.0F;
@@ -41,28 +47,25 @@ public class FogEffect extends AreaEffect {
     private float rampLength;
     /** 起雾距离（米）：该距离内完全无雾。 */
     private float startDistance;
-    private int red;
-    private int green;
-    private int blue;
+    /** 颜色：{@code 0xRRGGBBAA} 单整数存储/传输（NBT 键 {@code color}）。 */
+    private int color;
     private int dust;
 
     public FogEffect() {
-        this(DEFAULT_RAMP_LENGTH, DEFAULT_START_DISTANCE, 40, 80, 50, 0, 1.0F);
+        this(DEFAULT_RAMP_LENGTH, DEFAULT_START_DISTANCE, DEFAULT_COLOR, 0, 1.0F);
     }
 
-    public FogEffect(float rampLength, float startDistance, int red, int green, int blue, int dust, float duration) {
+    public FogEffect(float rampLength, float startDistance, int color, int dust, float duration) {
         setRampLength(rampLength);
         setStartDistance(startDistance);
-        setRed(red);
-        setGreen(green);
-        setBlue(blue);
+        setColor(color);
         setDust(dust);
         setDuration(duration);
     }
 
     @Override
     public AreaEffect copy() {
-        FogEffect copy = new FogEffect(getRampLength(), getStartDistance(), getRed(), getGreen(), getBlue(),
+        FogEffect copy = new FogEffect(getRampLength(), getStartDistance(), getColor(),
                 getDust(), getDuration());
         copyCommonTo(copy);
         return copy;
@@ -78,9 +81,7 @@ public class FogEffect extends AreaEffect {
         writeNbtFields(tag);
         tag.setFloat("rampLength", rampLength);
         tag.setFloat("startDistance", startDistance);
-        tag.setInteger("red", red);
-        tag.setInteger("green", green);
-        tag.setInteger("blue", blue);
+        tag.setInteger("color", color);
         tag.setInteger("dust", dust);
     }
 
@@ -89,9 +90,7 @@ public class FogEffect extends AreaEffect {
         writeBufFields(buf);
         buf.writeFloat(rampLength);
         buf.writeFloat(startDistance);
-        buf.writeInt(red);
-        buf.writeInt(green);
-        buf.writeInt(blue);
+        buf.writeInt(color);
         buf.writeInt(dust);
     }
 
@@ -100,9 +99,6 @@ public class FogEffect extends AreaEffect {
         super.sanitize();
         setRampLength(rampLength);
         setStartDistance(startDistance);
-        setRed(red);
-        setGreen(green);
-        setBlue(blue);
         setDust(dust);
     }
 
@@ -125,28 +121,22 @@ public class FogEffect extends AreaEffect {
                 : Math.max(0.0F, Math.min(MAX_START_DISTANCE, startDistance));
     }
 
-    public int getRed() {
-        return red;
+    /** 完整颜色（含 AA 透明度字节），供 NBT / 网络读写。 */
+    public int getColor() {
+        return color;
     }
 
-    public void setRed(int red) {
-        this.red = clampColor(red);
+    public void setColor(int color) {
+        this.color = color;
     }
 
-    public int getGreen() {
-        return green;
+    /** 24 位 RGB 视图（{@code 0xRRGGBB}），UI 取色用；写回时保留 AA 字节。 */
+    public int getRgb() {
+        return (color >>> 8) & 0xFFFFFF;
     }
 
-    public void setGreen(int green) {
-        this.green = clampColor(green);
-    }
-
-    public int getBlue() {
-        return blue;
-    }
-
-    public void setBlue(int blue) {
-        this.blue = clampColor(blue);
+    public void setRgb(int rgb) {
+        color = ((rgb & 0xFFFFFF) << 8) | (color & 0xFF);
     }
 
     public int getDust() {
@@ -155,11 +145,6 @@ public class FogEffect extends AreaEffect {
 
     public void setDust(int dust) {
         this.dust = clampDust(dust);
-    }
-
-    /** 颜色分量取值收窄到 [0,255]。 */
-    private static int clampColor(int value) {
-        return Math.max(0, Math.min(255, value));
     }
 
     /** 尘粒数量收窄到 [0, {@link #MAX_DUST}]。 */

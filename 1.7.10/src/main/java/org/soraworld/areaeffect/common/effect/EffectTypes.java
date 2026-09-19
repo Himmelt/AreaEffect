@@ -33,11 +33,11 @@ public final class EffectTypes {
                 // 亮度效果默认：亮度 100、过渡 1 秒（权重由 AreaEffect 默认为 0）
                 return new LightnessEffect(100.0F, 1.0F);
             case TYPE_FOG:
-                // 雾效果默认：浅雾色、16 米起雾、再过 7 米全白、无尘粒、过渡 1 秒
-                return new FogEffect(7.0F, 16.0F, 40, 80, 50, 0, 1.0F);
+                // 雾效果默认：深绿雾色（0x285032FF）、16 米起雾、再过 7 米全白、无尘粒、过渡 1 秒
+                return new FogEffect(7.0F, 16.0F, FogEffect.DEFAULT_COLOR, 0, 1.0F);
             case TYPE_SKY:
-                // 天空效果默认：天蓝色、过渡 1 秒
-                return new SkyEffect(135, 206, 235, 1.0F);
+                // 天空效果默认：近似原版白昼天蓝（0x87CEEBFF）、过渡 1 秒
+                return new SkyEffect(SkyEffect.DEFAULT_COLOR, 1.0F);
             default:
                 return null;
         }
@@ -159,9 +159,7 @@ public final class EffectTypes {
                 : FogEffect.DEFAULT_RAMP_LENGTH);
         effect.setStartDistance(tag.hasKey("startDistance") ? tag.getFloat("startDistance")
                 : FogEffect.DEFAULT_START_DISTANCE);
-        effect.setRed(tag.getInteger("red"));
-        effect.setGreen(tag.getInteger("green"));
-        effect.setBlue(tag.getInteger("blue"));
+        effect.setColor(tag.hasKey("color") ? tag.getInteger("color") : FogEffect.DEFAULT_COLOR);
         effect.setDust(tag.getInteger("dust"));
         return effect;
     }
@@ -171,9 +169,7 @@ public final class EffectTypes {
         effect.readBufFields(buf);
         effect.setRampLength(buf.readFloat());
         effect.setStartDistance(buf.readFloat());
-        effect.setRed(buf.readInt());
-        effect.setGreen(buf.readInt());
-        effect.setBlue(buf.readInt());
+        effect.setColor(buf.readInt());
         effect.setDust(buf.readInt());
         return effect;
     }
@@ -181,18 +177,14 @@ public final class EffectTypes {
     private static SkyEffect readSkyNbt(NBTTagCompound tag) {
         SkyEffect effect = new SkyEffect();
         effect.readNbtFields(tag);
-        effect.setRed(tag.getInteger("red"));
-        effect.setGreen(tag.getInteger("green"));
-        effect.setBlue(tag.getInteger("blue"));
+        effect.setColor(tag.hasKey("color") ? tag.getInteger("color") : SkyEffect.DEFAULT_COLOR);
         return effect;
     }
 
     private static SkyEffect readSkyBuf(ByteBuf buf) {
         SkyEffect effect = new SkyEffect();
         effect.readBufFields(buf);
-        effect.setRed(buf.readInt());
-        effect.setGreen(buf.readInt());
-        effect.setBlue(buf.readInt());
+        effect.setColor(buf.readInt());
         return effect;
     }
 }

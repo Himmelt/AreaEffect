@@ -39,6 +39,8 @@ final class GuiTheme {
     static final int COLOR_TEXT_DISABLED = 0x707070;
     /** 全屏黑色半透明底（铺满整块画面，详情栏留透明）。 */
     static final int COLOR_BG = 0x000000CC;
+    /** 模态弹窗（取色器 / 添加效果）的不透明面板底。 */
+    static final int COLOR_MODAL_BG = 0x1E1E1EFF;
     /** 按钮常态底。 */
     static final int COLOR_BTN_BG = 0x222222AA;
     /** 按钮禁用底。 */
@@ -53,6 +55,10 @@ final class GuiTheme {
     static final int COLOR_DANGER = 0xFF6B6BFF;
     /** 滑动条数值文字。 */
     static final int COLOR_SLIDER_TEXT = 0xF0F0F0;
+    /** 取色滑条标签的暗底板（62% 黑，压在渐变色带上保证白字在黄/青段也可读）。 */
+    static final int COLOR_BAND_PLATE = 0x0000009E;
+    /** 取色滑块常态描边（深色，防止滑块颜色与色带同色时看不见）。 */
+    static final int COLOR_BAND_THUMB_EDGE = 0x000000B4;
     /** 滚动条轨道。 */
     static final int COLOR_SCROLL_TRACK = 0x00000033;
     /** 滚动条滑块。 */

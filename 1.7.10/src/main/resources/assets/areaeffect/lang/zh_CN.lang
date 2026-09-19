@@ -12,10 +12,10 @@ key.areaeffect.manager=打开区域管理面板
 key.areaeffect.selrender=切换选区线框显示
 key.categories.areaeffect=AreaEffect
 
+gui.areaeffect.color.cancel=取消
+gui.areaeffect.color.ok=确定
 gui.areaeffect.edit.addEffect=添加效果
-gui.areaeffect.edit.color.blue=蓝色 (0-255):
-gui.areaeffect.edit.color.green=绿色 (0-255):
-gui.areaeffect.edit.color.red=红色 (0-255):
+gui.areaeffect.edit.color=颜色
 gui.areaeffect.edit.delEffect=删除效果
 gui.areaeffect.edit.duration=过渡时长 (秒):
 gui.areaeffect.edit.fog.dust=尘粒数量:

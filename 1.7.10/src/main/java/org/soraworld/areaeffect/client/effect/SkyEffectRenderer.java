@@ -47,9 +47,11 @@ public class SkyEffectRenderer implements EffectRenderer {
         float seconds = inArea ? ((SkyEffect) effect).getDuration() : fallbackDuration;
         if (inArea) {
             SkyEffect sky = (SkyEffect) effect;
-            double tr = sky.getRed() / 255.0D;
-            double tg = sky.getGreen() / 255.0D;
-            double tb = sky.getBlue() / 255.0D;
+            // 0xRRGGBBAA 单整数 → 三个 0..1 分量（低字节是 AA，渲染端暂不用）
+            int rgb = sky.getRgb();
+            double tr = ((rgb >>> 16) & 255) / 255.0D;
+            double tg = ((rgb >>> 8) & 255) / 255.0D;
+            double tb = (rgb & 255) / 255.0D;
             if (areaChanged || targetR != tr || targetG != tg || targetB != tb) {
                 beginAnim(tr, tg, tb);
             }

@@ -60,9 +60,11 @@ public class FogEffectRenderer implements EffectRenderer {
             dust = fog.getDust();
             double slopeTarget = 1.0D / Math.max(FogEffect.MIN_RAMP_LENGTH, fog.getRampLength());
             double startTarget = fog.getStartDistance();
-            double r = fog.getRed() / 255.0D;
-            double g = fog.getGreen() / 255.0D;
-            double b = fog.getBlue() / 255.0D;
+            // 0xRRGGBBAA 单整数 → 三个 0..1 分量（低字节是 AA，渲染端暂不用）
+            int rgb = fog.getRgb();
+            double r = ((rgb >>> 16) & 255) / 255.0D;
+            double g = ((rgb >>> 8) & 255) / 255.0D;
+            double b = (rgb & 255) / 255.0D;
             if (visible) {
                 // 雾已经看得见（A→B 或区域内改参数）：三个量一起过渡
                 if (areaChanged || slopeTarget != tSlope || startTarget != tStart
