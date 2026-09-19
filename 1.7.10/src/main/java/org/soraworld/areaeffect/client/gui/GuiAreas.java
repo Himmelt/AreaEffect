@@ -103,6 +103,12 @@ public class GuiAreas extends GuiScreen {
     /** 时段步进：1 分钟（以小时计）。 */
     private static final float HOUR_STEP = 1.0F / 60.0F;
     /**
+     * "未选中任何维度"的哨兵值。<b>绝不能取任何真实维度号</b>：原版下界维度（下界）的 id 恰为 -1，
+     * 若用 -1 当"无选中"标记，整个下界页签会被当成空、区域列表恒空、保存/传送/线框/预览全部失效
+     * （这正是"下界里创建的区域按 J 看不到"的根因）。故用不可能出现的 {@link Integer#MIN_VALUE}。
+     */
+    private static final int NO_DIM = Integer.MIN_VALUE;
+    /**
      * 三栏宽度权重：区域 : 效果 : 详情。按内容实际需要定，不是把原四栏等比放大 ——
      * 区域栏每行都要放 {@code #id} + 备注（信息密度最高），详情栏只有几排滑条（够放最长文案即可），
      * 效果栏够放「名称 + W 值」即可。权重只有相对意义，不必凑满 100。
@@ -337,7 +343,7 @@ public class GuiAreas extends GuiScreen {
     /** 重建本维度区域列表（不处理选中项）。 */
     private void reloadAreas() {
         int dim = currentDim();
-        areas = dim >= 0 ? proxy.getAreasLocal(dim) : new ArrayList<Area>();
+        areas = dim != NO_DIM ? proxy.getAreasLocal(dim) : new ArrayList<Area>();
         areaCol.reset();
     }
 
@@ -367,7 +373,7 @@ public class GuiAreas extends GuiScreen {
         closeColorPicker();
         if (selected != null) {
             int dim = currentDim();
-            if (dim >= 0) {
+            if (dim != NO_DIM) {
                 proxy.clearPreview(dim, selected.id);
             }
         }
@@ -388,7 +394,7 @@ public class GuiAreas extends GuiScreen {
         addMenuOpen = false;
         if (selected != null) {
             int dim = currentDim();
-            if (dim >= 0) {
+            if (dim != NO_DIM) {
                 proxy.clearPreview(dim, selected.id);
             }
         }
@@ -412,9 +418,9 @@ public class GuiAreas extends GuiScreen {
         }
     }
 
-    /** 当前选中维度 id；无效返回 -1。所有按维度定位的读写都应先取它并判 {@code >=0}。 */
+    /** 当前选中维度 id；无有效选中返回 {@link #NO_DIM}。所有按维度定位的读写都应先取它再判 {@code != NO_DIM}。 */
     private int currentDim() {
-        return dimIdx >= 0 && dimIdx < dims.size() ? dims.get(dimIdx) : -1;
+        return dimIdx >= 0 && dimIdx < dims.size() ? dims.get(dimIdx) : NO_DIM;
     }
 
     /** 当前选中效果实例；无有效选中返回 null。可见性与绘制都以它为准（单一来源）。 */
@@ -734,7 +740,7 @@ public class GuiAreas extends GuiScreen {
         remarkField.setEnabled(has);
         if (wireBtn != null) {
             int dim = currentDim();
-            wireBtn.setOn(has && dim >= 0 && proxy.isAreaVisible(dim, selected.id));
+            wireBtn.setOn(has && dim != NO_DIM && proxy.isAreaVisible(dim, selected.id));
         }
         // L3 效果级：权重/过渡时长/时段是所有效果通用参数，有选中效果即可见
         AreaEffect effect = selectedEffect();
@@ -999,7 +1005,7 @@ public class GuiAreas extends GuiScreen {
             // 备注：紧跟在编号列之后左对齐；超出可用宽度截成省略号（右侧给滚动条留位）
             int remarkX = areaX1 + 6 + idW + 4;
             int avail = (areaX2 - ScrollColumn.BAR_W - 4) - remarkX;
-            String remark = listDim >= 0 ? proxy.getEffectiveRemark(listDim, area) : "";
+            String remark = listDim != NO_DIM ? proxy.getEffectiveRemark(listDim, area) : "";
             if (!remark.isEmpty()) {
                 String shown = trim(remark, avail);
                 if (!shown.isEmpty()) {
@@ -1090,7 +1096,7 @@ public class GuiAreas extends GuiScreen {
                 dirty = true;
             }
             int dim = currentDim();
-            if (dim >= 0 && !text.equals(proxy.getEffectiveRemark(dim, area))) {
+            if (dim != NO_DIM && !text.equals(proxy.getEffectiveRemark(dim, area))) {
                 proxy.previewAreaRemark(dim, area.id, text);
             }
         }
@@ -1363,7 +1369,7 @@ public class GuiAreas extends GuiScreen {
             }
             return;
         }
-        if (selected == null || dim < 0) {
+        if (selected == null || dim == NO_DIM) {
             return;
         }
         if (button.id == BTN_SAVE) {
@@ -1389,13 +1395,13 @@ public class GuiAreas extends GuiScreen {
         if (id == BTN_TP) {
             proxy.sendTpRequest(selected.id);
         } else if (id == BTN_DELETE) {
-            if (dim < 0) {
+            if (dim == NO_DIM) {
                 return;
             }
             proxy.sendDeleteRequest(dim, selected.id);
             clearSelection();
         } else if (id == BTN_SEL) {
-            if (dim < 0) {
+            if (dim == NO_DIM) {
                 return;
             }
             proxy.toggleAreaVisible(dim, selected.id);
@@ -1408,7 +1414,7 @@ public class GuiAreas extends GuiScreen {
     private void afterEffectStructuralChange(int dim) {
         dirty = true;
         effectCol.clamp(pendingEffects.size());
-        if (dim >= 0) {
+        if (dim != NO_DIM) {
             proxy.previewAreaEffects(dim, selected.id, pendingEffects);
         }
         syncDetailWidgets();
@@ -1492,7 +1498,7 @@ public class GuiAreas extends GuiScreen {
         if (changed) {
             dirty = true;
             int dim = currentDim();
-            if (dim >= 0) {
+            if (dim != NO_DIM) {
                 proxy.previewAreaEffects(dim, selected.id, pendingEffects);
             }
         }
@@ -1546,7 +1552,7 @@ public class GuiAreas extends GuiScreen {
         }
         dirty = true;
         int dim = currentDim();
-        if (dim >= 0) {
+        if (dim != NO_DIM) {
             proxy.previewAreaEffects(dim, selected.id, pendingEffects);
         }
         colorButton.setColor(color);
