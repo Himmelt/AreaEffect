@@ -5,7 +5,6 @@ import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import org.soraworld.areaeffect.common.effect.AreaEffect;
 import org.soraworld.areaeffect.common.effect.EffectTypes;
-import org.soraworld.areaeffect.common.effect.LightnessEffect;
 import org.soraworld.areaeffect.common.shape.AreaShape;
 import org.soraworld.areaeffect.common.shape.PrismShape;
 import org.soraworld.areaeffect.common.shape.ShapeTypes;
@@ -43,11 +42,6 @@ public class Area {
      * 整组替换保证读取方拿到的永远是一份完整、一致的旧列表。
      */
     private volatile List<AreaEffect> effects = new ArrayList<>();
-
-    public Area(AreaShape shape, float lightness, float duration) {
-        this.shape = shape;
-        this.effects = Collections.singletonList(new LightnessEffect(lightness, duration));
-    }
 
     /** 创建不带任何效果的纯区域（区域创建阶段无效果，效果由面板后续添加）。 */
     public Area(AreaShape shape) {
