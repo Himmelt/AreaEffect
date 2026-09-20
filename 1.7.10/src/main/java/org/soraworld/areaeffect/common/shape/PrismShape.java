@@ -512,35 +512,46 @@ public class PrismShape extends AreaShape {
         if (section == null) {
             return null;
         }
-        Bounds b;
+        // 各形状严格按其 writeToBuf 的字段顺序读取（RECT 六坐标 / CIRCLE 圆心半径 / POLYGON 顶点序列），
+        // 不得用统一的一条读路径 —— 否则与写侧不对称，会让几何字段或同包后续元素整体错位。
         if (section == Section.RECT) {
-            b = new Bounds(buf.readDouble(), buf.readDouble(), buf.readDouble(),
-                    buf.readDouble(), buf.readDouble(), buf.readDouble());
+            // 写序：minX, maxX, minY, maxY, minZ, maxZ；按连续几何语义排进 Bounds(minX,minY,minZ,maxX,maxY,maxZ)
+            double minX = buf.readDouble();
+            double maxX = buf.readDouble();
+            double minY = buf.readDouble();
+            double maxY = buf.readDouble();
+            double minZ = buf.readDouble();
+            double maxZ = buf.readDouble();
+            Bounds b = new Bounds(minX, minY, minZ, maxX, maxY, maxZ);
             return new PrismShape(section, full, b, 0, 0, 0, new double[0], new double[0]);
         }
-        double cx = buf.readDouble();
-        double cz = buf.readDouble();
-        double r = buf.readDouble();
+        if (section == Section.CIRCLE) {
+            double cx = buf.readDouble();
+            double cz = buf.readDouble();
+            double r = buf.readDouble();
+            double minY = 0;
+            double maxY = FULL_MAX_Y + 1.0D;
+            if (!full) {
+                minY = buf.readDouble();
+                maxY = buf.readDouble();
+            }
+            Bounds b = boundsFromGeometry(section, full, cx, cz, r, new double[0], new double[0], minY, maxY);
+            return new PrismShape(section, full, b, cx, cz, r, new double[0], new double[0]);
+        }
+        // POLYGON：只写顶点序列 +（有界时）Y 区间，不含 cx/cz/r 字段
+        double[] xs = readDoublesBuf(buf);
+        double[] zs = readDoublesBuf(buf);
+        if (xs.length < 3 || xs.length != zs.length) {
+            return null;
+        }
         double minY = 0;
         double maxY = FULL_MAX_Y + 1.0D;
         if (!full) {
             minY = buf.readDouble();
             maxY = buf.readDouble();
         }
-        double[] xs;
-        double[] zs;
-        if (section == Section.CIRCLE) {
-            xs = new double[0];
-            zs = new double[0];
-        } else {
-            xs = readDoublesBuf(buf);
-            zs = readDoublesBuf(buf);
-            if (xs.length < 3 || xs.length != zs.length) {
-                return null;
-            }
-        }
-        b = boundsFromGeometry(section, full, cx, cz, r, xs, zs, minY, maxY);
-        return new PrismShape(section, full, b, cx, cz, r, xs, zs);
+        Bounds b = boundsFromGeometry(section, full, 0, 0, 0, xs, zs, minY, maxY);
+        return new PrismShape(section, full, b, 0, 0, 0, xs, zs);
     }
 
     private static double[] readDoublesBuf(ByteBuf buf) {
