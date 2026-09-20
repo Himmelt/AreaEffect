@@ -1,0 +1,248 @@
+package org.soraworld.areaeffect.client.handler;
+
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.EntityRenderer;
+import net.minecraft.client.renderer.texture.DynamicTexture;
+import net.minecraftforge.fml.relauncher.Side;
+import net.minecraftforge.fml.relauncher.SideOnly;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.soraworld.areaeffect.AreaEffectMod;
+import org.soraworld.areaeffect.common.util.GammaCurve;
+
+import java.lang.reflect.Field;
+
+/**
+ * Takes over the receiving end of the vanilla lightmap without ever touching
+ * {@code GameSettings.gammaSetting}: the {@link DynamicTexture} vanilla uses
+ * for the lightmap is swapped for a delegating subclass whose
+ * {@code updateDynamicTexture()} applies a uniform CIE L* offset to the freshly
+ * computed pixels, then lets the original upload run. Because the upload stays
+ * on the original texture object, the GL id registered under the vanilla
+ * resource location never changes.
+ *
+ * <p>The offset is channel-order agnostic (the same per channel LUT is applied
+ * to the three low bytes, the alpha high byte is preserved) and {@code 0}
+ * means an exact vanilla passthrough. Installation uses a pure type scan (only
+ * class literals, which FML remaps at runtime, so it survives obfuscation) and
+ * requires the lightmap texture to be the only field of its type; if the
+ * structure is not recognised the hook simply stays uninstalled and vanilla
+ * behaviour is kept.
+ */
+@SideOnly(Side.CLIENT)
+public final class LightmapHook {
+
+    private static final Logger LOGGER = LogManager.getLogger(AreaEffectMod.MOD_NAME);
+
+    private static boolean installed = false;
+    /** 结构歧义（同类型字段多于一个）时置位：停止每帧重试与重试告警。 */
+    private static boolean installAborted = false;
+    /** 目标亮度（CIE L*），blend=1 时整张贴图统一到该亮度。 */
+    private static volatile double lightness = 0.0D;
+    /** 混合系数：0 = vanilla 原样，1 = 完全统一到目标亮度。 */
+    private static volatile double blend = 0.0D;
+    private static volatile int[] lut = null;
+    private static volatile double lutLightness = Double.NaN;
+    private static volatile double lutBlend = Double.NaN;
+    /** 已替换的贴图实例：输入变化时主动触发上传。 */
+    private static volatile HookedTexture hooked = null;
+    /** vanilla 像素备份：混合映射非幂等，上传后必须还原防止复合。 */
+    private static int[] pixelBackup = null;
+    /** 安装线程（客户端渲染线程）：仅在该线程允许主动上传。 */
+    private static volatile Thread renderThread = null;
+
+    /**
+     * 256 项「输入码值 → 感知亮度（CIE L*）」基础表。与 {@code lightness}/{@code blend}
+     * 无关，进程内只算一次；否则过渡动画期间每帧重建 LUT 都要重复 256 次 pow + cbrt。
+     */
+    private static final double[] BASE_LIGHTNESS = new double[256];
+
+    static {
+        for (int i = 0; i < 256; i++) {
+            BASE_LIGHTNESS[i] = GammaCurve.lightnessFromCode(i / 255.0D);
+        }
+    }
+
+    private LightmapHook() {
+    }
+
+    /**
+     * 设置当前混合输入：目标亮度 {@code lightness}（CIE L*）与混合系数 {@code blend}。
+     * {@code blend <= 0} 时为 vanilla 精确透传。输入变化时在渲染线程主动上传
+     * 光照贴图，不依赖 vanilla 的 lightmapUpdateNeeded 标志（GUI 打开时该标志
+     * 可能长期不置位，导致预览延迟）。
+     */
+    public static void setOffset(double lightness, double blend) {
+        boolean changed = lightness != LightmapHook.lightness || blend != LightmapHook.blend;
+        LightmapHook.lightness = lightness;
+        LightmapHook.blend = blend;
+        if (changed && hooked != null && Thread.currentThread() == renderThread) {
+            hooked.updateDynamicTexture();
+        }
+    }
+
+    /**
+     * Locates the lightmap texture and swaps in the hooking wrapper. Cheap to
+     * call every tick; does nothing once installed, and keeps looking until
+     * the renderer actually exists.
+     */
+    public static void tryInstall(Minecraft mc) {
+        if (installed || installAborted || mc == null) {
+            return;
+        }
+        EntityRenderer renderer = mc.entityRenderer;
+        if (renderer == null) {
+            return;
+        }
+        try {
+            // case one: the renderer itself holds the texture (1.7.10, 1.12.2).
+            // 定位前提是「类型唯一」：1.7.10 的 EntityRenderer 恰好只有一个 DynamicTexture
+            // 字段（lightmapTexture）。字段顺序不是任何契约，若其它模组新增了同类型字段就
+            // 无法判断该换哪一个——此时宁可放弃安装（保持 vanilla 表现），也不能换错对象，
+            // 因为换错是静默失败：画面看不出异常，光照却再也不会更新。
+            Field target = null;
+            int count = 0;
+            for (Field f : EntityRenderer.class.getDeclaredFields()) {
+                if (f.getType() == DynamicTexture.class) {
+                    target = f;
+                    count++;
+                }
+            }
+            if (count > 1) {
+                installAborted = true;
+                LOGGER.warn("Found {} DynamicTexture fields in {}; lightmap hook disabled "
+                        + "rather than risk replacing the wrong one", count, EntityRenderer.class.getName());
+                return;
+            }
+            if (target != null) {
+                target.setAccessible(true);
+                if (wrap(target, renderer)) {
+                    return;
+                }
+            }
+            // case two: a lightmap wrapper object holds it (1.8.9 - 1.11.2).
+            // 【未验证路径】运行时类名是混淆名，getSimpleName() 拿不到 "...Light..."，
+            // 因此该分支在混淆环境下实际不可能命中，保留仅供其它版本分支参考，
+            // 不要据此认为本 hook 已支持 1.8.9+。
+            for (Field f : EntityRenderer.class.getDeclaredFields()) {
+                Class<?> type = f.getType();
+                if (type.isPrimitive() || type.isArray() || type == String.class
+                        || !type.getSimpleName().contains("Light")) {
+                    continue;
+                }
+                f.setAccessible(true);
+                Object holder = f.get(renderer);
+                if (holder == null) {
+                    continue;
+                }
+                Field inner = findField(holder.getClass(), DynamicTexture.class);
+                if (inner != null && wrap(inner, holder)) {
+                    return;
+                }
+            }
+        } catch (Throwable ignored) {
+            // unexpected structure or mapping: keep vanilla behaviour
+        }
+    }
+
+    /**
+     * First declared field of exactly {@code type}, made accessible.
+     */
+    private static Field findField(Class<?> owner, Class<?> type) {
+        for (Field f : owner.getDeclaredFields()) {
+            if (f.getType() == type) {
+                f.setAccessible(true);
+                return f;
+            }
+        }
+        return null;
+    }
+
+    private static boolean wrap(Field field, Object owner) throws IllegalAccessException {
+        Object value = field.get(owner);
+        if (!(value instanceof DynamicTexture) || value instanceof HookedTexture) {
+            return false;
+        }
+        HookedTexture texture = new HookedTexture((DynamicTexture) value);
+        field.set(owner, texture);
+        hooked = texture;
+        renderThread = Thread.currentThread();
+        installed = true;
+        return true;
+    }
+
+    /**
+     * 256 项 LUT：把每个输入码值的感知亮度（CIE L*）向目标亮度按 blend 插值。
+     * blend=0 时是恒等映射（不过此情况下走透传，不会用到），blend=1 时全部
+     * 映射到目标亮度，中间值则逐像素连续混合，两端均无跳变。
+     *
+     * <p>正向（码值 → L*）用静态基础表，每帧只做一次加权；逆向（L* → 码值）保持
+     * 精确数学不做近似，以免牺牲暗部的码值精度。输入未变化时直接复用上次结果。
+     */
+    private static int[] getLut() {
+        double l = lightness;
+        double b = blend;
+        int[] table = lut;
+        if (table != null && lutLightness == l && lutBlend == b) {
+            return table;
+        }
+        double clampedL = clamp(l, 0.0D, 100.0D);
+        table = new int[256];
+        for (int i = 0; i < 256; i++) {
+            double lo = BASE_LIGHTNESS[i] * (1.0D - b) + clampedL * b;
+            table[i] = (int) Math.round(255.0D * clamp(GammaCurve.toCode(GammaCurve.toLuminance(lo)), 0.0D, 1.0D));
+        }
+        lut = table;
+        lutLightness = l;
+        lutBlend = b;
+        return table;
+    }
+
+    private static double clamp(double value, double min, double max) {
+        // NaN and -Infinity land on min, +Infinity lands on max
+        return !(value >= min) ? min : (value > max ? max : value);
+    }
+
+    /**
+     * Delegating texture: post-processes the original's pixel array (the very
+     * array vanilla writes every frame) and then delegates the upload, so the
+     * registered texture keeps its GL id and content ordering.
+     */
+    private static class HookedTexture extends DynamicTexture {
+
+        private final DynamicTexture origin;
+
+        HookedTexture(DynamicTexture origin) {
+            super(16, 16);
+            // 构造仅为继承 DynamicTexture 类型，分配出的纹理本类永不使用，立即释放避免 GL id 泄漏
+            deleteGlTexture();
+            this.origin = origin;
+        }
+
+        @Override
+        public void updateDynamicTexture() {
+            if (blend <= 0.0D) {
+                origin.updateDynamicTexture();
+                return;
+            }
+            int[] pixels = origin.getTextureData();
+            int[] table = getLut();
+            // 混合 LUT 非幂等：备份 vanilla 像素，映射后上传，再还原。
+            // 之后的主动上传/vanilla 重算都基于干净的原始值，不会反复复合。
+            int[] backup = pixelBackup;
+            if (backup == null || backup.length != pixels.length) {
+                backup = pixelBackup = new int[pixels.length];
+            }
+            System.arraycopy(pixels, 0, backup, 0, pixels.length);
+            for (int i = 0; i < pixels.length; i++) {
+                int p = pixels[i];
+                pixels[i] = (p & 0xFF000000)
+                        | (table[(p >>> 16) & 0xFF] << 16)
+                        | (table[(p >>> 8) & 0xFF] << 8)
+                        | table[p & 0xFF];
+            }
+            origin.updateDynamicTexture();
+            System.arraycopy(backup, 0, pixels, 0, pixels.length);
+        }
+    }
+}

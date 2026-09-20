@@ -16,8 +16,17 @@ apply plugin: 'java'
 apply plugin: 'eclipse'
 apply plugin: 'maven-publish'
 
+// 源码含大量中文注释，统一按 UTF-8 编译/处理资源
+compileJava.options.encoding = 'UTF-8'
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+}
+tasks.withType(ProcessResources) {
+    filteringCharset = 'UTF-8'
+}
+
 group = 'org.soraworld.areaeffect'
-version = '1.3.0'
+version = '1.4.0'
 archivesBaseName = 'AreaEffect-1.13.2'
 
 // 使用 MCP snapshot 映射（1.13.2 无官方 mojmap）
@@ -26,11 +35,12 @@ minecraft {
 }
 
 repositories {
-    // USTC-BMCLAPI 镜像（国内加速，兜底源）
-    maven { url = 'https://bmclapi2.bangbang93.com/maven' }
+    // Maven Central 优先（镜像缺件时兜底，如 jline-reader）
+    mavenCentral()
     // Forge 官方 maven
     maven { url = 'https://maven.minecraftforge.net/' }
-    mavenCentral()
+    // USTC-BMCLAPI 镜像（国内加速）
+    maven { url = 'https://bmclapi2.bangbang93.com/maven' }
 }
 
 dependencies {
