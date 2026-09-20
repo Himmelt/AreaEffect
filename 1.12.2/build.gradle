@@ -3,7 +3,17 @@ plugins {
     id 'com.gtnewhorizons.retrofuturagradle' version '2.0.3'
 }
 
-version = '1.2.0'
+// 版本号的唯一来源是 AreaEffectMod.MOD_VERSION：@Mod(version) 与 mcmod.info 必须一致，
+// 这里直接解析源码常量，避免两处分别手改后漂移。
+def modVersion = '1.4.0'
+def modSource = file('src/main/java/org/soraworld/areaeffect/AreaEffectMod.java')
+if (modSource.exists()) {
+    def matcher = modSource.text =~ /MOD_VERSION\s*=\s*"([^"]+)"/
+    if (matcher.find()) {
+        modVersion = matcher.group(1)
+    }
+}
+version = modVersion
 group = 'org.soraworld.areaeffect'
 
 base { archivesName = 'AreaEffect-1.12.2' }

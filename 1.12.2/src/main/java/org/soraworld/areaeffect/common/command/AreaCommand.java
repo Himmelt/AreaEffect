@@ -1,0 +1,86 @@
+package org.soraworld.areaeffect.common.command;
+
+import net.minecraft.command.CommandBase;
+import net.minecraft.command.ICommandSender;
+import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.util.math.BlockPos;
+
+import org.soraworld.areaeffect.common.CommonProxy;
+import org.soraworld.areaeffect.common.util.Vec3i;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+
+public class AreaCommand extends CommandBase {
+
+    private static final String[] SUBS = {"pos1", "pos2", "create", "tool"};
+
+    private final String name;
+    private final CommonProxy proxy;
+    private final String[] aliases;
+
+    public AreaCommand(CommonProxy proxy, String... aliases) {
+        this.proxy = proxy;
+        this.name = aliases != null && aliases.length > 0 ? aliases[0] : "areaeffect";
+        this.aliases = aliases != null && aliases.length > 1
+                ? Arrays.copyOfRange(aliases, 1, aliases.length)
+                : new String[0];
+    }
+
+    @Override
+    public String getName() {
+        return name;
+    }
+
+    @Override
+    public String getUsage(ICommandSender sender) {
+        return "/areaeffect pos1|pos2|create|tool";
+    }
+
+    @Override
+    public List<String> getAliases() {
+        List<String> aliases = new ArrayList<>();
+        Collections.addAll(aliases, this.aliases);
+        return aliases;
+    }
+
+    @Override
+    public void execute(MinecraftServer server, ICommandSender sender, String[] args) {
+        if (!(sender instanceof EntityPlayerMP)) {
+            return;
+        }
+        EntityPlayerMP player = (EntityPlayerMP) sender;
+        String sub = args.length > 0 ? args[0] : "";
+        if ("pos1".equals(sub)) {
+            proxy.onSelectToolLeft(player, new Vec3i(player));
+        } else if ("pos2".equals(sub)) {
+            proxy.onSelectToolRight(player, new Vec3i(player));
+        } else if ("create".equals(sub)) {
+            // 只创建空区域（不带效果），效果由面板（默认 J 键）后续添加
+            proxy.createArea(player);
+        } else if ("tool".equals(sub)) {
+            proxy.commandTool(player);
+        } else {
+            // 未识别或缺失子命令：必须给出用法，不能静默返回。
+            // 区域管理（列表/传送/删除/改亮度时长）已迁移到客户端面板（默认 J 键）不再提供指令，
+            // 缺少提示会让玩家误判为指令失效。
+            proxy.sendChatTranslation(player, "chat.command.usage");
+        }
+    }
+
+    @Override
+    public boolean checkPermission(MinecraftServer server, ICommandSender sender) {
+        return sender.canUseCommand(2, "gamemode");
+    }
+
+    @Override
+    public List<String> getTabCompletions(MinecraftServer server, ICommandSender sender, String[] args, BlockPos targetPos) {
+        if (args.length == 1) {
+            return getListOfStringsMatchingLastWord(args, SUBS);
+        }
+        return null;
+    }
+}

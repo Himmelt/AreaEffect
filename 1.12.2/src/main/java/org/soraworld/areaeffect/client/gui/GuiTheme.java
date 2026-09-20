@@ -1,0 +1,74 @@
+package org.soraworld.areaeffect.client.gui;
+
+/**
+ * 区域管理界面的扁平配色与颜色换算。
+ *
+ * <p>单独成类的原因：配色原先散落在界面的静态字段里，控件类被抽出去后就无法引用。
+ * 集中到一处后，界面与控件都以单一来源取色（用法见各文件的静态导入）。
+ *
+ * <p>约定：<b>填充类</b>常量按 RGBA(0xRRGGBBAA) 书写，使用时经 {@link #argb(int)}
+ * 转成 Minecraft 需要的 ARGB；<b>文字类</b>常量只有 24 位 RGB（无 alpha 位），
+ * 直接交给字体渲染，不做转换。
+ */
+final class GuiTheme {
+
+    // ===================== 主题色 =====================
+
+    /** 选中高亮（维度 / 区域行）。 */
+    static final int COLOR_SELECTED = 0x00FFFFCC;
+    /** 行悬停底。 */
+    static final int COLOR_HOVER_ROW = 0x00ffff54;
+    /** 强调文字（备注、L 值）。 */
+    static final int COLOR_ACCENT = 0xFFFF00;
+    /** 滑动条进度填充（半透明纯绿）。 */
+    static final int COLOR_SLIDER_FILL = 0x64FF6480;
+    /** 面板 / 按钮 / 滑动条描边。 */
+    static final int COLOR_BORDER = 0x4A6666FF;
+    /** 按钮悬停底。 */
+    static final int COLOR_BTN_HOVER = 0x00ffff54;
+
+    // ===================== 中性色 =====================
+
+    /** 标题 / 选中项文字。 */
+    static final int COLOR_TEXT_HEAD = 0xFFFFFF;
+    /** 正文 / 按钮文字。 */
+    static final int COLOR_TEXT_BODY = 0xE0E0E0;
+    /** 提示文字。 */
+    static final int COLOR_TEXT_HINT = 0x808080;
+    /** 禁用文字。 */
+    static final int COLOR_TEXT_DISABLED = 0x707070;
+    /** 全屏黑色半透明底（铺满整块画面，详情栏留透明）。 */
+    static final int COLOR_BG = 0x000000CC;
+    /** 模态弹窗（取色器 / 添加效果）的不透明面板底。 */
+    static final int COLOR_MODAL_BG = 0x1E1E1EFF;
+    /** 按钮常态底。 */
+    static final int COLOR_BTN_BG = 0x222222AA;
+    /** 按钮禁用底。 */
+    static final int COLOR_BTN_DISABLED = 0x111111AA;
+    /** 滑动条轨道底。 */
+    static final int COLOR_SLIDER_TRACK = 0x1A1A1AAA;
+    /** 滑动条滑块。 */
+    static final int COLOR_SLIDER_THUMB = 0xE8E8E8FF;
+    /** 滑动条滑块悬停/拖拽高亮（填充类，不透明黄）。也用于图标按钮的悬停字形色。 */
+    static final int COLOR_SLIDER_THUMB_HOT = 0xFFFF00FF;
+    /** 危险动作（删除区域）悬停时的字形色（填充类，不透明红）：与安全动作的黄色区分开。 */
+    static final int COLOR_DANGER = 0xFF6B6BFF;
+    /** 滑动条数值文字。 */
+    static final int COLOR_SLIDER_TEXT = 0xF0F0F0;
+    /** 取色滑条标签的暗底板（62% 黑，压在渐变色带上保证白字在黄/青段也可读）。 */
+    static final int COLOR_BAND_PLATE = 0x0000009E;
+    /** 取色滑块常态描边（深色，防止滑块颜色与色带同色时看不见）。 */
+    static final int COLOR_BAND_THUMB_EDGE = 0x000000B4;
+    /** 滚动条轨道。 */
+    static final int COLOR_SCROLL_TRACK = 0x00000033;
+    /** 滚动条滑块。 */
+    static final int COLOR_SCROLL_THUMB = 0xCCCCCCFF;
+
+    private GuiTheme() {
+    }
+
+    /** RGBA(0xRRGGBBAA) → ARGB(0xAARRGGBB)，供 Minecraft 填充 / 文字颜色使用。 */
+    static int argb(int rgba) {
+        return ((rgba & 0xFF) << 24) | ((rgba >> 8) & 0xFFFFFF);
+    }
+}
