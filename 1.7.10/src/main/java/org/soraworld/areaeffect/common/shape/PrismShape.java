@@ -539,8 +539,16 @@ public class PrismShape extends AreaShape {
             return new PrismShape(section, full, b, cx, cz, r, new double[0], new double[0]);
         }
         // POLYGON：只写顶点序列 +（有界时）Y 区间，不含 cx/cz/r 字段
-        double[] xs = readDoublesBuf(buf);
-        double[] zs = readDoublesBuf(buf);
+        // 顶点写侧是「xs[0],zs[0],xs[1],zs[1],…」交替布局（见 writePolygonBuf），
+        // 读侧必须同布局、只读一个 count：不能套用 readDoublesBuf 的「先整段 xs 再整段 zs」
+        // 分组读取——二者不对称会让第二个 count 拿到顶点 double 的字节、几何与后续元素整体错位。
+        int count = Math.min(Math.max(buf.readInt(), 0), Selection.MAX_ANCHORS);
+        double[] xs = new double[count];
+        double[] zs = new double[count];
+        for (int i = 0; i < count; i++) {
+            xs[i] = buf.readDouble();
+            zs[i] = buf.readDouble();
+        }
         if (xs.length < 3 || xs.length != zs.length) {
             return null;
         }
@@ -552,15 +560,6 @@ public class PrismShape extends AreaShape {
         }
         Bounds b = boundsFromGeometry(section, full, 0, 0, 0, xs, zs, minY, maxY);
         return new PrismShape(section, full, b, 0, 0, 0, xs, zs);
-    }
-
-    private static double[] readDoublesBuf(ByteBuf buf) {
-        int count = Math.min(Math.max(buf.readInt(), 0), Selection.MAX_ANCHORS);
-        double[] a = new double[count];
-        for (int i = 0; i < count; i++) {
-            a[i] = buf.readDouble();
-        }
-        return a;
     }
 
     private static Bounds boundsFromGeometry(Section section, boolean full, double cx, double cz, double r,
