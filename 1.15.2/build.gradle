@@ -1,9 +1,10 @@
 buildscript {
     repositories {
-        // Forge 官方 maven（FG4 所在的仓库，必需，coremods 等官方构件需从此解析）
-        maven { url = 'https://maven.minecraftforge.net/' }
-        // USTC-BMCLAPI 镜像（国内加速，兜底源）
+        // 注意：buildscript 解析的是 ForgeGradle 插件及其工具链依赖，阿里云私仓并不代理这些
+        // 构件（实测对其返回 401/挂起回退），因此这里**不要**把阿里云放首位，否则插件
+        // 解析会卡在 buildscript 阶段。用 bmclapi（可达、含 ForgeGradle）+ forge maven 优先。
         maven { url = 'https://bmclapi2.bangbang93.com/maven' }
+        maven { url = 'https://maven.minecraftforge.net' }
         mavenCentral()
     }
     dependencies {
@@ -13,30 +14,85 @@ buildscript {
 
 apply plugin: 'net.minecraftforge.gradle'
 apply plugin: 'java'
-apply plugin: 'eclipse'
-apply plugin: 'maven-publish'
 
+// 源码含大量中文注释，统一按 UTF-8 编译/处理资源
+compileJava.options.encoding = 'UTF-8'
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+}
+tasks.withType(ProcessResources) {
+    filteringCharset = 'UTF-8'
+}
+
+// 版本号的唯一来源是 AreaEffectMod.MOD_VERSION：@Mod 的版本与 mods.toml 的 ${version} 必须一致，
+// 这里直接解析源码常量，避免两处分别手改后漂移（与 1.12.2 / 1.13.2 / 1.14.4 同一约定）。
+def modVersion = '1.4.0'
+def modSource = file('src/main/java/org/soraworld/areaeffect/AreaEffectMod.java')
+if (modSource.exists()) {
+    def matcher = modSource.text =~ /MOD_VERSION\s*=\s*"([^"]+)"/
+    if (matcher.find()) {
+        modVersion = matcher.group(1)
+    }
+}
+version = modVersion
 group = 'org.soraworld.areaeffect'
-version = '1.3.0'
 archivesBaseName = 'AreaEffect-1.15.2'
 
 sourceCompatibility = targetCompatibility = JavaVersion.VERSION_1_8
 
-// 使用 MCP snapshot 映射（1.15.2 对应的是为 1.15.x 发布的 snapshot，此处用官方推荐的 20200514-1.15.1）
-minecraft {
-    mappings channel: 'snapshot', version: '20200514-1.15.1'
-}
-
 repositories {
-    // Forge 官方 maven（coremods 等官方构件需从此解析，优先）
-    maven { url = 'https://maven.minecraftforge.net/' }
+    // 阿里云私有 maven 镜像（优先，凭据见 buildscript 同上）
+    maven {
+        credentials {
+            username = System.getenv('ALIYUN_MVN_USERNAME')
+            password = System.getenv('ALIYUN_MVN_PASSWORD')
+        }
+        url = System.getenv('ALIYUN_MVN_URL')
+    }
     // USTC-BMCLAPI 镜像（国内加速，兜底源）
     maven { url = 'https://bmclapi2.bangbang93.com/maven' }
+    maven { url = 'https://maven.minecraftforge.net' }
     mavenCentral()
+}
+
+minecraft {
+    // 1.15.2 仍用 MCP snapshot 映射（与 1.13.2 / 1.14.4 一致的命名风格，便于跨版本对照）
+    mappings channel: 'snapshot', version: '20200514-1.15.1'
+    runs {
+        client {
+            workingDirectory project.file('run/client')
+            property 'forge.logging.markers', 'SCAN,REGISTRIES,REGISTRYDUMP'
+            property 'forge.logging.console.level', 'debug'
+            mods {
+                areaeffect {
+                    source sourceSets.main
+                }
+            }
+        }
+        server {
+            workingDirectory project.file('run/server')
+            property 'forge.logging.markers', 'SCAN,REGISTRIES,REGISTRYDUMP'
+            property 'forge.logging.console.level', 'debug'
+            mods {
+                areaeffect {
+                    source sourceSets.main
+                }
+            }
+        }
+    }
 }
 
 dependencies {
     minecraft 'net.minecraftforge:forge:1.15.2-31.1.30'
+}
+
+// mods.toml 的 ${version} 由构建期替换为上面的实际版本
+processResources {
+    inputs.property "version", project.version
+    from(sourceSets.main.resources.srcDirs) {
+        include 'META-INF/mods.toml'
+        expand 'version': project.version
+    }
 }
 
 jar {

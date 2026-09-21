@@ -27,3 +27,7 @@ ehthumbs.db
 
 # ===== WorkBuddy 本地工作区数据 =====
 .workbuddy/
+
+# ===== 本地构建辅助/实验残留（不入库） =====
+_cachewarm/
+**/.guser/
