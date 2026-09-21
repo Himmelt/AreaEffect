@@ -1,7 +1,6 @@
 package org.soraworld.areaeffect.client.gui;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiButton;
 
 import static org.soraworld.areaeffect.client.gui.GuiTheme.COLOR_BORDER;
 import static org.soraworld.areaeffect.client.gui.GuiTheme.COLOR_BTN_BG;
@@ -20,7 +19,7 @@ import static org.soraworld.areaeffect.client.gui.GuiTheme.argb;
  * （见 {@link #B_LEFT} 等掩码）—— 贴在某一栏里的按钮，其左右两边由栏的共用竖线提供，组内两个按钮
  * 之间只留一根分隔线；否则会出现"两条 1px 并排"的加粗观感。
  */
-class FlatButton extends GuiButton {
+class FlatButton extends AefButton {
 
     /** 描边掩码：只画选中的那几条边。 */
     static final int B_LEFT = 1;
@@ -40,8 +39,9 @@ class FlatButton extends GuiButton {
         this.borders = borders;
     }
 
+    /** 1.13 的绘制钩子是 {@code render}(取代 {@code drawButton})，且不再传入 Minecraft 实例。 */
     @Override
-    public void drawButton(Minecraft mc, int mouseX, int mouseY, float partialTicks) {
+    public void render(int mouseX, int mouseY, float partialTicks) {
         if (!visible) {
             return;
         }
@@ -62,7 +62,7 @@ class FlatButton extends GuiButton {
             drawRect(x + width - 1, y, x + width, y + height, argb(COLOR_BORDER));
         }
         int color = enabled ? COLOR_TEXT_BODY : COLOR_TEXT_DISABLED;
-        drawCenteredString(mc.fontRenderer, displayString,
+        drawCenteredString(Minecraft.getInstance().fontRenderer, displayString,
                 x + width / 2, y + (height - 8) / 2, color);
     }
 }

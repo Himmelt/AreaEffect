@@ -1,9 +1,8 @@
 package org.soraworld.areaeffect.client.gui;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.renderer.BufferBuilder;
-import net.minecraft.client.renderer.OpenGlHelper;
+import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.Tessellator;
 import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
 import org.lwjgl.opengl.GL11;
@@ -37,7 +36,7 @@ import static org.soraworld.areaeffect.client.gui.GuiTheme.argb;
  * <p>轨道几何、步进、外部直设（{@link #setRangeRaw}/{@link #setMode}）与每帧自驱拖动（原因见 {@link FlatSlider}
  * 注释）均与 {@link FlatSlider} 一致。id 固定为 -1，使宿主 {@code actionPerformed} 不响应、避免与游标拖拽冲突。
  */
-class RangeSlider extends GuiButton {
+class RangeSlider extends AefButton {
 
     private static final int THUMB_W = 8;
     /** 无抓取状态。 */
@@ -150,27 +149,26 @@ class RangeSlider extends GuiButton {
         }
     }
 
+    /** 按下：命中游标则进入拖拽，否则整块当模式切换（1.13 的按下钩子是 onClick，命中判定已由基类做掉）。 */
     @Override
-    public boolean mousePressed(Minecraft mc, int mouseX, int mouseY) {
-        if (!super.mousePressed(mc, mouseX, mouseY)) {
-            return false;
-        }
+    public void onClick(double mouseX, double mouseY) {
+        fireAction();
+        int mx = (int) mouseX;
         if (!timed) {
             // 始终开启无游标，整块即模式按钮
             toggleMode();
-            return true;
+            return;
         }
         // 点中游标：拖拽改区间；否则（轨道/文字等非游标区域）：轮切模式
-        if (Math.abs(mouseX - centerOf(start)) <= GRAB) {
+        if (Math.abs(mx - centerOf(start)) <= GRAB) {
             dragging = START;
-            applyDrag(mouseX);
-        } else if (Math.abs(mouseX - centerOf(end)) <= GRAB) {
+            applyDrag(mx);
+        } else if (Math.abs(mx - centerOf(end)) <= GRAB) {
             dragging = END;
-            applyDrag(mouseX);
+            applyDrag(mx);
         } else {
             toggleMode();
         }
-        return true;
     }
 
     private void toggleMode() {
@@ -180,22 +178,27 @@ class RangeSlider extends GuiButton {
         }
     }
 
+    /** 拖动中：只由"按下时命中的那个控件"收到（见 {@link AefButton} 类注释），无需每帧自驱。 */
     @Override
-    protected void mouseDragged(Minecraft mc, int mouseX, int mouseY) {
-        if (dragging != NONE) {
-            applyDrag(mouseX);
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        if (dragging == NONE) {
+            return false;
         }
+        applyDrag((int) mouseX);
+        return true;
     }
 
     @Override
-    public void mouseReleased(int mouseX, int mouseY) {
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
         dragging = NONE;
+        return super.mouseReleased(mouseX, mouseY, button);
     }
 
     /**
      * 用 Tessellator 画一个实心三角形，GL 状态设置与 {@code Gui.drawRect} 一致：
      * 关纹理、开混合、按 {@code argb}(0xAARRGGBB) 取色。三个顶点即三条真边（含斜边）。
-     * 1.12.2 改为 BufferBuilder 顶点流（每顶点带 color）。
+     * 1.12.2 改为 BufferBuilder 顶点流（每顶点带 color）；1.13 的状态改写统一走
+     * {@link GlStateManager}（与 Gui.drawRect 同一套缓存，避免与 vanilla 的记账错位）。
      */
     private void fillTriangle(double x1, double y1, double x2, double y2, double x3, double y3, int argb) {
         float a = (float) ((argb >> 24) & 255) / 255.0F;
@@ -204,16 +207,16 @@ class RangeSlider extends GuiButton {
         float b = (float) (argb & 255) / 255.0F;
         Tessellator tessellator = Tessellator.getInstance();
         BufferBuilder buffer = tessellator.getBuffer();
-        GL11.glEnable(GL11.GL_BLEND);
-        GL11.glDisable(GL11.GL_TEXTURE_2D);
-        OpenGlHelper.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA, GL11.GL_ONE, GL11.GL_ZERO);
+        GlStateManager.enableBlend();
+        GlStateManager.disableTexture2D();
+        GlStateManager.blendFuncSeparate(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA, GL11.GL_ONE, GL11.GL_ZERO);
         buffer.begin(GL11.GL_TRIANGLES, DefaultVertexFormats.POSITION_COLOR);
         buffer.pos(x1, y1, 0.0D).color(r, g, b, a).endVertex();
         buffer.pos(x2, y2, 0.0D).color(r, g, b, a).endVertex();
         buffer.pos(x3, y3, 0.0D).color(r, g, b, a).endVertex();
         tessellator.draw();
-        GL11.glEnable(GL11.GL_TEXTURE_2D);
-        GL11.glDisable(GL11.GL_BLEND);
+        GlStateManager.enableTexture2D();
+        GlStateManager.disableBlend();
     }
 
     private void drawMarker(int cx, boolean isStart, int color) {
@@ -228,13 +231,12 @@ class RangeSlider extends GuiButton {
         }
     }
 
+    /** 1.13 的绘制钩子是 {@code render}(取代 {@code drawButton})，且不再传入 Minecraft 实例。 */
     @Override
-    public void drawButton(Minecraft mc, int mouseX, int mouseY, float partialTicks) {
+    public void render(int mouseX, int mouseY, float partialTicks) {
         if (!visible) {
             return;
         }
-        // 与 FlatSlider 同理：1.7.10 无人回调 mouseDragged，靠每帧自驱一次使拖动生效，勿删。
-        this.mouseDragged(mc, mouseX, mouseY);
         boolean over = enabled && mouseX >= x && mouseX < x + width
                 && mouseY >= y && mouseY < y + height;
         int scx = centerOf(start);
@@ -273,7 +275,7 @@ class RangeSlider extends GuiButton {
             drawMarker(scx, true, hotStart ? COLOR_SLIDER_THUMB_HOT : COLOR_SLIDER_THUMB);
             drawMarker(ecx, false, hotEnd ? COLOR_SLIDER_THUMB_HOT : COLOR_SLIDER_THUMB);
         }
-        drawCenteredString(mc.fontRenderer, displayString,
+        drawCenteredString(Minecraft.getInstance().fontRenderer, displayString,
                 x + width / 2, y + (height - 8) / 2, COLOR_SLIDER_TEXT);
     }
 }

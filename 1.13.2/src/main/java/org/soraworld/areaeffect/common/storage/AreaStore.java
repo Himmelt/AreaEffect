@@ -125,11 +125,12 @@ public class AreaStore {
             try (DataInputStream in = new DataInputStream(new FileInputStream(file))) {
                 root = CompressedStreamTools.readCompressed(in);
             }
-            // 1.13+ NBTTagList 访问改名：getTagList→getList、tagCount→size、getCompoundTagAt→getCompound
+            // 1.13+ NBT 访问全面改名：getTagList→getList、tagCount→size、getCompoundTagAt→getCompound、
+            // getInteger→getInt（hasKey→contains 见下方各处）
             NBTTagList areas = root.getList("areas", 10);
             for (int i = 0; i < areas.size(); i++) {
                 NBTTagCompound tag = areas.getCompound(i);
-                int dim = tag.getInteger("dim");
+                int dim = tag.getInt("dim");
                 Area area;
                 if (tag.contains("shape")) {
                     AreaShape shape = ShapeTypes.fromNbt(tag.getCompound("shape"));
@@ -143,15 +144,15 @@ public class AreaStore {
                     if (!tag.contains("x1") || !tag.contains("y1") || !tag.contains("z1")
                             || !tag.contains("x2") || !tag.contains("y2") || !tag.contains("z2")) {
                         LOGGER.warn("存档条目缺少形状或坐标键（dim={} id={}），已跳过以免产生 (0,0,0) 单格幽灵区域",
-                                dim, tag.contains("id") ? tag.getInteger("id") : -1);
+                                dim, tag.contains("id") ? tag.getInt("id") : -1);
                         continue;
                     }
-                    area = Area.box(tag.getInteger("x1"), tag.getInteger("y1"), tag.getInteger("z1"),
-                            tag.getInteger("x2"), tag.getInteger("y2"), tag.getInteger("z2"));
+                    area = Area.box(tag.getInt("x1"), tag.getInt("y1"), tag.getInt("z1"),
+                            tag.getInt("x2"), tag.getInt("y2"), tag.getInt("z2"));
                 }
                 area.setRemark(tag.getString("remark"));
                 area.setEffects(readEffectsNbt(tag.getList("effects", 10)));
-                area.id = tag.getInteger("id");
+                area.id = tag.getInt("id");
                 Area prev = table.put(dim, area.id, area);
                 if (prev != null) {
                     LOGGER.warn("存档中出现重复区域 id {} @维度 {}，先前条目将被覆盖", area.id, dim);

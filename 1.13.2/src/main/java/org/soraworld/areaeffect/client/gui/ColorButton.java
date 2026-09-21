@@ -1,7 +1,7 @@
 package org.soraworld.areaeffect.client.gui;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiButton;
+import net.minecraft.client.gui.FontRenderer;
 
 import java.util.Locale;
 
@@ -18,7 +18,7 @@ import static org.soraworld.areaeffect.client.gui.GuiTheme.argb;
  *
  * <p>文字是「标签 + #RRGGBBAA」，带阴影直接叠在色块上（不垫暗板）；悬停时描边转黄，与其余按钮观感一致。
  */
-class ColorButton extends GuiButton {
+class ColorButton extends AefButton {
 
     private final String label;
     /** 当前颜色 {@code 0xRRGGBBAA}。 */
@@ -39,8 +39,9 @@ class ColorButton extends GuiButton {
         return rgba;
     }
 
+    /** 1.13 的绘制钩子是 {@code render}(取代 {@code drawButton})，且不再传入 Minecraft 实例。 */
     @Override
-    public void drawButton(Minecraft mc, int mouseX, int mouseY, float partialTicks) {
+    public void render(int mouseX, int mouseY, float partialTicks) {
         if (!visible) {
             return;
         }
@@ -57,9 +58,10 @@ class ColorButton extends GuiButton {
         drawRect(x + width - 1, y, x + width, y + height, argb(border));
         // 文字：标签 + 十六进制（#RRGGBBAA），带阴影直接叠在色块上（不垫暗板）
         String text = label + " " + String.format(Locale.ROOT, "#%08X", rgba);
-        int tw = mc.fontRenderer.getStringWidth(text);
+        FontRenderer font = Minecraft.getInstance().fontRenderer;
+        int tw = font.getStringWidth(text);
         int tx = x + (width - tw) / 2;
         int ty = y + (height - 8) / 2;
-        mc.fontRenderer.drawStringWithShadow(text, tx, ty, COLOR_SLIDER_TEXT);
+        font.drawStringWithShadow(text, tx, ty, COLOR_SLIDER_TEXT);
     }
 }

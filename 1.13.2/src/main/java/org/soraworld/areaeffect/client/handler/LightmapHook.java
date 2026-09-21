@@ -1,10 +1,12 @@
 package org.soraworld.areaeffect.client.handler;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.EntityRenderer;
+import net.minecraft.client.renderer.GameRenderer;
+import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.texture.DynamicTexture;
-import net.minecraftforge.fml.relauncher.Side;
-import net.minecraftforge.fml.relauncher.SideOnly;
+import net.minecraft.client.renderer.texture.NativeImage;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.api.distmarker.OnlyIn;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.soraworld.areaeffect.AreaEffectMod;
@@ -14,8 +16,8 @@ import java.lang.reflect.Field;
 
 /**
  * Takes over the receiving end of the vanilla lightmap without ever touching
- * {@code GameSettings.gammaSetting}: the {@link DynamicTexture} vanilla uses
- * for the lightmap is swapped for a delegating subclass whose
+ * {@code GameSettings.gammaSetting}: the {@link DynamicTexture} used for the
+ * lightmap is swapped for a delegating subclass whose
  * {@code updateDynamicTexture()} applies a uniform CIE L* offset to the freshly
  * computed pixels, then lets the original upload run. Because the upload stays
  * on the original texture object, the GL id registered under the vanilla
@@ -28,8 +30,15 @@ import java.lang.reflect.Field;
  * requires the lightmap texture to be the only field of its type; if the
  * structure is not recognised the hook simply stays uninstalled and vanilla
  * behaviour is kept.
+ *
+ * <p>1.13 的结构变化：光照贴图从 {@code EntityRenderer}（今 {@link GameRenderer}）
+ * 自己的 {@code DynamicTexture} 字段搬进了新类 {@link LightTexture}，像素也不再是
+ * {@code int[]} 而是 {@link NativeImage}。因此安装路径变为两级：
+ * GameRenderer 上唯一的 {@code LightTexture} → 它内部的唯一 {@code DynamicTexture}。
+ * 逐像素读写改走 NativeImage 的 RGBA 存取器（其 32 位像素按 RGBA 字节序，
+ * 即 int 低位是 R），亮度映射本身与 1.12 完全一致。
  */
-@SideOnly(Side.CLIENT)
+@OnlyIn(Dist.CLIENT)
 public final class LightmapHook {
 
     private static final Logger LOGGER = LogManager.getLogger(AreaEffectMod.MOD_NAME);
@@ -90,85 +99,69 @@ public final class LightmapHook {
         if (installed || installAborted || mc == null) {
             return;
         }
-        EntityRenderer renderer = mc.entityRenderer;
+        GameRenderer renderer = mc.gameRenderer;
         if (renderer == null) {
             return;
         }
         try {
-            // case one: the renderer itself holds the texture (1.7.10, 1.12.2).
-            // 定位前提是「类型唯一」：1.7.10 的 EntityRenderer 恰好只有一个 DynamicTexture
-            // 字段（lightmapTexture）。字段顺序不是任何契约，若其它模组新增了同类型字段就
-            // 无法判断该换哪一个——此时宁可放弃安装（保持 vanilla 表现），也不能换错对象，
-            // 因为换错是静默失败：画面看不出异常，光照却再也不会更新。
-            Field target = null;
-            int count = 0;
-            for (Field f : EntityRenderer.class.getDeclaredFields()) {
-                if (f.getType() == DynamicTexture.class) {
-                    target = f;
-                    count++;
-                }
-            }
-            if (count > 1) {
-                installAborted = true;
-                LOGGER.warn("Found {} DynamicTexture fields in {}; lightmap hook disabled "
-                        + "rather than risk replacing the wrong one", count, EntityRenderer.class.getName());
+            // 第一步：GameRenderer 上的光照贴图对象。定位前提是「类型唯一」——若其它模组
+            // 新增了同类型字段就无法判断该换哪一个，此时宁可放弃安装（保持 vanilla 表现），
+            // 也不能换错对象：换错是静默失败，画面看不出异常，光照却再也不会更新。
+            Field lightmapField = uniqueField(GameRenderer.class, LightTexture.class);
+            if (lightmapField == null) {
+                aborted(GameRenderer.class, LightTexture.class);
                 return;
             }
-            if (target != null) {
-                target.setAccessible(true);
-                if (wrap(target, renderer)) {
-                    return;
-                }
+            Object lightmap = lightmapField.get(renderer);
+            if (!(lightmap instanceof LightTexture)) {
+                return;
             }
-            // case two: a lightmap wrapper object holds it (1.8.9 - 1.11.2).
-            // 【未验证路径】运行时类名是混淆名，getSimpleName() 拿不到 "...Light..."，
-            // 因此该分支在混淆环境下实际不可能命中，保留仅供其它版本分支参考，
-            // 不要据此认为本 hook 已支持 1.8.9+。
-            for (Field f : EntityRenderer.class.getDeclaredFields()) {
-                Class<?> type = f.getType();
-                if (type.isPrimitive() || type.isArray() || type == String.class
-                        || !type.getSimpleName().contains("Light")) {
-                    continue;
-                }
-                f.setAccessible(true);
-                Object holder = f.get(renderer);
-                if (holder == null) {
-                    continue;
-                }
-                Field inner = findField(holder.getClass(), DynamicTexture.class);
-                if (inner != null && wrap(inner, holder)) {
-                    return;
-                }
+            // 第二步：LightTexture 内部的贴图。1.13 的 LightTexture 恰好持有一个
+            // DynamicTexture（另有一个 NativeImage 是同一份像素的宿主），同样按类型唯一判定。
+            Field textureField = uniqueField(LightTexture.class, DynamicTexture.class);
+            if (textureField == null) {
+                aborted(LightTexture.class, DynamicTexture.class);
+                return;
             }
+            Object texture = textureField.get(lightmap);
+            if (!(texture instanceof DynamicTexture) || texture instanceof HookedTexture) {
+                return;
+            }
+            HookedTexture wrapper = new HookedTexture((DynamicTexture) texture);
+            textureField.set(lightmap, wrapper);
+            hooked = wrapper;
+            renderThread = Thread.currentThread();
+            installed = true;
         } catch (Throwable ignored) {
             // unexpected structure or mapping: keep vanilla behaviour
         }
     }
 
     /**
-     * First declared field of exactly {@code type}, made accessible.
+     * {@code owner} 上类型恰为 {@code type} 的唯一字段（已置为可访问）。
+     * 同类型字段多于一个时返回 null —— 无法判断该换哪一个，调用方据此放弃安装。
      */
-    private static Field findField(Class<?> owner, Class<?> type) {
+    private static Field uniqueField(Class<?> owner, Class<?> type) {
+        Field target = null;
+        int count = 0;
         for (Field f : owner.getDeclaredFields()) {
             if (f.getType() == type) {
-                f.setAccessible(true);
-                return f;
+                target = f;
+                count++;
             }
         }
-        return null;
+        if (count != 1) {
+            return null;
+        }
+        target.setAccessible(true);
+        return target;
     }
 
-    private static boolean wrap(Field field, Object owner) throws IllegalAccessException {
-        Object value = field.get(owner);
-        if (!(value instanceof DynamicTexture) || value instanceof HookedTexture) {
-            return false;
-        }
-        HookedTexture texture = new HookedTexture((DynamicTexture) value);
-        field.set(owner, texture);
-        hooked = texture;
-        renderThread = Thread.currentThread();
-        installed = true;
-        return true;
+    /** 结构歧义（同类型字段 0 个或多个）时置位并告警一次，停止每帧重试。 */
+    private static void aborted(Class<?> owner, Class<?> type) {
+        installAborted = true;
+        LOGGER.warn("Lightmap hook disabled: expected exactly one {} field in {}, "
+                + "refusing to replace a possibly wrong object", type.getName(), owner.getName());
     }
 
     /**
@@ -204,8 +197,8 @@ public final class LightmapHook {
     }
 
     /**
-     * Delegating texture: post-processes the original's pixel array (the very
-     * array vanilla writes every frame) and then delegates the upload, so the
+     * Delegating texture: post-processes the original's pixel image (the very
+     * image vanilla writes every frame) and then delegates the upload, so the
      * registered texture keeps its GL id and content ordering.
      */
     private static class HookedTexture extends DynamicTexture {
@@ -213,8 +206,9 @@ public final class LightmapHook {
         private final DynamicTexture origin;
 
         HookedTexture(DynamicTexture origin) {
-            super(16, 16);
-            // 构造仅为继承 DynamicTexture 类型，分配出的纹理本类永不使用，立即释放避免 GL id 泄漏
+            super(16, 16, false);
+            // 构造仅为继承 DynamicTexture 类型；这张 16x16 贴图本类从不 bind，
+            // GL id 由 AbstractTexture 惰性分配，故此处删除只为杜绝"万一"的分配
             deleteGlTexture();
             this.origin = origin;
         }
@@ -225,24 +219,47 @@ public final class LightmapHook {
                 origin.updateDynamicTexture();
                 return;
             }
-            int[] pixels = origin.getTextureData();
+            NativeImage image = origin.getTextureData();
+            if (image == null) {
+                origin.updateDynamicTexture();
+                return;
+            }
             int[] table = getLut();
+            int width = image.getWidth();
+            int height = image.getHeight();
+            int size = width * height;
             // 混合 LUT 非幂等：备份 vanilla 像素，映射后上传，再还原。
             // 之后的主动上传/vanilla 重算都基于干净的原始值，不会反复复合。
             int[] backup = pixelBackup;
-            if (backup == null || backup.length != pixels.length) {
-                backup = pixelBackup = new int[pixels.length];
+            if (backup == null || backup.length != size) {
+                backup = pixelBackup = new int[size];
             }
-            System.arraycopy(pixels, 0, backup, 0, pixels.length);
-            for (int i = 0; i < pixels.length; i++) {
-                int p = pixels[i];
-                pixels[i] = (p & 0xFF000000)
-                        | (table[(p >>> 16) & 0xFF] << 16)
-                        | (table[(p >>> 8) & 0xFF] << 8)
-                        | table[p & 0xFF];
+            for (int x = 0; x < width; x++) {
+                for (int y = 0; y < height; y++) {
+                    int p = image.getPixelRGBA(x, y);
+                    backup[y * width + x] = p;
+                    image.setPixelRGBA(x, y, map(p, table));
+                }
             }
             origin.updateDynamicTexture();
-            System.arraycopy(backup, 0, pixels, 0, pixels.length);
+            for (int x = 0; x < width; x++) {
+                for (int y = 0; y < height; y++) {
+                    image.setPixelRGBA(x, y, backup[y * width + x]);
+                }
+            }
+        }
+
+        /**
+         * 单像素的亮度映射：保留 alpha，三个颜色分量各自过 LUT。
+         *
+         * <p>NativeImage 的 32 位像素按 RGBA 字节序存放（int 低位是 R，即 {@code 0xAABBGGRR}），
+         * 与 1.12 的 {@code int[] ARGB} 布局相反，故各分量的取值位置也相应互换。
+         */
+        private static int map(int pixel, int[] table) {
+            return (pixel & 0xFF000000)
+                    | (table[(pixel >>> 16) & 0xFF] << 16)
+                    | (table[(pixel >>> 8) & 0xFF] << 8)
+                    | table[pixel & 0xFF];
         }
     }
 }

@@ -1,7 +1,6 @@
 package org.soraworld.areaeffect.client.gui;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiButton;
 
 import java.util.Locale;
 
@@ -23,7 +22,7 @@ import static org.soraworld.areaeffect.client.gui.GuiTheme.argb;
  * 可传入 {@link Scale}（见 {@link #logarithmic}）：等距移动对应等比值变化，两端手感一致 ——
  * 否则会出现"1→2 米变化巨大、100→110 米毫无感觉"的线性刻度问题。
  */
-class FlatSlider extends GuiButton {
+class FlatSlider extends AefButton {
 
     private static final int THUMB_W = 8;
     /** 距滑块中心不超过此像素即视为悬停在滑块上（与 RangeSlider 口径一致）。 */
@@ -171,38 +170,44 @@ class FlatSlider extends GuiButton {
         return x + 8 + (int) (track * frac);
     }
 
+    /**
+     * 按下：进入拖拽并按落点取值。
+     *
+     * <p>1.13 的按下钩子是 {@code onClick}（取代 {@code mousePressed(Minecraft,int,int)}），
+     * 命中判定（可用 + 可见 + 落在框内）已由 {@code GuiButton#mouseClicked} 先做掉；
+     * 另外宿主不再自动收到 {@code actionPerformed}，故这里主动回调一次（本控件 id=-1，宿主按 id 分发时自然忽略）。
+     */
     @Override
-    public boolean mousePressed(Minecraft mc, int mouseX, int mouseY) {
-        if (super.mousePressed(mc, mouseX, mouseY)) {
-            dragging = true;
-            setValueFromMouse(mouseX);
-            return true;
+    public void onClick(double mouseX, double mouseY) {
+        fireAction();
+        dragging = true;
+        setValueFromMouse((int) mouseX);
+    }
+
+    /**
+     * 拖动中：由 {@code GuiScreen} 只发给"按下时命中的那个控件"（见 {@link AefButton} 类注释），
+     * 因此不再需要 1.7.10 时代"每帧自驱拖拽"的补丁。
+     */
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        if (!dragging) {
+            return false;
         }
-        return false;
+        setValueFromMouse((int) mouseX);
+        return true;
     }
 
     @Override
-    protected void mouseDragged(Minecraft mc, int mouseX, int mouseY) {
-        if (dragging) {
-            setValueFromMouse(mouseX);
-        }
-    }
-
-    @Override
-    public void mouseReleased(int mouseX, int mouseY) {
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
         dragging = false;
+        return super.mouseReleased(mouseX, mouseY, button);
     }
 
     @Override
-    public void drawButton(Minecraft mc, int mouseX, int mouseY, float partialTicks) {
+    public void render(int mouseX, int mouseY, float partialTicks) {
         if (!visible) {
             return;
         }
-        // 【不可删除】1.7.10 没有任何框架回调会调用 mouseDragged：GuiScreen.mouseClickMove
-        // 是空实现（GuiScreen.java 中方法体为空），GuiButton.mouseDragged 也没有调用方，
-        // mouseClicked 只处理按下、不转发拖动。拖动之所以生效完全依赖这里每帧自驱一次，
-        // 删掉这一行即所有滑条都无法拖动。
-        this.mouseDragged(mc, mouseX, mouseY);
         // 轨道
         drawRect(x, y, x + width, y + height, argb(COLOR_SLIDER_TRACK));
         drawRect(x, y, x + width, y + 1, argb(COLOR_BORDER));
@@ -219,7 +224,7 @@ class FlatSlider extends GuiButton {
         boolean over = enabled && mouseY >= y && mouseY < y + height;
         boolean hot = dragging || (over && Math.abs(mouseX - cx) <= GRAB);
         drawRect(tx, y + 2, tx + THUMB_W, y + height - 2, argb(hot ? COLOR_SLIDER_THUMB_HOT : COLOR_SLIDER_THUMB));
-        drawCenteredString(mc.fontRenderer, displayString,
+        drawCenteredString(Minecraft.getInstance().fontRenderer, displayString,
                 x + width / 2, y + (height - 8) / 2, COLOR_SLIDER_TEXT);
     }
 }

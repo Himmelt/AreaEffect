@@ -4,10 +4,8 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.GuiTextField;
-import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.resources.I18n;
-import org.lwjgl.input.Keyboard;
-import org.lwjgl.input.Mouse;
+import org.lwjgl.glfw.GLFW;
 import org.lwjgl.opengl.GL11;
 import org.soraworld.areaeffect.client.ClientProxy;
 import org.soraworld.areaeffect.common.effect.AreaEffect;
@@ -70,6 +68,19 @@ import static org.soraworld.areaeffect.client.gui.GuiTheme.argb;
  * <p>生命周期两条初始化路径：构造期只备数据（此时尚无控件、{@code fontRenderer} 也未就绪，
  * 故 {@link #reloadDims(int)} 里的 tab 实测会自行跳过），{@link #initGui()} 建控件后再
  * {@link #syncDetailWidgets()} 完成首帧同步；二者顺序是隐式契约，勿颠倒。
+ *
+ * <p><b>1.13 的框架差异</b>（逐处落在下面的注释里）：
+ * <ul>
+ *   <li>{@code buttonList} → {@code buttons}，且控件必须经 {@code addButton} 同时进
+ *       {@code buttons}(绘制) 与 {@code children}(事件分发)，因此 {@link #initGui()} 里两张表一起清、
+ *       统一走 {@link #addWidget}；</li>
+ *   <li>{@code GuiScreen#actionPerformed} 被移除：控件自己在按下时回调宿主（见 {@link AefButton}），
+ *       宿主仍按 id 分发（{@link #actionPerformed(GuiButton)}）；</li>
+ *   <li>鼠标/键盘入口改名并改用浮点坐标：{@code drawScreen→render}、{@code updateScreen→tick}、
+ *       {@code mouseClicked/mouseClickMove/mouseReleased} 收 double，{@code keyTyped} 拆成
+ *       {@code keyPressed + charTyped}，滚轮从自取 {@code Mouse} 状态改为重写 {@code mouseScrolled}；</li>
+ *   <li>{@code ScaledResolution} 移除：裁剪所需的缩放比与帧高改取 {@code Minecraft#mainWindow}。</li>
+ * </ul>
  */
 public class GuiAreas extends GuiScreen {
 
@@ -182,6 +193,8 @@ public class GuiAreas extends GuiScreen {
     private GuiTextField remarkField;
     /** 底栏：线框开关按钮，需要按该区域当前是否显示线框切换字形。 */
     private IconButton wireBtn;
+    /** 鼠标左键当前是否按住（1.13 没有 {@code Mouse.isButtonDown}，滚轮与拖拽的互斥改为自己记账）。 */
+    private boolean leftDown = false;
 
     // ===================== 几何 =====================
     private int frameX1, frameX2, frameY1, frameY2;
@@ -197,8 +210,8 @@ public class GuiAreas extends GuiScreen {
 
     public GuiAreas(ClientProxy proxy) {
         this.proxy = proxy;
-        Minecraft mc = Minecraft.getMinecraft();
-        int preferDim = mc.player != null ? mc.player.dimension : -1;
+        Minecraft mc = Minecraft.getInstance();
+        int preferDim = mc.player != null ? mc.player.dimension.getId() : -1;
         // 构造期只备数据（控件尚未在 initGui 创建），故这里不触碰任何控件
         reloadDims(preferDim);
         reloadAreas();
@@ -230,6 +243,12 @@ public class GuiAreas extends GuiScreen {
     @Override
     public void onGuiClosed() {
         super.onGuiClosed();
+        // 拖动中直接关屏（Esc / 被别的界面抢占）时收不到 mouseReleased，按下状态要在这里复位，
+        // 否则下次打开界面时"左键按住"会残留，详情栏滚轮被永久压制
+        leftDown = false;
+        areaCol.release();
+        effectCol.release();
+        detailCol.release();
         clearSelection();
     }
 
@@ -327,8 +346,7 @@ public class GuiAreas extends GuiScreen {
         tabViewX1 = tabAreaX1 + (tabOverflow ? 1 : 0);
         tabViewX2 = tabAreaX2 - (tabOverflow ? 1 : 0);
         tabScroll = clampInt(tabScroll, 0, maxTabScroll());
-        for (Object b : buttonList) {
-            GuiButton btn = (GuiButton) b;
+        for (GuiButton btn : buttons) {
             if (btn.id == BTN_NAV_L) {
                 btn.x = tabAreaX1 - NAV_W;
                 btn.y = tabY1;
@@ -484,8 +502,7 @@ public class GuiAreas extends GuiScreen {
 
     /** 点是否落在「添加效果」按钮上：弹窗打开时点它应当收起弹窗，不该被面板吞掉。 */
     private boolean overAddButton(int mouseX, int mouseY) {
-        for (Object b : buttonList) {
-            GuiButton btn = (GuiButton) b;
+        for (GuiButton btn : buttons) {
             if (btn.id == BTN_ADD_EFFECT) {
                 return mouseX >= btn.x && mouseX < btn.x + btn.width
                         && mouseY >= btn.y && mouseY < btn.y + btn.height;
@@ -495,7 +512,7 @@ public class GuiAreas extends GuiScreen {
     }
 
     /**
-     * 绘制「添加效果」弹窗（居中模态）：在 {@code super.drawScreen} 之后调用，浮在最上层。
+     * 绘制「添加效果」弹窗（居中模态）：在 {@code super.render} 之后调用，浮在最上层。
      * 全屏遮罩 + 不透明面板，逐行列出可添加类型（{@link EffectTypes#ALL} 的固定顺序），
      * 已挂在工作列表里的置灰不可点。
      */
@@ -596,17 +613,20 @@ public class GuiAreas extends GuiScreen {
         detX2 = bodyX2;
         effectTop = bodyY1 + TOOLBAR_H + 4;
 
-        buttonList.clear();
+        // 1.13：控件要进两张表 —— buttons（绘制）与 children（事件分发）；窗口缩放会重跑 initGui，
+        // 两张表都必须清干净，否则残留的旧控件仍会收到点击/拖动
+        buttons.clear();
+        children.clear();
         // 翻动按钮：贴在外框内边界上，自身不描边（两侧线由外框与 tab 条的共用竖线提供）
-        buttonList.add(new IconButton(BTN_NAV_L, tabAreaX1 - NAV_W, tabY1, NAV_W, TAB_H - 1,
+        addWidget(new IconButton(BTN_NAV_L, tabAreaX1 - NAV_W, tabY1, NAV_W, TAB_H - 1,
                 IconButton.GLYPH_PREV, COLOR_SLIDER_THUMB_HOT, 0));
-        buttonList.add(new IconButton(BTN_NAV_R, tabAreaX2, tabY1, NAV_W, TAB_H - 1,
+        addWidget(new IconButton(BTN_NAV_R, tabAreaX2, tabY1, NAV_W, TAB_H - 1,
                 IconButton.GLYPH_NEXT, COLOR_SLIDER_THUMB_HOT, 0));
         // 效果栏顶部工具条：左右边由列分隔线提供；两按钮齐平、共用中间一根竖线（删除按钮的 B_LEFT 提供），各自一条底线
         int toolW = (effectX2 - effectX1) / 2;
-        buttonList.add(new FlatButton(BTN_ADD_EFFECT, effectX1, bodyY1, toolW, TOOLBAR_H,
+        addWidget(new FlatButton(BTN_ADD_EFFECT, effectX1, bodyY1, toolW, TOOLBAR_H,
                 translate("gui.areaeffect.edit.addEffect"), FlatButton.B_BOTTOM));
-        buttonList.add(new FlatButton(BTN_DEL_EFFECT, effectX1 + toolW, bodyY1,
+        addWidget(new FlatButton(BTN_DEL_EFFECT, effectX1 + toolW, bodyY1,
                 effectX2 - (effectX1 + toolW), TOOLBAR_H,
                 translate("gui.areaeffect.edit.delEffect"), FlatButton.B_LEFT | FlatButton.B_BOTTOM));
 
@@ -618,11 +638,11 @@ public class GuiAreas extends GuiScreen {
         int selX = saveX - ICON_GAP - ICON_S;
         int tpX = selX - ICON_GAP - ICON_S;
         int delX = tpX - ICON_GAP - ICON_DANGER_GAP - ICON_S;
-        buttonList.add(new IconButton(BTN_DELETE, delX, iconY, ICON_S, IconButton.GLYPH_DELETE, COLOR_DANGER));
-        buttonList.add(new IconButton(BTN_TP, tpX, iconY, ICON_S, IconButton.GLYPH_TP, COLOR_SLIDER_THUMB_HOT));
+        addWidget(new IconButton(BTN_DELETE, delX, iconY, ICON_S, IconButton.GLYPH_DELETE, COLOR_DANGER));
+        addWidget(new IconButton(BTN_TP, tpX, iconY, ICON_S, IconButton.GLYPH_TP, COLOR_SLIDER_THUMB_HOT));
         wireBtn = new IconButton(BTN_SEL, selX, iconY, ICON_S, IconButton.GLYPH_WIRE, COLOR_SLIDER_THUMB_HOT);
-        buttonList.add(wireBtn);
-        buttonList.add(new IconButton(BTN_SAVE, saveX, iconY, ICON_S, IconButton.GLYPH_SAVE, COLOR_SLIDER_THUMB_HOT));
+        addWidget(wireBtn);
+        addWidget(new IconButton(BTN_SAVE, saveX, iconY, ICON_S, IconButton.GLYPH_SAVE, COLOR_SLIDER_THUMB_HOT));
 
         // 底栏 #id 槽位宽度反算，使备注框左边界正好落在「区域列 | 效果列」那根共用竖线上：
         // 槽位左端 = 框内左 + ACT_PAD，槽位右端再走 ACT_PAD 就是输入框，故
@@ -669,14 +689,14 @@ public class GuiAreas extends GuiScreen {
                 translate("gui.areaeffect.edit.fog.start"), 0.0F, FogEffect.MAX_START_DISTANCE, 16.0F, 1.0F);
         dustSlider = new FlatSlider(detX1 + 10, bodyY1 + SLIDER_TOP + SLIDER_PITCH * 6, sw, SLIDER_H,
                 translate("gui.areaeffect.edit.fog.dust"), 0.0F, FogEffect.MAX_DUST, 0.0F, 1.0F);
-        buttonList.add(weightSlider);
-        buttonList.add(lightSlider);
-        buttonList.add(durationSlider);
-        buttonList.add(timeRangeSlider);
-        buttonList.add(colorButton);
-        buttonList.add(rampSlider);
-        buttonList.add(startDistanceSlider);
-        buttonList.add(dustSlider);
+        addWidget(weightSlider);
+        addWidget(lightSlider);
+        addWidget(durationSlider);
+        addWidget(timeRangeSlider);
+        addWidget(colorButton);
+        addWidget(rampSlider);
+        addWidget(startDistanceSlider);
+        addWidget(dustSlider);
 
         // 两列滚动条：贴各自栏的右侧内边界（维度列表已改为 tab 条，不再需要滚动条）
         areaCol.x = areaX2 - ScrollColumn.BAR_W - 1;
@@ -708,14 +728,25 @@ public class GuiAreas extends GuiScreen {
     }
 
     /**
+     * 建控件并接线：加入绘制/事件两张表，同时把"按下"回调指回 {@link #actionPerformed(GuiButton)}。
+     *
+     * <p>1.13 的 {@code GuiScreen#actionPerformed} 已移除，控件不再自动通知宿主（见 {@link AefButton}），
+     * 因此这里统一接线 —— 各创建点只需把 {@code buttonList.add(x)} 换成 {@code addWidget(x)}。
+     */
+    private <T extends AefButton> T addWidget(T widget) {
+        addButton(widget);
+        widget.setOnPress(() -> actionPerformed(widget));
+        return widget;
+    }
+
+    /**
      * 按层刷新各控件的启用态/可见性/文案/取值基线。<b>每个控件的门控层级已显式标注</b>，
      * 区域级控件一律按 {@code has}（是否选中区域），不得放进效果级分支。
      */
     private void syncDetailWidgets() {
         boolean has = selected != null;
         // 启用态：底栏四图标（含保存）属 L2（按 has）；增删效果属 L3
-        for (Object b : buttonList) {
-            GuiButton btn = (GuiButton) b;
+        for (GuiButton btn : buttons) {
             int id = btn.id;
             if (id == BTN_SAVE || id == BTN_DELETE || id == BTN_TP || id == BTN_SEL) {
                 btn.enabled = has;
@@ -848,8 +879,7 @@ public class GuiAreas extends GuiScreen {
 
     /** 翻动按钮只在 tab 总宽超出可见宽度时出现；到两端时转灰不可点。 */
     private void syncTabNav() {
-        for (Object b : buttonList) {
-            GuiButton btn = (GuiButton) b;
+        for (GuiButton btn : buttons) {
             if (btn.id == BTN_NAV_L) {
                 btn.visible = tabOverflow;
                 btn.enabled = tabOverflow && tabScroll > 0;
@@ -883,8 +913,9 @@ public class GuiAreas extends GuiScreen {
 
     // ===================== 绘制 =====================
 
+    /** 1.13 的绘制钩子是 {@code render}（取代 {@code drawScreen}）。 */
     @Override
-    public void drawScreen(int mouseX, int mouseY, float partialTicks) {
+    public void render(int mouseX, int mouseY, float partialTicks) {
         // 模态弹窗（添加效果 / 取色器）打开时，底层界面用无效坐标绘制，屏蔽一切悬停高亮
         // （点击/滚轮/键盘已由各输入转发拦截，悬停是最后一条穿透路径）
         boolean modal = addMenuOpen || (colorPicker != null && colorPicker.isOpen());
@@ -905,7 +936,8 @@ public class GuiAreas extends GuiScreen {
         drawScrollBar(effectCol, pendingEffects == null ? 0 : pendingEffects.size());
         drawScrollBar(detailCol, detailRowCount());
 
-        super.drawScreen(hx, hy, partialTicks);
+        // 1.13：GuiScreen#render 只负责把 buttons/labels 画出来，不铺背景，顺序与 1.12 一致
+        super.render(hx, hy, partialTicks);
         // 弹窗浮层用真实鼠标坐标绘制（各自处理自己的悬停），压在按钮与列表之上
         drawAddMenu(mouseX, mouseY);
         if (colorPicker != null && colorPicker.isOpen()) {
@@ -1058,8 +1090,8 @@ public class GuiAreas extends GuiScreen {
     /**
      * 详情栏：只服务效果（L3/L4）。栏内不含任何区域级内容，也不再自报"是什么效果"——
      * 效果列表的选中行已表明它是什么效果，作用的区域则由左栏选中行 + 底栏 {@code #id} 指示。
-     * 因此这里只剩空态提示要画，各条滑条由 GuiScreen#drawScreen 统一绘制；
-     * 滑条编辑的提交也在这里触发（1.7.10 的滑条靠 drawButton 自驱，没有独立变更回调）。
+     * 因此这里只剩空态提示要画，各条滑条由 {@code GuiScreen#render} 统一绘制；
+     * 滑条编辑的提交也在这里触发（滑条自身没有变更回调）。
      */
     private void drawDetail() {
         if (selected == null) {
@@ -1077,7 +1109,7 @@ public class GuiAreas extends GuiScreen {
 
     /**
      * 底栏「区域操作条」：区域级（L2）的元素全部在这里 —— #id·形状名、备注编辑、未保存圆点，
-     * 以及四个图标按钮（删除 / 传送 / 线框 / 保存，由 buttonList 绘制）。
+     * 以及四个图标按钮（删除 / 传送 / 线框 / 保存，由 buttons 绘制）。
      */
     private void drawActionBar(int mouseX, int mouseY) {
         Area area = selected;
@@ -1088,7 +1120,7 @@ public class GuiAreas extends GuiScreen {
             fontRenderer.drawStringWithShadow(shownCid, cidX1, cidY, COLOR_TEXT_HEAD);
         }
         // 备注框由 vanilla GuiTextField 自己画（保留原版观感：黑底 + 灰描边）
-        remarkField.drawTextBox();
+        remarkField.drawTextField(mouseX, mouseY, 0.0F);
         // 备注实时写覆盖表（列表行即时更新；预览不入共享 Area）；与基线不同即标记未保存
         if (area != null) {
             String text = remarkField.getText();
@@ -1116,195 +1148,243 @@ public class GuiAreas extends GuiScreen {
         drawRect(bar[0], bar[1], bar[2], bar[3], argb(COLOR_SCROLL_THUMB));
     }
 
-    /** 裁剪：部分露出的 tab 需要切齐到 tab 内容区（1.7.10 没有现成裁剪，手动开 scissor）。 */
+    /**
+     * 裁剪：部分露出的 tab 需要切齐到 tab 内容区（这里手动开 scissor）。
+     *
+     * <p>1.13 移除了 {@code ScaledResolution}：缩放比与帧缓冲高度都从 {@code Minecraft#mainWindow} 取
+     * （{@code getGuiScaleFactor()} 即当前实际缩放，{@code getHeight()} 是帧缓冲高度）。
+     */
     private void enableClip(int x1, int y1, int x2, int y2) {
-        ScaledResolution sr = new ScaledResolution(mc);
-        int s = sr.getScaleFactor();
+        int s = (int) mc.mainWindow.getGuiScaleFactor();
+        int fbHeight = mc.mainWindow.getHeight();
+        // 裁剪开关 GlStateManager 未做封装（1.13 的 GlStateManager 没有 scissor 一组方法），
+        // 与 vanilla 一致直接用 GL11
         GL11.glEnable(GL11.GL_SCISSOR_TEST);
-        GL11.glScissor(x1 * s, mc.displayHeight - y2 * s, (x2 - x1) * s, (y2 - y1) * s);
+        GL11.glScissor(x1 * s, fbHeight - y2 * s, (x2 - x1) * s, (y2 - y1) * s);
     }
 
     private void disableClip() {
         GL11.glDisable(GL11.GL_SCISSOR_TEST);
     }
 
+    /** 1.13 的每帧钩子是 {@code tick}（取代 {@code updateScreen}）。 */
     @Override
-    public void updateScreen() {
-        super.updateScreen();
+    public void tick() {
+        super.tick();
         if (colorPicker != null && colorPicker.isOpen()) {
             colorPicker.updateScreen();
         }
         if (remarkField != null) {
-            remarkField.updateCursorCounter();
+            remarkField.tick();
         }
     }
 
     // ===================== 输入 =====================
 
+    /**
+     * 控制键通道（1.13 把 1.12 的 {@code keyTyped} 拆成"控制键 + 字符"两条）。
+     * Esc 的两种语义都保留：先收"添加效果"弹窗，再关界面。
+     */
     @Override
-    protected void keyTyped(char typedChar, int keyCode) {
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
         // 取色弹窗打开时是模态：所有按键交给它（Esc 取消、Enter 确认都在弹窗内处理）
         if (colorPicker != null && colorPicker.isOpen()) {
-            colorPicker.keyTyped(typedChar, keyCode);
-            return;
+            colorPicker.keyPressed(keyCode, scanCode, modifiers);
+            return true;
         }
-        if (keyCode == Keyboard.KEY_ESCAPE) {
+        if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
             // 弹出列表展开时 Esc 只收起列表，不关界面
             if (addMenuOpen) {
                 addMenuOpen = false;
-                return;
+                return true;
             }
             mc.displayGuiScreen(null);
-            return;
+            return true;
         }
         if (selected != null && remarkField.isFocused()) {
-            if (keyCode == Keyboard.KEY_RETURN || keyCode == Keyboard.KEY_NUMPADENTER) {
+            if (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER) {
                 remarkField.setFocused(false);
-                return;
+                return true;
             }
-            remarkField.textboxKeyTyped(typedChar, keyCode);
+            remarkField.keyPressed(keyCode, scanCode, modifiers);
+            return true;
         }
+        return super.keyPressed(keyCode, scanCode, modifiers);
+    }
+
+    /** 字符通道：备注框聚焦时收字符（编辑/导航键走 {@link #keyPressed}）。 */
+    @Override
+    public boolean charTyped(char typedChar, int modifiers) {
+        if (colorPicker != null && colorPicker.isOpen()) {
+            colorPicker.charTyped(typedChar, modifiers);
+            return true;
+        }
+        if (selected != null && remarkField.isFocused()) {
+            remarkField.charTyped(typedChar, modifiers);
+            return true;
+        }
+        return super.charTyped(typedChar, modifiers);
     }
 
     @Override
-    protected void mouseClicked(int mouseX, int mouseY, int mouseButton) {
+    public boolean mouseClicked(double mouseX, double mouseY, int mouseButton) {
+        int mx = (int) mouseX;
+        int my = (int) mouseY;
         // 取色弹窗打开时是模态：所有点击交给它（面板外点击被吞掉、不取消）
         if (colorPicker != null && colorPicker.isOpen()) {
-            colorPicker.mousePressed(mouseX, mouseY, mouseButton);
-            return;
+            colorPicker.mousePressed(mx, my, mouseButton);
+            return true;
         }
         // 「添加效果」弹窗（居中模态）打开时先消费点击：命中行 = 加入并收起；面板内空白 = 吞掉；
         // 面板外 = 收起后继续走常规处理。落在「添加效果」按钮上的情况刻意不吞 —— 交给按钮逻辑
         // （actionPerformed 里会收起弹窗），这样点按钮能开也能关。
-        if (addMenuOpen && mouseButton == 0 && pendingEffects != null && !overAddButton(mouseX, mouseY)) {
-            int hit = addMenuIndexAt(mouseX, mouseY);
+        if (addMenuOpen && mouseButton == 0 && pendingEffects != null && !overAddButton(mx, my)) {
+            int hit = addMenuIndexAt(mx, my);
             if (hit >= 0) {
                 String typeId = EffectTypes.ALL.get(hit);
                 if (!containsType(pendingEffects, typeId)) {
                     addEffectOfType(typeId, currentDim());
                 }
                 addMenuOpen = false;
-                return;
+                return true;
             }
-            if (mouseX >= addMenuX1 && mouseX < addMenuX2 && mouseY >= addMenuY1 && mouseY < addMenuY2) {
-                return;
+            if (mx >= addMenuX1 && mx < addMenuX2 && my >= addMenuY1 && my < addMenuY2) {
+                return true;
             }
             addMenuOpen = false;
         }
+        if (mouseButton == 0) {
+            leftDown = true;
+        }
+        // 1.13 的控件分发自这里转发（children 列表），按下命中的控件会拿到后续拖动/释放
         super.mouseClicked(mouseX, mouseY, mouseButton);
         // 备注框只在选中区域时接受点击：GuiTextField 自身不看 enabled，必须在这里把关
         if (mouseButton == 0 && selected != null) {
-            remarkField.mouseClicked(mouseX, mouseY, mouseButton);
+            remarkField.mouseClicked(mx, my, mouseButton);
         }
         if (mouseButton != 0) {
-            return;
+            return true;
         }
         // 滚动条：命中滑块开始拖拽；命中轨道按位置跳转
-        if (areaCol.press(mouseX, mouseY, areas.size())) {
-            return;
+        if (areaCol.press(mx, my, areas.size())) {
+            return true;
         }
-        if (effectCol.press(mouseX, mouseY, pendingEffects == null ? 0 : pendingEffects.size())) {
-            return;
+        if (effectCol.press(mx, my, pendingEffects == null ? 0 : pendingEffects.size())) {
+            return true;
         }
         // 详情栏滚动条：滑条本身由 super 分派，滚动条在滑条右侧那条窄边上
-        if (detailCol.press(mouseX, mouseY, detailRowCount())) {
+        if (detailCol.press(mx, my, detailRowCount())) {
             layoutDetailSliders();
-            return;
+            return true;
         }
-        // 维度 tab 条（翻动按钮由 buttonList 处理，不在这个区间内）
-        if (mouseY >= tabY1 && mouseY < tabLineY) {
-            if (mouseX >= tabViewX1 && mouseX < tabViewX2) {
-                int idx = tabIndexAt(mouseX - tabViewX1 + tabScroll);
+        // 维度 tab 条（翻动按钮由 buttons 处理，不在这个区间内）
+        if (my >= tabY1 && my < tabLineY) {
+            if (mx >= tabViewX1 && mx < tabViewX2) {
+                int idx = tabIndexAt(mx - tabViewX1 + tabScroll);
                 if (idx >= 0 && idx < dims.size() && idx != dimIdx) {
                     selectDim(idx);
                 }
             }
-            return;
+            return true;
         }
         // 区域列表（L2 选择）
-        if (mouseX >= areaX1 && mouseX < areaX2 && mouseY >= bodyY1 && mouseY < bodyY2) {
-            int idx = (mouseY - bodyY1 - 4 + areaCol.scroll()) / ROW_H;
+        if (mx >= areaX1 && mx < areaX2 && my >= bodyY1 && my < bodyY2) {
+            int idx = (my - bodyY1 - 4 + areaCol.scroll()) / ROW_H;
             if (idx >= 0 && idx < areas.size()) {
                 Area area = areas.get(idx);
                 if (selected == null || area.id != selected.id) {
                     selectArea(area);
                 }
             }
-            return;
+            return true;
         }
         // 效果列表（L3 选择，避开顶部工具条）
-        if (pendingEffects != null && mouseX >= effectX1 && mouseX < effectX2
-                && mouseY >= effectTop && mouseY < bodyY2) {
-            int idx = (mouseY - effectTop - 4 + effectCol.scroll()) / ROW_H;
+        if (pendingEffects != null && mx >= effectX1 && mx < effectX2
+                && my >= effectTop && my < bodyY2) {
+            int idx = (my - effectTop - 4 + effectCol.scroll()) / ROW_H;
             if (idx >= 0 && idx < pendingEffects.size() && idx != effectIdx) {
                 effectIdx = idx;
                 syncDetailWidgets();
             }
         }
+        return true;
     }
 
+    /** 1.13 的拖拽钩子（取代 {@code mouseClickMove}，坐标改为 double 并附带拖动增量）。 */
     @Override
-    protected void mouseClickMove(int mouseX, int mouseY, int clickedMouseButton, long timeSinceLastClick) {
-        super.mouseClickMove(mouseX, mouseY, clickedMouseButton, timeSinceLastClick);
+    public boolean mouseDragged(double mouseX, double mouseY, int clickedMouseButton, double dragX, double dragY) {
+        int mx = (int) mouseX;
+        int my = (int) mouseY;
+        // 控件自身的拖动（滑条、时段游标）由 super 转发给"按下时命中的那个控件"
+        super.mouseDragged(mouseX, mouseY, clickedMouseButton, dragX, dragY);
         if (colorPicker != null && colorPicker.isOpen()) {
             // 取色器拖动（SV 平面 / 色相条 / 透明度条）自己驱动，滚动条与滑条都不应响应
-            colorPicker.mouseDragged(mouseX, mouseY);
-            return;
+            colorPicker.mouseDragged(mx, my);
+            return true;
         }
         if (clickedMouseButton != 0) {
-            return;
+            return true;
         }
-        areaCol.drag(mouseY, areas.size());
-        effectCol.drag(mouseY, pendingEffects == null ? 0 : pendingEffects.size());
+        areaCol.drag(my, areas.size());
+        effectCol.drag(my, pendingEffects == null ? 0 : pendingEffects.size());
         // 滚动条拖动会改变滑条位置，拖完必须重排（未处于拖拽时是一次无副作用的空转）
-        detailCol.drag(mouseY, detailRowCount());
+        detailCol.drag(my, detailRowCount());
         layoutDetailSliders();
+        return true;
     }
 
     @Override
-    protected void mouseReleased(int mouseX, int mouseY, int state) {
+    public boolean mouseReleased(double mouseX, double mouseY, int state) {
+        int mx = (int) mouseX;
+        int my = (int) mouseY;
         super.mouseReleased(mouseX, mouseY, state);
         if (colorPicker != null && colorPicker.isOpen()) {
             colorPicker.mouseReleased();
-            return;
+            return true;
         }
         if (state == 0) {
+            leftDown = false;
             areaCol.release();
             effectCol.release();
             detailCol.release();
         }
+        return true;
     }
 
+    /**
+     * 滚轮（1.13 把滚轮做成 {@code IGuiEventListener#mouseScrolled}，由 {@code MouseHelper} 直接调
+     * 当前界面，取代 1.12 里自取 {@code Mouse.getDWheel()} 的 {@code handleMouseInput}）。
+     * 鼠标位置改从 {@code MouseHelper} 取（已是缩放后的 GUI 坐标）。
+     */
     @Override
-    public void handleMouseInput() {
-        super.handleMouseInput();
+    public boolean mouseScrolled(double amount) {
         // 取色弹窗打开时滚轮不作用于底层列表
         if (colorPicker != null && colorPicker.isOpen()) {
-            return;
+            return true;
         }
-        int dwheel = Mouse.getDWheel();
-        if (dwheel == 0) {
-            return;
+        if (amount == 0.0D) {
+            return super.mouseScrolled(amount);
         }
-        int rows = dwheel > 0 ? -1 : 1;
-        int x = getMouseX();
-        int y = getMouseY();
+        int rows = amount > 0.0D ? -1 : 1;
+        int x = (int) mc.mouseHelper.getMouseX();
+        int y = (int) mc.mouseHelper.getMouseY();
         // 鼠标在 tab 条上：横向翻动 tab；其余按所在栏纵向滚动
         if (y >= tabY1 && y < tabLineY) {
             if (tabOverflow) {
                 tabScroll = clampInt(tabScroll + rows * navStep(), 0, maxTabScroll());
                 syncTabNav();
             }
-            return;
+            return true;
         }
         if (x >= areaX1 && x < areaX2) {
             areaCol.wheel(rows, areas.size());
         } else if (x >= effectX1 && x < effectX2) {
             effectCol.wheel(rows, pendingEffects == null ? 0 : pendingEffects.size());
-        } else if (x >= detX1 && x < detX2 && !Mouse.isButtonDown(0)) {
+        } else if (x >= detX1 && x < detX2 && !leftDown) {
             // 详情栏：左键按住（正在拖滑条）时不滚 —— 否则滑条会从指针底下移走
             scrollDetail(rows);
         }
+        return true;
     }
 
     /** 翻动步长：一次挪一个 tab 宽（tab 宽度已按文字实测，故这里取首个 tab 的实宽）。 */
@@ -1312,17 +1392,12 @@ public class GuiAreas extends GuiScreen {
         return tabW.isEmpty() ? 48 : tabW.get(0);
     }
 
-    private int getMouseX() {
-        return Mouse.getEventX() * width / mc.displayWidth;
-    }
-
-    private int getMouseY() {
-        return height - Mouse.getEventY() * height / mc.displayHeight - 1;
-    }
-
     // ===================== 动作 =====================
 
-    @Override
+    /**
+     * 按 id 分发的动作入口。1.13 的 {@code GuiScreen} 不再自带此方法，本类是"自建"的：
+     * 各控件在按下时经 {@link AefButton#setOnPress} 回调到这里（见 {@link #addWidget}）。
+     */
     protected void actionPerformed(GuiButton button) {
         if (button.id == BTN_NAV_L) {
             tabScroll = clampInt(tabScroll - navStep(), 0, maxTabScroll());
@@ -1436,8 +1511,8 @@ public class GuiAreas extends GuiScreen {
     /**
      * 把滑条当前值写回工作副本，变化时刷新预览并标记未保存。
      *
-     * <p>注：受 1.7.10 框架限制（滑条靠 {@code drawButton} 自驱拖动、无独立变更回调），此方法由
-     * {@link #drawScreen} 每帧调用；逻辑已从绘制里析出，绘制通道只负责触发它。
+     * <p>注：滑条没有独立的变更回调（1.13 的拖动事件只到控件本身），故本方法由 {@link #render} 每帧调用；
+     * 逻辑已从绘制里析出，绘制通道只负责触发它。
      */
     private void commitSliderEdits() {
         AreaEffect effect = selectedEffect();

@@ -166,8 +166,8 @@ public final class EffectTypes {
                 : FogEffect.DEFAULT_RAMP_LENGTH);
         effect.setStartDistance(tag.contains("startDistance") ? tag.getFloat("startDistance")
                 : FogEffect.DEFAULT_START_DISTANCE);
-        effect.setColor(tag.contains("color") ? tag.getInteger("color") : FogEffect.DEFAULT_COLOR);
-        effect.setDust(tag.getInteger("dust"));
+        effect.setColor(tag.contains("color") ? tag.getInt("color") : FogEffect.DEFAULT_COLOR);
+        effect.setDust(tag.getInt("dust"));
         return effect;
     }
 
@@ -184,7 +184,7 @@ public final class EffectTypes {
     private static SkyEffect readSkyNbt(NBTTagCompound tag) {
         SkyEffect effect = new SkyEffect();
         effect.readNbtFields(tag);
-        effect.setColor(tag.contains("color") ? tag.getInteger("color") : SkyEffect.DEFAULT_COLOR);
+        effect.setColor(tag.contains("color") ? tag.getInt("color") : SkyEffect.DEFAULT_COLOR);
         return effect;
     }
 

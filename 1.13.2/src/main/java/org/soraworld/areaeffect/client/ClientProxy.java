@@ -6,14 +6,16 @@ import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.init.Items;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.Util;
 import net.minecraft.util.text.TextComponentTranslation;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.fml.client.registry.ClientRegistry;
-import net.minecraftforge.fml.common.event.FMLInitializationEvent;
-import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
-import org.lwjgl.input.Keyboard;
-import org.soraworld.areaeffect.client.effect.EffectRenderers;
+import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
+import net.minecraftforge.registries.ForgeRegistries;
+import org.lwjgl.glfw.GLFW;
 import org.soraworld.areaeffect.client.effect.EffectRenderer;
+import org.soraworld.areaeffect.client.effect.EffectRenderers;
 import org.soraworld.areaeffect.client.gui.GuiAreas;
 import org.soraworld.areaeffect.client.handler.AreaClientHandler;
 import org.soraworld.areaeffect.client.handler.ClientSelectionHandler;
@@ -31,11 +33,11 @@ import org.soraworld.areaeffect.common.network.MessageClickAir;
 import org.soraworld.areaeffect.common.network.MessageDeleteRequest;
 import org.soraworld.areaeffect.common.network.MessageListReply;
 import org.soraworld.areaeffect.common.network.MessageListRequest;
+import org.soraworld.areaeffect.common.network.MessageSelectShape;
 import org.soraworld.areaeffect.common.network.MessageSelection;
 import org.soraworld.areaeffect.common.network.MessageSetProps;
-import org.soraworld.areaeffect.common.network.MessageTpRequest;
-import org.soraworld.areaeffect.common.network.MessageSelectShape;
 import org.soraworld.areaeffect.common.network.MessageToolSync;
+import org.soraworld.areaeffect.common.network.MessageTpRequest;
 import org.soraworld.areaeffect.common.network.PacketChannel;
 import org.soraworld.areaeffect.common.shape.Selection;
 import org.soraworld.areaeffect.common.util.Vec3d;
@@ -43,10 +45,17 @@ import org.soraworld.areaeffect.common.util.Vec3d;
 import java.time.LocalTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+
 public class ClientProxy extends CommonProxy {
 
-    public static final KeyBinding KEY_LIST = new KeyBinding("key.areaeffect.manager", Keyboard.KEY_J, "key.categories.areaeffect");
-    public static final KeyBinding KEY_SEL_RENDER = new KeyBinding("key.areaeffect.selrender", Keyboard.KEY_K, "key.categories.areaeffect");
+    /**
+     * 按键码：1.13 的 {@code KeyBinding} 不再吃 LWJGL2 的 {@code Keyboard.KEY_*}，
+     * 统一用 GLFW 的键码常量。
+     */
+    public static final KeyBinding KEY_LIST = new KeyBinding("key.areaeffect.manager",
+            GLFW.GLFW_KEY_J, "key.categories.areaeffect");
+    public static final KeyBinding KEY_SEL_RENDER = new KeyBinding("key.areaeffect.selrender",
+            GLFW.GLFW_KEY_K, "key.categories.areaeffect");
 
     /** 该类型尚无记录时的淡出时长（秒）。 */
     private static final float DEFAULT_DURATION = 1.0F;
@@ -83,15 +92,16 @@ public class ClientProxy extends CommonProxy {
     private EffectRenderers renderers = new EffectRenderers();
 
     /** netty 线程投递、需在客户端主线程执行的逻辑（GUI 必须回主线程操作）。 */
-    // 1.12.2 用 Minecraft#addScheduledTask 投递到客户端主线程（与 Forge SimpleNetworkWrapper 客户端侧同一机制），
-    // 不再需要自建 clientTasks 队列 + 每帧 drain（见 runOnClientThread）。
+    // 1.13 的 SimpleChannel 已在 enqueueWork 里把回调投到客户端主线程，入站消息本身即在主线程执行；
+    // 这里保留投递入口仅为"从任意线程安全进入主线程"的通用语义（与 1.12 的 Minecraft#addScheduledTask 等价）。
 
-    private final Minecraft mc = Minecraft.getMinecraft();
+    private final Minecraft mc = Minecraft.getInstance();
 
     /**
      * 客户端只读镜像：与继承自 {@code CommonProxy} 的服务端权威 {@code areas} 相互独立、永不共享实例。
-     * 只由网络入站处理器（{@link #handleUpdate}/{@link #handleDelete}）写入，渲染与 GUI 一律读它；
-     * 单机（集成服）同样经完整网络回环填充，不走共享捷径。权威 {@code areas} 不参与客户端渲染。
+     * 只由网络入站处理器（{@link #handleUpdate}/{@link #handleDelete}）与断线复位
+     * （{@link #clientReset()}）写入，渲染与 GUI 一律读它；单机（集成服）同样经完整网络回环填充，
+     * 不走共享捷径。权威 {@code areas} 不参与客户端渲染。
      */
     private final AreaTable clientAreas = new AreaTable();
 
@@ -101,45 +111,51 @@ public class ClientProxy extends CommonProxy {
      */
     private Item clientTool = Items.WOODEN_AXE;
 
+    /**
+     * 客户端装配：绑定客户端方向消息、注册按键与渲染挂钩。
+     *
+     * <p>1.13 没有 {@code FMLPreInitializationEvent}/{@code FMLInitializationEvent}，两者合并到
+     * {@link FMLClientSetupEvent}（它在 {@code FMLCommonSetupEvent} 之后触发，届时
+     * {@code CommonProxy#onCommonSetup} 已把 opcode 表与服务端方向处理绑定完成）。
+     */
     @Override
-    public void onPreInit(FMLPreInitializationEvent event) {
-        super.onPreInit(event);
-        AreaClientHandler handler = new AreaClientHandler(this);
-        // 1.12.2 的 TickEvent 系列与客户端连接/断线事件都在 MinecraftForge.EVENT_BUS 派发，
-        // 客户端 handler 统一注册于此（不再像 1.7.10 分挂 FML 与 Forge 两条总线）。
-        MinecraftForge.EVENT_BUS.register(handler);
-        MinecraftForge.EVENT_BUS.register(new SelectionRenderHandler(this));
-        MinecraftForge.EVENT_BUS.register(new ClientSelectionHandler(this));
-        // FogColors / FogDensity、ClientTick 及天空装卸都在 1.12.2 的 EVENT_BUS 上，同一实例一次注册即可
-        MinecraftForge.EVENT_BUS.register(new FogRenderHandler());
-        MinecraftForge.EVENT_BUS.register(new SkyRenderHandler());
-        ClientRegistry.registerKeyBinding(KEY_LIST);
-        ClientRegistry.registerKeyBinding(KEY_SEL_RENDER);
-    }
-
-    @Override
-    public void onInit(FMLInitializationEvent event) {
-        super.onInit(event);
+    public void onClientSetup(FMLClientSetupEvent event) {
+        super.onClientSetup(event);
         // 客户端方向消息的处理逻辑绑定
         PacketChannel.bindClient(MessageAreaUpdate.class, this::handleUpdate);
         PacketChannel.bindClient(MessageAreaDelete.class, this::handleDelete);
         PacketChannel.bindClient(MessageSelection.class, this::handleSelection);
         PacketChannel.bindClient(MessageListReply.class, this::handleListReply);
         PacketChannel.bindClient(MessageToolSync.class, this::handleToolSync);
+        AreaClientHandler handler = new AreaClientHandler(this);
+        // 1.13 的 TickEvent 系列与所有 Forge 事件都只在 MinecraftForge.EVENT_BUS 上派发，
+        // 客户端 handler 统一注册于此。
+        MinecraftForge.EVENT_BUS.register(handler);
+        MinecraftForge.EVENT_BUS.register(new SelectionRenderHandler(this));
+        MinecraftForge.EVENT_BUS.register(new ClientSelectionHandler(this));
+        // FogColors / FogDensity、ClientTick 及天空装卸都在 EVENT_BUS 上，同一实例一次注册即可
+        MinecraftForge.EVENT_BUS.register(new FogRenderHandler());
+        MinecraftForge.EVENT_BUS.register(new SkyRenderHandler());
+        ClientRegistry.registerKeyBinding(KEY_LIST);
+        ClientRegistry.registerKeyBinding(KEY_SEL_RENDER);
     }
 
-    /** 同步服务端下发的选区工具到客户端镜像 {@link #clientTool}（客户端不读 config）。netty 回调，写须回主线程。 */
+    /** 同步服务端下发的选区工具到客户端镜像 {@link #clientTool}（客户端不读 config）。 */
     public void handleToolSync(MessageToolSync packet) {
         runOnClientThread(() -> {
-            // 1.12.2 用 Item.getByNameOrId 统一按名字/数字 id 查物品；查不到返回 null
-            Item item = Item.getByNameOrId(packet.toolName);
-            clientTool = item != null ? item : Items.WOODEN_AXE;
+            // 1.13 起物品数字 id 废弃，按注册名（mod:item）查物品注册表；查不到回落木斧
+            try {
+                Item item = ForgeRegistries.ITEMS.getValue(new ResourceLocation(packet.toolName));
+                clientTool = item != null ? item : Items.WOODEN_AXE;
+            } catch (Throwable ignored) {
+                clientTool = Items.WOODEN_AXE;
+            }
         });
     }
 
     /** 客户端本地判定：手持物是否为选区工具（读客户端镜像 {@link #clientTool}，非服务端权威 tool）。 */
     public boolean isSelectToolLocal(ItemStack stack) {
-        // 1.12.2 空手为 ItemStack.EMPTY，用 isEmpty() 明确排除
+        // 空手为 ItemStack.EMPTY，用 isEmpty() 明确排除
         return stack != null && !stack.isEmpty() && Objects.equals(stack.getItem(), clientTool);
     }
 
@@ -157,17 +173,6 @@ public class ClientProxy extends CommonProxy {
 
     public void sendTpRequest(int id) {
         PacketChannel.sendToServer(new MessageTpRequest(id));
-    }
-
-    /**
-     * 连接建立：清空客户端区域镜像 {@link #clientAreas}，随后由登录全量同步重建。
-     *
-     * <p>镜像与集成服务端的权威 {@code areas} 是<b>不同实例</b>，因此无论单机还是连外部服务器都可安全清空
-     * （清了不会动到世界数据）；不清则上个会话残留的 id 会以幽灵区域留存。单机同样走此路径，
-     * 与专用服共用一条"清空 → 全量同步"的时序。
-     */
-    public void onServerConnected() {
-        clientAreas.clear();
     }
 
     public void handleUpdate(MessageAreaUpdate packet) {
@@ -221,7 +226,7 @@ public class ClientProxy extends CommonProxy {
      * 而且是跨维度的全量（左栏列所有存在区域的维度），所以这里不需要、也不该使用任何 payload。
      */
     public void handleListReply(MessageListReply packet) {
-        // netty 线程回调：GUI 操作必须回客户端主线程
+        // 回调可能来自网络线程：GUI 操作必须回客户端主线程
         runOnClientThread(() -> {
             // 已打开界面则刷新，否则打开主界面（读取全量本地数据，跨维度）
             if (mc.currentScreen instanceof GuiAreas) {
@@ -232,13 +237,12 @@ public class ClientProxy extends CommonProxy {
         });
     }
 
-    /** netty 线程投递需在客户端主线程执行的逻辑（GUI 等必须回主线程操作）。 */
+    /** 投递需在客户端主线程执行的逻辑（GUI 等必须回主线程操作）。 */
     private void runOnClientThread(Runnable task) {
-        // 1.12.2 内置投递到客户端主线程：netty 线程回调直接排队，由客户端主循环执行，线程安全
         mc.addScheduledTask(task);
     }
 
-    /** 当前本地选区镜像（netty 线程写，渲染线程读，与旧 selPos1/2 模式一致）。 */
+    /** 当前本地选区镜像（入站线程写，渲染线程读）。 */
     public Selection getLocalSelection() {
         return selSelection;
     }
@@ -271,7 +275,8 @@ public class ClientProxy extends CommonProxy {
     /** 触发选区形状轮切 overlay 显示（重置 1.5 秒停留计时）。 */
     public void showShapeOverlay(String type) {
         overlayShape = type;
-        overlayLastAction = Minecraft.getSystemTime();
+        // 1.12 的 Minecraft#getSystemTime 已被移除，改用 1.13 的 Util#milliTime（同为毫秒单调时钟）
+        overlayLastAction = Util.milliTime();
     }
 
     /** overlay 当前展示的形状类型；无则返回 null。 */
@@ -284,7 +289,7 @@ public class ClientProxy extends CommonProxy {
         overlayShape = null;
     }
 
-    /** overlay 最近一次轮切触发时间（Minecraft 毫秒时间）。 */
+    /** overlay 最近一次轮切触发时间（{@link Util#milliTime()} 基准）。 */
     public long getOverlayLastAction() {
         return overlayLastAction;
     }
@@ -429,12 +434,13 @@ public class ClientProxy extends CommonProxy {
      */
     public void updateClientLight(EntityPlayer player) {
         LightmapHook.tryInstall(mc);
-        int dim = player.dimension;
+        // 1.13 的维度是 DimensionType；区域镜像仍按维度 id 分表
+        int dim = player.dimension.getId();
         Vec3d pos = new Vec3d(player);
         List<Area> containing = clientAreas.findAt(dim, pos);
 
         // 当前游戏/现实时间（小时，0..24），供时间段过滤
-        float gameHour = gameHourOf(player.world.getWorldTime());
+        float gameHour = gameHourOf(player.world.getDayTime());
         LocalTime now = LocalTime.now();
         float realHour = now.getHour() + now.getMinute() / 60.0F;
 
@@ -477,25 +483,31 @@ public class ClientProxy extends CommonProxy {
     /**
      * 世界时间 → 游戏时钟小时（0..24），供「生效时段 = 游戏」过滤用。
      *
-     * <p>原版的一天从 <b>06:00</b> 起算：{@code worldTime % 24000 == 0} 是日出（06:00）、
+     * <p>原版的一天从 <b>06:00</b> 起算：{@code dayTime % 24000 == 0} 是日出（06:00）、
      * {@code 6000} 正午、{@code 12000} 日落（18:00）、{@code 18000} 午夜。因此钟点要在
-     * {@code worldTime / 1000} 的基础上偏移 6 小时；漏掉这个偏移会让 GUI 上写的
+     * {@code dayTime / 1000} 的基础上偏移 6 小时；漏掉这个偏移会让 GUI 上写的
      * 「游戏 06:00→18:00」实际生效于游戏内 12:00→24:00（一半落在夜里）。
      */
-    private static float gameHourOf(long worldTime) {
-        long dayTime = worldTime % 24000L;
-        if (dayTime < 0L) {
+    private static float gameHourOf(long dayTime) {
+        long time = dayTime % 24000L;
+        if (time < 0L) {
             // 正常游戏时钟不为负，但存档可被手工改成负值；先归一到 [0, 24000) 再换算
-            dayTime += 24000L;
+            time += 24000L;
         }
-        return (dayTime / 1000.0F + 6.0F) % 24.0F;
+        return (time / 1000.0F + 6.0F) % 24.0F;
     }
 
+    /**
+     * 断线 / 退出世界：复位全部客户端本地状态。
+     *
+     * <p>1.13 没有客户端断线事件，本方法由 {@code AreaClientHandler} 在世界卸载沿上调用
+     * （见其类注释）。复位包含清空客户端镜像 {@link #clientAreas} —— 它与集成服务端的权威
+     * {@code areas} 已是不同实例，清它不会动到世界数据；权威表的落盘由 AreaStore 负责（服务端侧）。
+     * 下一个会话由登录时的全量同步重建镜像，故不会出现上个会话的幽灵区域。
+     */
     public void clientReset() {
         clientTool = Items.WOODEN_AXE;
         lastDurationByType.clear();
-        // 清客户端镜像：它与集成服务端的权威 areas 已是不同实例，清它不会动到世界数据；
-        // 权威表的落盘由 AreaStore 负责（服务端侧），镜像则在下次 onServerConnected 清空并经登录全量同步重建。
         clientAreas.clear();
         selections.clearAll();
         selSelection = null;

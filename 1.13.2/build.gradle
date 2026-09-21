@@ -26,7 +26,18 @@ tasks.withType(ProcessResources) {
 }
 
 group = 'org.soraworld.areaeffect'
-version = '1.4.0'
+
+// 版本号的唯一来源是 AreaEffectMod.MOD_VERSION：@Mod 的版本与 mods.toml 的 ${version} 必须一致，
+// 这里直接解析源码常量，避免两处分别手改后漂移（与 1.12.2 分支同一约定）。
+def modVersion = '1.4.0'
+def modSource = file('src/main/java/org/soraworld/areaeffect/AreaEffectMod.java')
+if (modSource.exists()) {
+    def matcher = modSource.text =~ /MOD_VERSION\s*=\s*"([^"]+)"/
+    if (matcher.find()) {
+        modVersion = matcher.group(1)
+    }
+}
+version = modVersion
 archivesBaseName = 'AreaEffect-1.13.2'
 
 // 使用 MCP snapshot 映射（1.13.2 无官方 mojmap）
@@ -45,6 +56,16 @@ repositories {
 
 dependencies {
     minecraft 'net.minecraftforge:forge:1.13.2-25.0.219'
+}
+
+// 1.13 的模组元数据是 META-INF/mods.toml，其中的 ${version} 由构建期替换为上面的实际版本
+processResources {
+    inputs.property 'version', project.version
+    filesMatching('META-INF/mods.toml') {
+        filter { line ->
+            line.replace('${version}', project.version.toString())
+        }
+    }
 }
 
 jar {

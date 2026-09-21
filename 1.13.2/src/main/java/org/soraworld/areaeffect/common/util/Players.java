@@ -1,6 +1,7 @@
 package org.soraworld.areaeffect.common.util;
 
 import net.minecraft.command.ICommandSource;
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.util.text.TextComponentTranslation;
 
@@ -17,10 +18,20 @@ public final class Players {
 
     /**
      * OP 权限等级 2 判定。客户端提交"已鉴权"的说法不可信，服务端每个入口都要独立判一次。
-     * 1.13+ 命令源接口为 {@link ICommandSource}，权限判定统一为 hasPermissionLevel。
+     *
+     * <p>1.13 的权限位不在 {@link ICommandSource} 上（该接口只剩发消息与反馈开关），而是收在
+     * {@code CommandSource} 里；实体（玩家）经 {@code Entity#getCommandSource()} 取到带权限的
+     * 命令源，因此这里按"有实体就查实体、无实体（控制台/命令方块）按最高权限"判定 ——
+     * 与 1.12 的 {@code canUseCommand(2, "gamemode")} 在控制台恒为 true 的语义一致。
      */
     public static boolean canManage(ICommandSource sender) {
-        return sender != null && sender.hasPermissionLevel(2);
+        if (sender == null) {
+            return false;
+        }
+        if (sender instanceof Entity) {
+            return ((Entity) sender).getCommandSource().hasPermissionLevel(2);
+        }
+        return true;
     }
 
     /** 发送一条翻译键消息（参数交给客户端本地化）。 */

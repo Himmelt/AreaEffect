@@ -5,11 +5,11 @@ import net.minecraft.client.gui.Gui;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiTextField;
 import net.minecraft.client.renderer.BufferBuilder;
-import net.minecraft.client.renderer.OpenGlHelper;
+import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.Tessellator;
 import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
 import net.minecraft.client.resources.I18n;
-import org.lwjgl.input.Keyboard;
+import org.lwjgl.glfw.GLFW;
 import org.lwjgl.opengl.GL11;
 
 import java.util.Locale;
@@ -37,8 +37,15 @@ import static org.soraworld.areaeffect.client.gui.GuiTheme.argb;
  * 弹窗关闭时按结果回调：{@link Listener#onConfirmed}（携带最终颜色）或 {@link Listener#onCanceled}
  * （此前已以初始色回调一次 {@link Listener#onColorChanged} 还原）。
  *
- * <p>宿主职责：把 {@code keyTyped/mouseClicked/mouseClickMove/mouseMovedOrUp/updateScreen} 转发进来
+ * <p>宿主职责：把 {@code keyPressed/charTyped/mouseClicked/mouseDragged/mouseReleased/tick} 转发进来
  * （模态 —— 打开期间宿主应消费一切输入），并在最后调用 {@link #drawScreen}。本控件不依赖宿主具体类型。
+ *
+ * <p>1.13 的输入模型变化：键盘输入拆成 {@code keyPressed(键码,扫描码,修饰键)} 与
+ * {@code charTyped(字符,修饰键)} 两条通道（1.12 只有一个 {@code keyTyped(字符,键码)}），
+ * 因此"控制键"（Esc / 退格 / 方向键 / Ctrl 组合）走前者、可打印字符走后者；
+ * GuiTextField 的对应入口也随之变成 {@code keyPressed}/{@code charTyped}，
+ * 光标计时从 {@code updateCursorCounter()} 改名为 {@code tick()}，绘制从
+ * {@code drawTextBox()} 改名为 {@code drawTextField(mouseX, mouseY, partialTicks)}。
  */
 final class ColorPicker extends Gui {
 
@@ -266,20 +273,38 @@ final class ColorPicker extends Gui {
         drag = NONE;
     }
 
-    boolean keyTyped(char typedChar, int keyCode) {
+    /**
+     * 控制键通道（1.13 新增）：Esc 取消；其余按键交给聚焦的输入框
+     * （退格 / 删除 / 方向键 / Home / End 以及 Ctrl+A/C/V/X 都由 GuiTextField 自己处理）。
+     */
+    boolean keyPressed(int keyCode, int scanCode, int modifiers) {
         if (!open) {
             return false;
         }
-        if (keyCode == Keyboard.KEY_ESCAPE) {
-            // Esc 取消并关闭；其它按键（Enter 等）不再绑定任何操作
+        if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
+            // Esc 取消并关闭；其它控制键不再绑定任何操作
             onCancel();
             return true;
         }
-        // 聚焦的输入框收字符；未聚焦时也吞掉（模态）
         for (GuiTextField f : allFields()) {
             if (f.isFocused()) {
-                if (acceptKey(f, typedChar, keyCode)) {
-                    f.textboxKeyTyped(typedChar, keyCode);
+                f.keyPressed(keyCode, scanCode, modifiers);
+                afterFieldEdit(f);
+                return true;
+            }
+        }
+        return true;
+    }
+
+    /** 字符通道（1.13 新增）：只有白名单字符会进入聚焦的输入框；未聚焦时也吞掉（模态）。 */
+    boolean charTyped(char typedChar, int modifiers) {
+        if (!open) {
+            return false;
+        }
+        for (GuiTextField f : allFields()) {
+            if (f.isFocused()) {
+                if (acceptChar(f, typedChar)) {
+                    f.charTyped(typedChar, modifiers);
                     afterFieldEdit(f);
                 }
                 return true;
@@ -293,7 +318,7 @@ final class ColorPicker extends Gui {
             return;
         }
         for (GuiTextField f : allFields()) {
-            f.updateCursorCounter();
+            f.tick();
         }
     }
 
@@ -320,24 +345,28 @@ final class ColorPicker extends Gui {
         // HEX / RGBA 输入区：标签右对齐到同一列（rightX + 10），并与各自输入框垂直居中
         mc.fontRenderer.drawStringWithShadow("HEX", rightX + 10 - mc.fontRenderer.getStringWidth("HEX"),
                 hexFieldY + 3, COLOR_TEXT_HINT);
-        hexField.drawTextBox();
+        hexField.drawTextField(mouseX, mouseY, 0.0F);
         for (int i = 0; i < 4; i++) {
             int labelW = mc.fontRenderer.getStringWidth(CH_LABELS[i]);
             mc.fontRenderer.drawStringWithShadow(CH_LABELS[i], rightX + 10 - labelW,
                     chanY0 + i * FIELD_PITCH + 3, COLOR_TEXT_HINT);
-            channels[i].drawTextBox();
+            channels[i].drawTextField(mouseX, mouseY, 0.0F);
         }
-        okBtn.drawButton(mc, mouseX, mouseY, 0.0F);
-        cancelBtn.drawButton(mc, mouseX, mouseY, 0.0F);
+        okBtn.render(mouseX, mouseY, 0.0F);
+        cancelBtn.render(mouseX, mouseY, 0.0F);
     }
 
-    /** SV 平面：四角逐顶点着色（左上白 → 右上纯色相，下两角黑），圆点指示当前位置。 */
+    /**
+     * SV 平面：四角逐顶点着色（左上白 → 右上纯色相，下两角黑），圆点指示当前位置。
+     * GL 状态与顶点流写法同 1.12，仅把裸 {@code GL11} 状态改写换成 {@link GlStateManager}
+     * （与 {@code Gui.drawRect} 共用同一套状态缓存）。
+     */
     private void drawPlane() {
         int pure = ColorUtil.hsvToRgb(hue, 1.0F, 1.0F);
-        GL11.glShadeModel(GL11.GL_SMOOTH);
-        GL11.glEnable(GL11.GL_BLEND);
-        GL11.glDisable(GL11.GL_TEXTURE_2D);
-        OpenGlHelper.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA, 1, 0);
+        GlStateManager.shadeModel(GL11.GL_SMOOTH);
+        GlStateManager.enableBlend();
+        GlStateManager.disableTexture2D();
+        GlStateManager.blendFuncSeparate(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA, 1, 0);
         Tessellator tess = Tessellator.getInstance();
         BufferBuilder buffer = tess.getBuffer();
         buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_COLOR);
@@ -350,9 +379,9 @@ final class ColorPicker extends Gui {
         setVertex(buffer, 0xFFFFFF);     // 左上白
         buffer.pos(planeX1, planeY1, 0.0D).endVertex();
         tess.draw();
-        GL11.glEnable(GL11.GL_TEXTURE_2D);
-        GL11.glDisable(GL11.GL_BLEND);
-        GL11.glShadeModel(GL11.GL_FLAT);
+        GlStateManager.enableTexture2D();
+        GlStateManager.disableBlend();
+        GlStateManager.shadeModel(GL11.GL_FLAT);
         border(planeX1 - 1, planeY1 - 1, planeX2 + 1, planeY2 + 1);
         // 选择指示：准星式光标（4 条白色线段，中心留空露出底下颜色）。
         // 位置映射到平面内最后一像素（PLANE_SIZE-1），使 v=0/s=1 也能落在右下角
@@ -425,10 +454,10 @@ final class ColorPicker extends Gui {
 
     /** 纵向渐变（沿 y，每行同色）：{@code stops} 为 0xRRGGBB 端点色，顶部 = stops[0]。 */
     private static void drawVertGradient(int gx1, int gy1, int gx2, int gy2, int[] stops) {
-        GL11.glShadeModel(GL11.GL_SMOOTH);
-        GL11.glEnable(GL11.GL_BLEND);
-        GL11.glDisable(GL11.GL_TEXTURE_2D);
-        OpenGlHelper.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA, 1, 0);
+        GlStateManager.shadeModel(GL11.GL_SMOOTH);
+        GlStateManager.enableBlend();
+        GlStateManager.disableTexture2D();
+        GlStateManager.blendFuncSeparate(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA, 1, 0);
         Tessellator tess = Tessellator.getInstance();
         BufferBuilder buffer = tess.getBuffer();
         buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_COLOR);
@@ -445,9 +474,9 @@ final class ColorPicker extends Gui {
             buffer.pos(gx1, yTop, 0.0D).endVertex();
         }
         tess.draw();
-        GL11.glEnable(GL11.GL_TEXTURE_2D);
-        GL11.glDisable(GL11.GL_BLEND);
-        GL11.glShadeModel(GL11.GL_FLAT);
+        GlStateManager.enableTexture2D();
+        GlStateManager.disableBlend();
+        GlStateManager.shadeModel(GL11.GL_FLAT);
     }
 
     /** 纵向透明度渐变：顶部不透明、底部全透明（叠在棋盘格上）。 */
@@ -455,10 +484,10 @@ final class ColorPicker extends Gui {
         int r = (rgb >>> 16) & 255;
         int g = (rgb >>> 8) & 255;
         int b = rgb & 255;
-        GL11.glShadeModel(GL11.GL_SMOOTH);
-        GL11.glEnable(GL11.GL_BLEND);
-        GL11.glDisable(GL11.GL_TEXTURE_2D);
-        OpenGlHelper.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA, 1, 0);
+        GlStateManager.shadeModel(GL11.GL_SMOOTH);
+        GlStateManager.enableBlend();
+        GlStateManager.disableTexture2D();
+        GlStateManager.blendFuncSeparate(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA, 1, 0);
         Tessellator tess = Tessellator.getInstance();
         BufferBuilder buffer = tess.getBuffer();
         buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_COLOR);
@@ -470,9 +499,9 @@ final class ColorPicker extends Gui {
         buffer.pos(gx2, gy1, 0.0D).endVertex();
         buffer.pos(gx1, gy1, 0.0D).endVertex();
         tess.draw();
-        GL11.glEnable(GL11.GL_TEXTURE_2D);
-        GL11.glDisable(GL11.GL_BLEND);
-        GL11.glShadeModel(GL11.GL_FLAT);
+        GlStateManager.enableTexture2D();
+        GlStateManager.disableBlend();
+        GlStateManager.shadeModel(GL11.GL_FLAT);
     }
 
     private static void setVertex(BufferBuilder buffer, int rgb) {
@@ -601,15 +630,14 @@ final class ColorPicker extends Gui {
         }
     }
 
-    /** 是否放行该按键给输入框：放行编辑/导航/剪贴板组合键，以及字段允许的字符。 */
-    private boolean acceptKey(GuiTextField field, char c, int code) {
-        // 退格 14 / Home 199 / 左 203 / 右 205 / End 207 / 删除 211，及 Ctrl+A/C/V/X（字符 1/3/22/24）
-        if (code == 14 || code == 199 || code == 203 || code == 205 || code == 207 || code == 211) {
-            return true;
-        }
-        if (c == 1 || c == 3 || c == 22 || c == 24) {
-            return true;
-        }
+    /**
+     * 是否放行该字符给输入框。
+     *
+     * <p>1.13 把键盘拆成"控制键 + 字符"两条通道：退格 / 方向键 / Home / End / Ctrl 组合
+     * 都由 {@code keyPressed} 走 {@link GuiTextField#keyPressed} 自行处理，因此这里只剩
+     * "本字段允许哪些可打印字符"这一件事。
+     */
+    private boolean acceptChar(GuiTextField field, char c) {
         return field == hexField ? (c == '#' || Character.digit(c, 16) >= 0) : Character.isDigit(c);
     }
 

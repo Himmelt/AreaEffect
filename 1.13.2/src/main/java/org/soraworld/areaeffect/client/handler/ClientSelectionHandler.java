@@ -3,7 +3,7 @@ package org.soraworld.areaeffect.client.handler;
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
-import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
 import org.soraworld.areaeffect.client.ClientProxy;
 import org.soraworld.areaeffect.common.shape.Selection;
 import org.soraworld.areaeffect.common.shape.ShapeTypes;
@@ -24,7 +24,7 @@ import org.soraworld.areaeffect.common.shape.ShapeTypes;
 public class ClientSelectionHandler {
 
     private final ClientProxy proxy;
-    private final Minecraft mc = Minecraft.getMinecraft();
+    private final Minecraft mc = Minecraft.getInstance();
 
     public ClientSelectionHandler(ClientProxy proxy) {
         this.proxy = proxy;

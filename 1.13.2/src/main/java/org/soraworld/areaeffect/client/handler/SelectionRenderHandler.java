@@ -1,14 +1,15 @@
 package org.soraworld.areaeffect.client.handler;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.renderer.BufferBuilder;
+import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.Tessellator;
 import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
 import net.minecraft.client.resources.I18n;
+import net.minecraft.util.Util;
 import net.minecraftforge.client.event.RenderGameOverlayEvent;
 import net.minecraftforge.client.event.RenderWorldLastEvent;
-import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
 import org.lwjgl.opengl.GL11;
 import org.soraworld.areaeffect.client.ClientProxy;
 import org.soraworld.areaeffect.client.gui.GuiAreas;
@@ -22,11 +23,19 @@ import java.util.List;
 
 /**
  * 客户端自绘选区线框（按形状）+ 已保存区域线框（按形状边缘）。
+ *
+ * <p>1.13 的两处渲染 API 变化：
+ * <ul>
+ *   <li>{@code ScaledResolution} 已移除，屏幕逻辑尺寸改从 {@code Minecraft#mainWindow} 取
+ *       （{@code RenderGameOverlayEvent} 也不再携带分辨率）；</li>
+ *   <li>GL 状态改写统一走 {@link GlStateManager}：它与裸 {@code GL11} 落在同一套 GL 状态上，
+ *       额外维护 MC 自己的状态缓存与矩阵栈记账，避免与 vanilla 的 translate/rotate 错位。</li>
+ * </ul>
  */
 public class SelectionRenderHandler {
 
     private final ClientProxy proxy;
-    private final Minecraft mc = Minecraft.getMinecraft();
+    private final Minecraft mc = Minecraft.getInstance();
 
     public SelectionRenderHandler(ClientProxy proxy) {
         this.proxy = proxy;
@@ -53,7 +62,7 @@ public class SelectionRenderHandler {
         if (type == null || mc.currentScreen != null || mc.player == null) {
             return;
         }
-        long elapsed = Minecraft.getSystemTime() - proxy.getOverlayLastAction();
+        long elapsed = Util.milliTime() - proxy.getOverlayLastAction();
         float alpha;
         if (elapsed < 1500L) {
             alpha = 1.0F;
@@ -72,9 +81,8 @@ public class SelectionRenderHandler {
             return;
         }
 
-        ScaledResolution res = event.getResolution();
-        int cx = res.getScaledWidth() / 2;
-        int cy = res.getScaledHeight() / 2 - 44;
+        int cx = mc.mainWindow.getScaledWidth() / 2;
+        int cy = mc.mainWindow.getScaledHeight() / 2 - 44;
         String label = I18n.format("gui.areaeffect.shape.now")
                 + I18n.format("gui.areaeffect.shape." + type);
         int textWidth = mc.fontRenderer.getStringWidth(label);
@@ -86,18 +94,18 @@ public class SelectionRenderHandler {
         int iconY = cy - 2; // 图标竖向中心与文字中心对齐（文字可视高约 8px）
 
         drawOverlayIcon(type, iconX, iconY, iconSize, alpha);
-        GL11.glEnable(GL11.GL_TEXTURE_2D);
-        GL11.glEnable(GL11.GL_BLEND);
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GlStateManager.enableTexture2D();
+        GlStateManager.enableBlend();
+        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
         mc.fontRenderer.drawStringWithShadow(label, textX, cy,
                 0xFFFFFF | ((int) (alpha * 255.0F) << 24));
     }
 
     /** 绘制 overlay 图标：半透明底板 + 按形状族绘制的白色线框图形。 */
     private void drawOverlayIcon(String type, int x, int y, int size, float alpha) {
-        GL11.glDisable(GL11.GL_TEXTURE_2D);
-        GL11.glEnable(GL11.GL_BLEND);
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GlStateManager.disableTexture2D();
+        GlStateManager.enableBlend();
+        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
         Tessellator tessellator = Tessellator.getInstance();
         BufferBuilder buffer = tessellator.getBuffer();
         buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_COLOR);
@@ -109,7 +117,7 @@ public class SelectionRenderHandler {
         tessellator.draw();
 
         float[] rgb = iconColor(type);
-        GL11.glLineWidth(2.0F);
+        GlStateManager.lineWidth(2.0F);
         buffer.begin(GL11.GL_LINES, DefaultVertexFormats.POSITION_COLOR);
         buffer.color(rgb[0], rgb[1], rgb[2], alpha);
         iconGlyph(buffer, type, x, y, size);
@@ -218,21 +226,22 @@ public class SelectionRenderHandler {
         }
         Selection sel = proxy.getLocalSelection();
         boolean drawSelection = proxy.isShowSelection() && sel != null && !sel.anchors.isEmpty();
-        List<Area> visibleAreas = proxy.getVisibleAreas(mc.player.dimension);
+        // 1.13 的维度是 DimensionType，区域集合仍按维度 id 分表
+        List<Area> visibleAreas = proxy.getVisibleAreas(mc.player.dimension.getId());
         if (!drawSelection && visibleAreas.isEmpty()) {
             return;
         }
 
-        GL11.glPushMatrix();
-        GL11.glDisable(GL11.GL_TEXTURE_2D);
-        GL11.glEnable(GL11.GL_BLEND);
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-        GL11.glDepthMask(false);
+        GlStateManager.pushMatrix();
+        GlStateManager.disableTexture2D();
+        GlStateManager.enableBlend();
+        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GlStateManager.depthMask(false);
 
         double px = mc.getRenderManager().viewerPosX;
         double py = mc.getRenderManager().viewerPosY;
         double pz = mc.getRenderManager().viewerPosZ;
-        GL11.glTranslated(-px, -py, -pz);
+        GlStateManager.translated(-px, -py, -pz);
 
         if (drawSelection) {
             // 多边形选区：选点过程中按围栏方式逐边显示，创建时自动闭合。
@@ -266,17 +275,17 @@ public class SelectionRenderHandler {
             drawAreaShape(area);
         }
 
-        GL11.glDepthMask(true);
-        GL11.glDisable(GL11.GL_BLEND);
-        GL11.glEnable(GL11.GL_TEXTURE_2D);
-        GL11.glPopMatrix();
+        GlStateManager.depthMask(true);
+        GlStateManager.disableBlend();
+        GlStateManager.enableTexture2D();
+        GlStateManager.popMatrix();
     }
 
     /** 以指定颜色/线宽绘制形状的全部边缘线段。 */
     private void drawShapeEdges(AreaShape shape, float r, float g, float b, float width) {
         Tessellator tessellator = Tessellator.getInstance();
         BufferBuilder buffer = tessellator.getBuffer();
-        GL11.glLineWidth(width);
+        GlStateManager.lineWidth(width);
         buffer.begin(GL11.GL_LINES, DefaultVertexFormats.POSITION_COLOR);
         buffer.color(r, g, b, 1.0F);
         for (AreaShape.Edge edge : shape.edges()) {
@@ -320,7 +329,7 @@ public class SelectionRenderHandler {
         }
         Tessellator tessellator = Tessellator.getInstance();
         BufferBuilder buffer = tessellator.getBuffer();
-        GL11.glLineWidth(2.0F);
+        GlStateManager.lineWidth(2.0F);
         buffer.begin(GL11.GL_LINES, DefaultVertexFormats.POSITION_COLOR);
         buffer.color(0.0F, 1.0F, 0.0F, 1.0F);
         int n = anchors.size();
@@ -347,7 +356,7 @@ public class SelectionRenderHandler {
         }
         tessellator.draw();
         // 顶点竖棱：有界时只画 [minY, maxY+1]，通天时贯穿全高
-        GL11.glLineWidth(1.5F);
+        GlStateManager.lineWidth(1.5F);
         buffer.begin(GL11.GL_LINES, DefaultVertexFormats.POSITION_COLOR);
         buffer.color(0.0F, 1.0F, 0.0F, 0.6F);
         int top = maxY + 1;
@@ -368,7 +377,7 @@ public class SelectionRenderHandler {
     private void drawMarker(int bx, int by, int bz, float r, float g, float b) {
         Tessellator tessellator = Tessellator.getInstance();
         BufferBuilder buffer = tessellator.getBuffer();
-        GL11.glLineWidth(3.0F);
+        GlStateManager.lineWidth(3.0F);
         buffer.begin(GL11.GL_LINES, DefaultVertexFormats.POSITION_COLOR);
         buffer.color(r, g, b, 1.0F);
         double x = bx;
