@@ -11,8 +11,28 @@ buildscript {
 }
 
 apply plugin: 'net.minecraftforge.gradle'
+apply plugin: 'java'
 
-version = '1.3.0'
+// 源码含大量中文注释，统一按 UTF-8 编译/处理资源
+compileJava.options.encoding = 'UTF-8'
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+}
+tasks.withType(ProcessResources) {
+    filteringCharset = 'UTF-8'
+}
+
+// 版本号的唯一来源是 AreaEffectMod.MOD_VERSION：@Mod 的版本与 mods.toml 的 ${version} 必须一致，
+// 这里直接解析源码常量，避免两处分别手改后漂移（与 1.12.2 / 1.13.2 同一约定）。
+def modVersion = '1.4.0'
+def modSource = file('src/main/java/org/soraworld/areaeffect/AreaEffectMod.java')
+if (modSource.exists()) {
+    def matcher = modSource.text =~ /MOD_VERSION\s*=\s*"([^"]+)"/
+    if (matcher.find()) {
+        modVersion = matcher.group(1)
+    }
+}
+version = modVersion
 group = 'org.soraworld.areaeffect'
 archivesBaseName = 'AreaEffect-1.14.4'
 
@@ -26,6 +46,7 @@ repositories {
 }
 
 minecraft {
+    // 1.14.4 仍用 MCP snapshot 映射（与 1.13.2 一致的命名风格，便于跨版本对照）
     mappings channel: 'snapshot', version: '20200119-1.14.4'
     runs {
         client {
@@ -33,7 +54,7 @@ minecraft {
             property 'forge.logging.markers', 'SCAN,REGISTRIES,REGISTRYDUMP'
             property 'forge.logging.console.level', 'debug'
             mods {
-                examplemod {
+                areaeffect {
                     source sourceSets.main
                 }
             }
@@ -43,7 +64,7 @@ minecraft {
             property 'forge.logging.markers', 'SCAN,REGISTRIES,REGISTRYDUMP'
             property 'forge.logging.console.level', 'debug'
             mods {
-                examplemod {
+                areaeffect {
                     source sourceSets.main
                 }
             }
@@ -55,10 +76,22 @@ dependencies {
     minecraft 'net.minecraftforge:forge:1.14.4-28.2.3'
 }
 
+// mods.toml 的 ${version} 由构建期替换为上面的实际版本
 processResources {
     inputs.property "version", project.version
     from(sourceSets.main.resources.srcDirs) {
         include 'META-INF/mods.toml'
         expand 'version': project.version
+    }
+}
+
+jar {
+    manifest {
+        attributes([
+            'Implementation-Title'  : 'AreaEffect-1.14.4',
+            'Implementation-Version': "${version}",
+            'Specification-Title'   : 'areaeffect',
+            'Specification-Version' : '1'
+        ])
     }
 }
